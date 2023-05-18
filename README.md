@@ -31,7 +31,9 @@ The collection includes 6 scripts:
 
 **The run script** simply calls the fetch script, then calls the apply script, passing required arguments.
 
-**The fetch script** is based on a prior script by mivk, called get-ripe-ips. So it's basically a fork, modified and hopefully improved.
+**The fetch script** is based on a prior script by @mivk, called get-ripe-ips, located here:
+https://github.com/mivk/ip-country/blob/master/get-ripe-ips
+So it's basically a fork.
 It can be used separately from this collection, as it does its own pre-requisite checks and input validation and accepts arguments.
 - Gets country IP addresses from RIPE and compiles them into separate ipv4 and ipv6 plain lists
 - Attempts to determine local ipv4 subnet for the main network interface and adds that to the end of the list
