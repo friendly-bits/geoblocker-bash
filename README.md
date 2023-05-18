@@ -1,5 +1,5 @@
 # geoblocker_bash
-Block incoming traffic from anywhere except subnets in a whitelist. Uses iptables. Collection of bash scripts with easy install.
+Blocks incoming traffic from anywhere except subnets in a whitelist. Uses iptables. Collection of bash scripts with easy install.
 
 Intended use case is a server that needs to be publically accessible in your country but does not need to be internationally accessible. For example, a server you run your CRM application on.
 
@@ -49,9 +49,12 @@ It also can be used separately from this collection, as it does its own pre-requ
 - ipset (install it with 'apt install ipset' or similar)
 - jq - Json processor (install it with 'apt install jq' or similar)
 
+**NOTES**:
 
 All scripts accept the -d argument for debug (in case troubleshooting is needed).
 
 The run, fetch and apply scripts write to syslog in case critical errors occur. The run script also writes a syslog line upon success.
 
 **Note** that the install script creates cron jobs that **will be run as root**. Make appropriate security arrangements to prevent it from getting modified by unauthorized third parties.
+
+I will be interested to hear your feedback, for example whether it works or doesn't work on your system (please specify which), or if you find a bug, or would like to suggest code improvements. You can use the "Issues" tab for that.
