@@ -1,6 +1,9 @@
 #!/bin/bash -l
 
 # Creates or updates a named ipset from a file.
+# Sets default policy on INPUT and FORWARD iptables chains to DROP
+# Then creates iptables rules that allow connection from subnets included in the ipset
+#
 # Depends on 'ipset' program. To install it on Debian derivatives, use the command:
 ## apt install ipset
 #
