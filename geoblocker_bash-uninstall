@@ -1,0 +1,51 @@
+#!/bin/bash
+
+#### Checks
+
+# check for root
+if [ "$EUID" -ne 0 ]
+  then echo "This needs to be run as root."
+  exit
+fi
+
+### Initialize variables
+install_dir="/usr/local/bin"
+datapath="/var/lib/geoblocker_bash"
+preinstall_policies_file="$datapath/preinstall_policies.bak"
+whitelist_path="$datapath/ip_lists"
+ipset_name="geoblocker_whitelist"
+
+### Delete associated cron jobs
+echo "Deleting cron jobs for geoip-whitelist..."
+crontab -u root -l 2>/dev/null |  grep -v 'geoblocker_bash-run' | sudo crontab -u root -
+
+### Delete associated iptables rules
+iptables -D INPUT -m set --match-set "$ipset_name" src -j ACCEPT
+
+### Destroy associated ipset
+ipset destroy "$ipset_name"
+
+### Restore pre-install state of default policies for INPUT and FORWARD
+
+while IFS= read -r preinstall_policy; do
+	chain_name=$(echo "$preinstall_policy" | cut -f 1 -d " ")
+	oldpolicy=$(echo "$preinstall_policy" | cut -f 2 -d " ")
+	echo "Restoring pre-install iptables policy with command: \"iptables -P $chain_name $oldpolicy\""
+	iptables -P $chain_name $oldpolicy; rv=$?
+	if [ $rv -ne 0 ]; then
+		echo "Error $rv trying to change iptables policy with command \"iptables -P $chain_name $oldpolicy\". Exiting."
+		exit 1
+        fi
+done < "$preinstall_policies_file"
+
+### Delete app data and directory
+rm -rf "$datapath"
+
+### Delete scripts
+rm "$install_dir/geoblocker_bash-fetch"
+rm "$install_dir/geoblocker_bash-apply"
+rm "$install_dir/geoblocker_bash-run"
+rm "$install_dir/geoblocker_bash-install"
+rm "$install_dir/validate_cron_schedule.sh"
+
+echo "Uninstall complete."

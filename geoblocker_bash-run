@@ -1,0 +1,102 @@
+#!/bin/bash -l
+
+# runs the geoblocker_bash-fetch script to fetch ip list from RIPE
+# then runs geoblocker_bash-apply to apply the ip list to iptables
+# depends on following scripts: geoblocker_bash-fetch, geoblocker_bash-apply
+
+
+me=$(basename "$0")
+echo ""
+
+#### FUNCTIONS
+
+usage() {
+    cat <<EOF
+
+    Usage: $me -c country [-p path] [-d] [-h]
+
+    Options:
+                -c tld		: tld / country code
+	        -p path		: Path to store downloaded ip lists (default: /var/lib/geoblocker_bash)
+
+                -d		: Debug
+                -h		: This help
+EOF
+}
+
+die() {
+	echo "$@" 1>&2
+	echo ""
+	logger -t geoblocker_bash-run "$@"
+	exit 1
+}
+
+
+
+#### PARSE ARGUMENTS
+
+while getopts "c:p:dh" opt; do
+    case $opt in
+                c) country=$OPTARG;;
+		p) whitelist_path=$OPTARG;;
+                d) debug="-d";;
+                h) usage;;
+    esac
+done
+shift $((OPTIND -1))
+
+
+#### Initialize variables
+
+min_size_ipv4=${min_size_ipv4:-5000}  # default is 5000 bytes
+min_size_ipv6=${min_size_ipv6:-2000}  # default is 2000 bytes
+whitelist_path=${whitelist_path:-/var/lib/geoblocker_bash}  # default is /var/lib/geoblocker_bash
+
+
+#### Checks
+
+# check that we have geoblocker_bash-fetch
+if ! command -v geoblocker_bash-fetch &> /dev/null; then
+        err="Error: Cannot find \"geoblocker_bash-fetch\". Did you run setup? Exiting."
+        die "$err"
+fi
+
+# check that we have geoblocker_bash-apply
+if ! command -v geoblocker_bash-apply &> /dev/null; then
+        err="Error: Cannot find \"geoblocker_bash-apply\". Did you run setup? Exiting."
+        die "$err"
+fi
+
+
+if [ -z "$country" ]; then
+        err="Specify country with -c! Exiting."
+	usage
+	echo ""
+        die "$err"
+fi
+
+
+
+#### Main
+
+geoblocker_bash-fetch $debug -c "$country" -p "$whitelist_path"; rv=$?
+if [ $rv -ne 0 ]; then
+	echo ""
+	exit $rv
+else
+	[ $debug ] && echo "Successfully retrieved ip list from RIPE."
+fi
+
+geoblocker_bash-apply $debug -p "$whitelist_path/ipv4_$country" -o; rv=$?
+if [ $rv -ne 0 ]; then
+        echo ""
+        exit $rv
+else
+        [ $debug ] && echo "Successfully applied the whitelist."
+fi
+
+logger -t geoblocker_bash-run "Successfully fetched and applied whitelist."
+
+echo ""
+
+exit 0
