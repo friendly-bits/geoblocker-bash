@@ -2,7 +2,6 @@
 
 # runs the geoblocker_bash-fetch script to fetch ip list from RIPE
 # then runs geoblocker_bash-apply to apply the ip list to iptables
-# depends on following scripts: geoblocker_bash-fetch, geoblocker_bash-apply
 
 
 me=$(basename "$0")
