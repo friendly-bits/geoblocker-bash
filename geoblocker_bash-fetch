@@ -1,20 +1,16 @@
 #!/bin/bash -l
 
-# Get country IP addresses from RIPE and compile them into separate ipv4 and ipv6 plain lists
+# Based on a prior script by mivk, called get-ripe-ips.
+#
+# Gets country IP addresses from RIPE and compile them into separate ipv4 and ipv6 plain lists
 ## See https://stat.ripe.net/docs/data_api
-
+#
 # Attempts to determine local subnet for the main network interface and adds that to the end of the list
-## NOTE: works for me. May not work on your system. Test the function "findlocalsubnet" separately before use!
-
+#
 # Depends on jq - JSON processor.
 ## On Debian and derivatives, if you are missing jq then install it using this command:
 ## apt install jq
 
-# NOTE: This script attempts to find the local subnet and add it to the ipv4 list. Works for me. May not work on your system. Test!!!
-## The relevant function is "findlocaliprange"
-
-
-myversion=0.25.3
 me=$(basename "$0")
 
 ripe_url="https://stat.ripe.net/data/country-resource-list/data.json?v4_format=prefix&resource="
