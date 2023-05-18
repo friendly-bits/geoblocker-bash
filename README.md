@@ -38,6 +38,7 @@ It can be used separately from this collection, as it does its own pre-requisite
 - Creates or updates a named ipset from a user-specified file (which should contain a plain ipv4 subnets list).
 - Sets default policy on INPUT and FORWARD iptables chains to DROP
 - Then creates iptables rules that allow connection from subnets included in the ipset.
+
 It also can be used separately from this collection, as it does its own pre-requisite checks and input validation and accepts arguments.
 
 **The validate_cron_schedule script** is used by the install script. It accepts cron schedule expression and attempts to make sure that it complies with format that cron expects.
