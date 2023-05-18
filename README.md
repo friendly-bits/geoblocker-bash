@@ -21,8 +21,8 @@ The collection includes 6 scripts:
 - Creates periodic cron task based on that and a reboot task. Both cron tasks call the geoblocker_bash-run script with the necessary arguments.
 
 **The uninstall script**:
-- Removes the associated ipset
 - Removes associated iptables rules
+- Removes the associated ipset
 - Restores pre-install iptables policies for INPUT and FORWARD chains from backup
 - Deletes scripts' data folder /var/lib/geoblocker_bash
 - Deletes the scripts from /usr/local/bin
