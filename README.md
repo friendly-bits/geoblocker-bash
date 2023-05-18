@@ -46,6 +46,9 @@ It also can be used separately from this collection, as it does its own pre-requ
 **Pre-requisites**:
 - Linux running systemd (tested on Debian, may or may not work on other distributions)
 - Root access
+- iptables (default firewall on most linux distributions)
+- standard linux tools including awk, sed, grep
+- either curl or wget
 - ipset (install it with 'apt install ipset' or similar)
 - jq - Json processor (install it with 'apt install jq' or similar)
 
