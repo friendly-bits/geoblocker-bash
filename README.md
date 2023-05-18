@@ -37,7 +37,7 @@ It can be used separately from this collection, as it does its own pre-requisite
 **The apply script**:
 - Creates or updates a named ipset from a user-specified file (which should contain a plain ipv4 subnets list).
 - Sets default policy on INPUT and FORWARD iptables chains to DROP
-- Then creates iptables rules that allow connection from subnets included in the ipset.
+- Then creates iptables rules that allow connection from subnets included in the ipset (ipv4 only).
 
 It also can be used separately from this collection, as it does its own pre-requisite checks and input validation and accepts arguments.
 
