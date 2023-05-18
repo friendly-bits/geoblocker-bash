@@ -1,7 +1,7 @@
 # geoblocker_bash
-Blocks incoming traffic from anywhere except subnets in a whitelist. Uses iptables. Collection of bash scripts with easy install.
+Blocks incoming traffic from anywhere except whitelisted subnets Uses iptables. Collection of bash scripts with easy install.
 
-Fetches subnets list from RIPE - regional Internet registry for Europe, the Middle East and parts of Central Asia.
+Subnets list is fetched from RIPE - regional Internet registry for Europe, the Middle East and parts of Central Asia.
 
 Intended use case is a server that needs to be publically accessible in your country but does not need to be internationally accessible. For example, a server you run your CRM application on.
 
