@@ -14,11 +14,10 @@ The collection includes 6 scripts:
 **The install script**:
 - Checks for prerequisites
 - Copies the scripts (including itself) into /usr/local/bin
-- Creates system folder for scripts' data in /var/lib/geoblocker_bash. Data consists of a file storing pre-install iptables policies for the INPUT and FORWARD chains, and fetched subnet lists from RIPE.
-- Runs geoblocker_bash-apply to immediately apply new firewall config
+- Creates system folder for scripts' data in /var/lib/geoblocker_bash. Data consists of a file storing pre-install iptables policies for the INPUT and FORWARD chains (for backup), and fetched subnet lists from RIPE.
+- Calls geoblocker_bash-run that, in turn, calls geoblocker_bash-fetch and geoblocker_bash-apply to immediately fetch and apply new firewall config.
 - Verifies that crond service is enabled. Enables it if not.
-- Validates optionally user-specified cron schedule expression (if not specified then uses default schedule "0 4 * * *" (at 4:00 [am] every day). 
-(that's what validate_cron_schedule.sh is for)
+- Calls validate_cron_schedule.sh to verify optionally user-specified cron schedule expression (if not specified then uses default schedule "0 4 * * *" (at 4:00 [am] every day).
 - Creates cron periodic cron task based on that and a reboot task. Both cron tasks call the geoblocker_bash-run script with the necessary arguments.
 
 **The uninstall script**:
