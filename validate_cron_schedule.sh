@@ -1,6 +1,8 @@
 #!/bin/bash
-
-# verify_cron_expression - script checks a cron schedule expression to ensure
+#    Based on prior "verifycron" script circulating on the internets
+#    This is a simplified and modified version,
+#    adapted to receive one cron schedule expression in an argument.
+#    Checks a cron schedule expression to ensure
 #    that it's formatted properly.  Expects standard cron notation of
 #       min hr dom mon dow
 #    where min is 0-59, hr 0-23, dom is 1-31, mon is 1-12 (or names)
