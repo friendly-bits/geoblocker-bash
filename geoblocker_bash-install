@@ -92,7 +92,15 @@ if [ $(! ps -p 1 -o comm=) != "systemd" ]; then
 	exit 1
 fi
 
-# Check that we have the ipset command
+# check for curl or wget
+curl_or_wget=$(if hash curl 2>/dev/null; then echo "curl -s"; elif hash wget 2>/dev/null; then echo "wget -qO-"; fi);
+if [ -z "$curl_or_wget" ]; then
+        echo "Error: Neither curl nor wget found. Exiting."
+        echo ""
+        exit 1
+fi
+
+# Check that we have ipset tool
 if ! command -v "ipset" &> /dev/null; then
         echo "Error: Cannot find 'ipset'. Install it with 'apt install ipset' or similar. Exiting."
         echo ""
