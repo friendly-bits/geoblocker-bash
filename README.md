@@ -5,6 +5,17 @@ Subnets list is fetched from RIPE - regional Internet registry for Europe, the M
 
 Intended use case is a server that needs to be publically accessible in your country but does not need to be internationally accessible. For example, a server you run your CRM application on.
 
+**TL;DR**
+
+To install:
+1) Install prerequisites. On Debian and derivatives run: sudo apt install ipset jq wget
+2) Download *all* scripts in this collection into same folder
+3) run "sudo bash geoblocker_bash-install -c [country_code]"
+ To uninstall:
+ run "sudo geoblocker_bash-uninstall"
+
+**Detailed description**
+
 The collection includes 6 scripts:
 1. geoblocker_bash-install
 2. geoblocker_bash-uninstall
@@ -47,7 +58,7 @@ It also can be used separately from this collection, as it does its own pre-requ
 
 **The validate_cron_schedule script** is used by the install script. It accepts cron schedule expression and attempts to make sure that it complies with format that cron expects.
 
-**Pre-requisites**:
+**Prerequisites**:
 - Linux running systemd (tested on Debian, may or may not work on other distributions)
 - Root access
 - iptables (default firewall on most linux distributions)
@@ -59,11 +70,13 @@ It also can be used separately from this collection, as it does its own pre-requ
 
 **NOTES**:
 
-All scripts accept the -d argument for debug (in case troubleshooting is needed).
+Most scripts accept the -d argument for debug (in case troubleshooting is needed).
+
+Since these scripts are intended to be used on servers (including on my own server), I invested much effort to ensure reliability and proper error handling. Yet, I can not guarantee that they will work as intended in your environment. You should test on your own (and I will be interested to hear about your experience).
 
 The run, fetch and apply scripts write to syslog in case critical errors occur. The run script also writes a syslog line upon success.
 
-The collection can be installed and re-installed multiple times while preserving the initial backup of iptables policies. The install script will not overwrite the backup file. The backup will only be deleted upon running the uninstall script.
+Changes applied to the iptables are made persistent via cron. If you want to test without persistence, delete the 2 cron jobs created by the install script. In that case, changes will be reverted upon system reboot.
 
 **Note** that the install script creates cron jobs that **will be run as root**. Make appropriate security arrangements to prevent it from getting modified by unauthorized third parties.
 
