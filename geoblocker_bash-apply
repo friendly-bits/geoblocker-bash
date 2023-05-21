@@ -14,59 +14,62 @@
 ## https://www.thegeekdiary.com/how-to-use-ipset-command-in-linux/
 
 me=$(basename "$0")
-echo ""
 
 #### FUNCTIONS
 
 usage() {
     cat <<EOF
 
-    Usage: $me -p iplist_file_path [-n ipset_name] [-f family] [-t timeout] [-d] [-h]
+    Usage: $me -p iplist_file_path [-t timeout] [-d] [-h]
 
     Options:
 		-p path		: path to a file with raw list in the format of xxx.xxx.xxx.xxx/xx
-		-n ipset_name	: the name of the ipset in iptables (default: \"geoblocker_whitelist\")
-		-f family	: 'inet' for ipv4 or 'inet6' for ipv6 (default: inet)
 		-t timeout	: timeout in seconds. new entries to the list will be destroyed after timeout (default: -1, no timeout)
-		-o		: force overwrite existing ipset
 
 		-d		: Debug
 		-h		: This help
+
 EOF
 }
 
 die() {
-	# echoes out the error and writes it into syslog
-        echo "$@" 1>&2
-        echo ""
-        logger -t geoblocker_bash-apply "$@"
+# echoes out the error and writes it into syslog
+	echo "$@" 1>&2
+	echo ""
+	logger -t geoblocker_bash-apply "$@"
 	exit 1
 }
 
 
 #### Initialize variables
 ipset_name="geoblocker_whitelist"
+iptables_comment="geoblocker_bash"
+family="inet"
 
 #### PARSE ARGUMENTS
 
-while getopts "n:p:f:t:odh" opt; do
+while getopts "p:f:t:dh" opt; do
     case $opt in
-		n) ipset_name=$OPTARG;;
 		p) iplist_file=$OPTARG;;
-		f) family=$OPTARG;;
 		t) timeout=$OPTARG;;
-		o) force_overwrite=true;;
 		d) debug=true;;
-	        h) usage;;
+		h) usage; exit 0;;
     esac
 done
 shift $((OPTIND -1))
 
-family=${family:-inet}  # inet means ipv4, inet6 means ipv6. default is inet
 timeout=${timeout:-"0"}  # default is 0 - no timeout
-
+echo ""
 
 #### Checks
+
+# check that we have iplist file path
+if [ -z "$iplist_file" ]; then
+	err="Error: iplist file path can not be empty. Exiting."
+	usage
+	echo ""
+	die "$err"
+fi
 
 # Check that we have ipset
 if ! command -v "ipset" &> /dev/null; then
@@ -77,15 +80,6 @@ fi
 # check that we have ipset_name
 if [ -z "$ipset_name" ]; then
 	err="Error: ipset name can not be empty. Exiting."
-	usage
-	echo ""
-	die "$err"
-fi
-
-# check that we have iplist file path
-if [ -z "$iplist_file" ]; then
-	err="Error: iplist file path can not be empty. Exiting."
-	usage
 	echo ""
 	die "$err"
 fi
@@ -102,40 +96,32 @@ fi
 
 #### Main
 
-# check if ipset with given name already exists and is non-empty
+
+## delete existing iptables rules matching comment "$iptables_comment"
+
+# iptables-save command just dumps the table, then we pipe the contents into sed
+# sed executes iptables -D (delete) command on matching rules. execution is promtped by the switch /e
+
+iptables-save | sed -r "/OUTPUT.*comment.*$iptables_comment/s/-A/iptables -D/e" &>/dev/null
+iptables-save | sed -r "/INPUT.*comment.*$iptables_comment/s/-A/iptables -D/e" &>/dev/null
+
+
+## check if ipset with given name already exists and is non-empty
 # we query ipset and check how many lines it gives for given name.
-## for non-existing sets that should be 0
-## for existing empty sets that should be 7
-## for existing non-empty sets that should be >7
+# for non-existing sets that should be 0
+# for existing empty sets that should be 7
+# for existing non-empty sets that should be >7
 
 ipset_length=$(ipset -L $ipset_name 2>/dev/null |  wc -l)
 [ $debug ] && echo "Debug: ipset_length for existing ipset \"$ipset_name\": $ipset_length"
 
-if [ $ipset_length -gt "7" ]; then
-	if [ -z "$force_overwrite" ]; then
-		err="Error: ipset \"$ipset_name\" already exists but overwrite was not approved. Use -o to overwrite. Exiting."
-		die "$err"
-	else
-		[ $debug ] && echo "Debug: Found non-empty ipset \"$ipset_name\". Overwrite was approved. Destroying."
+if [ $ipset_length -ge "7" ]; then
+	[ $debug ] && echo "Debug: Found existing ipset \"$ipset_name\". Destroying."
 
-		[ $debug ] && echo "Debug: Trying to remove matching iptables rule..."
-		iptables -D INPUT -m set --match-set "$ipset_name" src -j ACCEPT 2>/dev/null
+#	[ $debug ] && echo "Debug: Trying to remove matching iptables rule..."
+#	iptables -D INPUT -m set --match-set "$ipset_name" src -j ACCEPT 2>/dev/null
 
-		[ $debug ] && echo "Debug: Destroying ipset \"$ipset_name\"..."
-		ipset destroy "$ipset_name"; rv=$?
-
-		if [ $rv -ne 0 ]; then
-		        err="Error $rv destroying ipset \"$ipset_name\". Exiting."
-		        die "$err"
-		else
-		        [ $debug ] && echo "Successfully destroyed existing ipset \"$ipset_name\"."
-		fi
-
-	fi
-fi
-
-if [ $ipset_length -eq 7 ]; then
-	[ $debug ] && echo "Debug: Found empty ipset \"$ipset_name\". Destroying."
+	[ $debug ] && echo "Debug: Destroying ipset \"$ipset_name\"..."
 	ipset destroy "$ipset_name"; rv=$?
 
 	if [ $rv -ne 0 ]; then
@@ -163,7 +149,7 @@ else
 	echo "Successfully created ipset \"$ipset_name\"."
 fi
 
-# import ip list from file
+# import ip list into ipset from file
 
 for ip in `cat $iplist_file`; do
 	ipset add "$ipset_name" "$ip"; rv=$?
@@ -174,7 +160,29 @@ for ip in `cat $iplist_file`; do
 done
 
 
-# configure iptables policies
+# allow already established/related connections
+
+[ $debug ] && echo "Debug: Allowing established/related connections..."
+
+
+# insert rules to allow ESTABLISHED, RELATED connections
+iptables -I INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT -m comment --comment "$iptables_comment"; rv=$?
+if [ $rv -ne 0 ]; then
+	err="Error $rv trying to insert rules with command \"iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT\". Exiting."
+	die "$err"
+fi
+
+# append the whitelist to the INPUT chain
+echo "Appending the whitelist to the INPUT chain..."
+iptables -A INPUT -m set --match-set "$ipset_name" src -j ACCEPT -m comment --comment "$iptables_comment"; rv=$?
+if [ $rv -ne 0 ]; then
+	err="Error $rv trying to append ipset rules with command \"iptables -I INPUT -m set --match-set "$ipset_name" src -j ACCEPT\". Exiting."
+	die "$err"
+fi
+
+
+## configure iptables policies
+
 # set policy on INPUT and FORWARD chains to DROP
 
 echo ""
@@ -187,36 +195,10 @@ fi
 
 iptables -P FORWARD DROP; rv=$?
 if [ $rv -ne 0 ]; then
-        err="Error $rv trying to change iptables policy with command \"iptables -P FORWARD DROP\". Exiting."
-        die "$err"
+	err="Error $rv trying to change iptables policy with command \"iptables -P FORWARD DROP\". Exiting."
+	die "$err"
 fi
 
-# allow already established/related connections
 
-[ $debug ] && echo "Debug: Allowing established/related connections..."
-
-iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT; rv=$?
-if [ $rv -ne 0 ]; then
-        err="Error $rv trying to change iptables rules with command \"iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT\". Exiting."
-        die "$err"
-fi
-
-iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT; rv=$?
-if [ $rv -ne 0 ]; then
-        err="Error $rv trying to change iptables rules with command \"iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT\". Exiting."
-        die "$err"
-fi
-
-# insert the ipset into iptables
-
-echo "Inserting whitelist ipset \"$ipset_name\" into iptables..."
-
-iptables -I INPUT -m set --match-set "$ipset_name" src -j ACCEPT; rv=$?
-if [ $rv -ne 0 ]; then
-        err="Error $rv trying to insert ipset rules into iptables with command \"iptables -I INPUT -m set --match-set "$ipset_name" src -j ACCEPT\". Exiting."
-        die "$err"
-else
-	echo "Success. All done!"
-fi
-
+echo "Success. All done!"
 echo ""
