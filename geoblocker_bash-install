@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Install script for geoip blocking collection of scripts
+# Installs script for geoip blocking collection of scripts
 # Must be run as root
 #
 # Creates system folders for lists storage and copies the scripts into /usr/local/bin
@@ -14,7 +14,6 @@
 
 
 me=$(basename "$0")
-echo ""
 
 #### FUNCTIONS
 
@@ -24,12 +23,13 @@ usage() {
     Usage: $me -c country [-s "schedule"] [-d] [-h]
 
     Options:
-                -c tld          : tld / country code
+		-c tld	  : tld / country code
 		-s "schedule"	: schedule expression for update cron job, must be inside double quotes
 					default: "0 4 * * *" (at 4:00 [am] every day)
 
-                -d              : Debug
-                -h              : This help
+		-d	      : Debug
+		-h	      : This help
+
 EOF
 }
 
@@ -48,7 +48,12 @@ get_script_dir () {
 	echo "$DIR"
 }
 
-
+install_failed() {
+	echo "Error: Installation failed. Uninstalling." >&2
+	echo ""
+	bash geoblocker_bash-uninstall
+	exit 1
+}
 
 #### PARSE ARGUMENTS
 
@@ -57,7 +62,7 @@ while getopts "c:s:dh" opt; do
 		c) country=$OPTARG;;
 		s) cron_schedule=$OPTARG;;
 		d) debug="-d";;
-		h) usage;;
+		h) usage; exit 0;;
     esac
 done
 
@@ -68,21 +73,22 @@ preinstall_policies_file="$datadir/preinstall_policies.bak"
 whitelist_path="$datadir/ip_lists"
 cron_schedule="${cron_schedule:-0 4 * * *}"
 
+echo ""
 
 #### Checks
+
+if [ -z "$country" ]; then
+	echo "Specify country with -c !"
+	echo ""
+	usage
+	exit 1
+fi
 
 # check for root
 if [ "$EUID" -ne 0 ]; then
 	echo "This needs to be run as root."
 	echo ""
 	exit 1
-fi
-
-if [ -z "$country" ]; then
-        echo "Specify country with -c !"
-	echo ""
-	usage
-        exit 1
 fi
 
 # check for systemd
@@ -95,22 +101,22 @@ fi
 # check for curl or wget
 curl_or_wget=$(if hash curl 2>/dev/null; then echo "curl -s"; elif hash wget 2>/dev/null; then echo "wget -qO-"; fi);
 if [ -z "$curl_or_wget" ]; then
-        echo "Error: Neither curl nor wget found. Exiting."
-        echo ""
-        exit 1
+	echo "Error: Neither curl nor wget found. Exiting."
+	echo ""
+	exit 1
 fi
 
 # Check that we have ipset tool
 if ! command -v "ipset" &> /dev/null; then
-        echo "Error: Cannot find 'ipset'. Install it with 'apt install ipset' or similar. Exiting."
-        echo ""
+	echo "Error: Cannot find 'ipset'. Install it with 'apt install ipset' or similar. Exiting."
+	echo ""
 	exit 1
 fi
 
 # check that we have jq
 if ! command -v jq &> /dev/null; then
-        echo "Error: Cannot find the jq Json processor. Install it with 'apt install jq' or similar. Exiting"
-        echo ""
+	echo "Error: Cannot find the jq Json processor. Install it with 'apt install jq' or similar. Exiting"
+	echo ""
 	exit 1
 fi
 
@@ -124,37 +130,37 @@ cd "$scriptdir"
 
 # check that geoblocker_bash-fetch exists
 if [ ! -f "geoblocker_bash-fetch" ]; then
-        echo "Error: Cannot find geoblocker_bash-fetch" >&2
-        echo ""
-        exit 1
+	echo "Error: Cannot find geoblocker_bash-fetch" >&2
+	echo ""
+	exit 1
 fi
 
 # check that geoblocker_bash-apply exists
 if [ ! -f "geoblocker_bash-apply" ]; then
-        echo "Error: Cannot find geoblocker_bash-apply" >&2
-        echo ""
-        exit 1
+	echo "Error: Cannot find geoblocker_bash-apply" >&2
+	echo ""
+	exit 1
 fi
 
 # check that geoblocker_bash-run exists
 if [ ! -f "geoblocker_bash-apply" ]; then
-        echo "Error: Cannot find geoblocker_bash-apply" >&2
-        echo ""
-        exit 1
+	echo "Error: Cannot find geoblocker_bash-apply" >&2
+	echo ""
+	exit 1
 fi
 
 # check that validate_cron_schedule.sh exists
 if [ ! -f "validate_cron_schedule.sh" ]; then
-        echo "Error: Cannot find validate_cron_schedule.sh" >&2
-        echo ""
-        exit 1
+	echo "Error: Cannot find validate_cron_schedule.sh" >&2
+	echo ""
+	exit 1
 fi
 
 # check that geoblocker_bash-uninstall exists
 if [ ! -f "geoblocker_bash-uninstall" ]; then
-        echo "Error: Cannot find geoblocker_bash-uninstall" >&2
-        echo ""
-        exit 1
+	echo "Error: Cannot find geoblocker_bash-uninstall" >&2
+	echo ""
+	exit 1
 fi
 
 
@@ -175,9 +181,9 @@ if [ $rv -ne 0 ]; then
 	echo "Enabling cron service..."
 	systemctl enable cron.service; rv=$?
 	if [ $rv -ne 0 ]; then
-	        echo "Error $rv enabling cron.service. Are you running Systemd? Exiting." >&2
-	        echo ""
-	        exit 1
+		echo "Error $rv enabling cron.service. Exiting." >&2
+		echo ""
+		exit 1
 	fi
 fi
 
@@ -194,65 +200,65 @@ if [ "$scriptdir" != "$install_dir" ]; then
 
 	cp geoblocker_bash-fetch "$install_dir/geoblocker_bash-fetch"; rv=$?
 	if [ $rv -ne 0 ]; then
-	        echo "Error $rv copying geoblocker_bash-fetch to $install_dir. Exiting." >&2
-	        echo ""
-	        exit 1
+		echo "Error $rv copying geoblocker_bash-fetch to $install_dir. Exiting." >&2
+		echo ""
+		install_failed
 	else
-	        [ $debug ] && echo "Debug: Successfully copied geoblocker_bash-fetch to $install_dir."
+		[ $debug ] && echo "Debug: Successfully copied geoblocker_bash-fetch to $install_dir."
 	fi
 	chmod +x "$install_dir/geoblocker_bash-fetch"
 
 	cp geoblocker_bash-apply "$install_dir/geoblocker_bash-apply"; rv=$?
 	if [ $rv -ne 0 ]; then
-	        echo "Error $rv copying geoblocker_bash-apply to $install_dir. Exiting." >&2
-	        echo ""
-	        exit 1
+		echo "Error $rv copying geoblocker_bash-apply to $install_dir. Exiting." >&2
+		echo ""
+		install_failed
 	else
-	        [ $debug ] && echo "Debug: Successfully copied geoblocker_bash-apply to $install_dir."
+		[ $debug ] && echo "Debug: Successfully copied geoblocker_bash-apply to $install_dir."
 	fi
 	chmod +x "$install_dir/geoblocker_bash-apply"
 
 	cp geoblocker_bash-install "$install_dir/geoblocker_bash-install"; rv=$?
 	if [ $rv -ne 0 ]; then
-	        echo "Error $rv copying geoblocker_bash-install to $install_dir. Exiting." >&2
-	        echo ""
-	        exit 1
+		echo "Error $rv copying geoblocker_bash-install to $install_dir. Exiting." >&2
+		echo ""
+		install_failed
 	else
-	        [ $debug ] && echo "Debug: Successfully copied geoblocker_bash-install to $install_dir."
+		[ $debug ] && echo "Debug: Successfully copied geoblocker_bash-install to $install_dir."
 	fi
 	chmod +x "$install_dir/geoblocker_bash-install"
 
 	cp geoblocker_bash-run "$install_dir/geoblocker_bash-run"; rv=$?
 	if [ $rv -ne 0 ]; then
-	        echo "Error $rv copying geoblocker_bash-run to $install_dir. Exiting." >&2
-	        echo ""
-	        exit 1
+		echo "Error $rv copying geoblocker_bash-run to $install_dir. Exiting." >&2
+		echo ""
+		install_failed
 	else
-	        [ $debug ] && echo "Debug: Successfully copied geoblocker_bash-run to $install_dir."
+		[ $debug ] && echo "Debug: Successfully copied geoblocker_bash-run to $install_dir."
 	fi
 	chmod +x "$install_dir/geoblocker_bash-run"
 
-        cp geoblocker_bash-uninstall "$install_dir/geoblocker_bash-uninstall"; rv=$?
-        if [ $rv -ne 0 ]; then
-                echo "Error $rv copying geoblocker_bash-uninstall to $install_dir. Exiting." >&2
-                echo ""
-                exit 1
-        else
-                [ $debug ] && echo "Debug: Successfully copied geoblocker_bash-uninstall to $install_dir."
-        fi
-        chmod +x "$install_dir/geoblocker_bash-uninstall"
+	cp geoblocker_bash-uninstall "$install_dir/geoblocker_bash-uninstall"; rv=$?
+	if [ $rv -ne 0 ]; then
+		echo "Error $rv copying geoblocker_bash-uninstall to $install_dir. Exiting." >&2
+		echo ""
+		install_failed
+	else
+		[ $debug ] && echo "Debug: Successfully copied geoblocker_bash-uninstall to $install_dir."
+	fi
+	chmod +x "$install_dir/geoblocker_bash-uninstall"
 
 
 
-        cp validate_cron_schedule.sh "$install_dir/validate_cron_schedule.sh"; rv=$?
-        if [ $rv -ne 0 ]; then
-                echo "Error $rv copying validate_cron_schedule.sh to $install_dir. Exiting." >&2
-                echo ""
-                exit 1
-        else
-                [ $debug ] && echo "Debug: Successfully copied validate_cron_schedule.sh to $install_dir."
-        fi
-        chmod +x "$install_dir/validate_cron_schedule.sh"
+	cp validate_cron_schedule.sh "$install_dir/validate_cron_schedule.sh"; rv=$?
+	if [ $rv -ne 0 ]; then
+		echo "Error $rv copying validate_cron_schedule.sh to $install_dir. Exiting." >&2
+		echo ""
+		install_failed
+	else
+		[ $debug ] && echo "Debug: Successfully copied validate_cron_schedule.sh to $install_dir."
+	fi
+	chmod +x "$install_dir/validate_cron_schedule.sh"
 fi
 
 ### Back up pre-install policies for INPUT and FORWARD chains
@@ -260,9 +266,9 @@ fi
 [ $debug ] && echo ""
 [ $debug ] && echo "Debug: Trying to create backup of current INPUT and FORWARD iptables chains policies..."
 
-# if backup file already exists, continue installing but skip overwriting the backup file
+# if a backup file already exists, continue installing but skip overwriting the backup file
 if [ -f "$preinstall_policies_file" ]; then
-        [ $debug ] && echo "Debug: $preinstall_policies_file already exists, skipping creation of iptables policies backup." >&2
+	[ $debug ] && echo "Debug: $preinstall_policies_file already exists, skipping creation of iptables policies backup." >&2
 
 else
 	preinstall_input_policy=$(iptables -nL | grep "Chain INPUT" | awk -F'policy |)' '{print $2}')
@@ -273,18 +279,16 @@ else
 	touch "$preinstall_policies_file"
 	echo "INPUT $preinstall_input_policy" >> "$preinstall_policies_file"
 	echo "FORWARD $preinstall_forward_policy" >> "$preinstall_policies_file"
-	[ $debug ] && echo "Debug: Done creating backup."
+	[ $debug ] && echo "Debug: Done creating policies backup."
 fi
 
 ### Fetch and apply the whitelist
 geoblocker_bash-run $debug -c $country -p "$whitelist_path"; rv=$?
 
 if [ $rv -ne 0 ]; then
-        echo "Error $rv fetching and applying the whitelist! Exiting." >&2
-        echo ""
-        exit 1
+	install_failed
 else
-        [ $debug ] && echo "Debug: Successfully fetched and applied the whitelist."
+	[ $debug ] && echo "Debug: Successfully fetched and applied the whitelist."
 fi
 
 
@@ -292,7 +296,7 @@ fi
 ### Create cron jobs
 
 [ $debug ] && echo ""
-[ $debug ] && echo "Debug: deleting previous cron jobs for geoblocker_bash-run..."
+[ $debug ] && echo "Debug: deleting previous cron jobs for geoip-whitelist..."
 crontab -u root -l 2>/dev/null |  grep -v 'geoblocker_bash-run' | sudo crontab -u root -
 
 [ $debug ] && echo ""
@@ -301,11 +305,11 @@ echo -e "$(sudo crontab -u root -l 2>/dev/null)\n$cron_schedule $install_dir/geo
 rv=$?
 
 if [ $rv -ne 0 ]; then
-        echo "Error $rv creating the cron job. Exiting." >&2
-        echo ""
-        exit 1
+	echo "Error $rv creating the cron job. Exiting." >&2
+	echo ""
+	install_failed
 else
-        echo "Successfully created periodic cron job."
+	echo "Successfully created periodic cron job."
 fi
 
 cron_line_result=$(crontab -u root -l 2>/dev/null |  grep 'geoblocker_bash-run')
@@ -313,19 +317,20 @@ echo "Applied cron line: $cron_line_result"
 
 [ $debug ] && echo ""
 echo "Creating reboot cron job..."
-echo -e "$(sudo crontab -u root -l 2>/dev/null)\n@reboot sleep 30 && $install_dir/geoblocker_bash-run $debug -c $country 2>&1" | sudo crontab -u root -
+echo -e "$(sudo crontab -u root -l 2>/dev/null)\n@reboot sleep 30 && $install_dir/geoblocker_bash-run -c $country 2>&1" | sudo crontab -u root -
 rv=$?
 
 if [ $rv -ne 0 ]; then
-        echo "Error $rv creating the cron job. Exiting." >&2
-        echo ""
-        exit 1
+	echo "Error $rv creating the cron job. Exiting." >&2
+	echo ""
+	install_failed
 else
-        echo "Successfully created reboot cron job."
+	echo "Successfully created reboot cron job."
 	echo ""
 	echo "View cron jobs with \"crontab -l\""
 fi
 
+echo "View iptables rules with \"iptables -L\""
 echo ""
 
 echo "Install done."
