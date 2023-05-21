@@ -1,14 +1,12 @@
 #!/bin/bash
-#    Based on prior "verifycron" script circulating on the internets
-#    This is a simplified and modified version,
-#    adapted to receive one cron schedule expression in an argument.
-#    Checks a cron schedule expression to ensure
-#    that it's formatted properly.  Expects standard cron notation of
+
+#    Checks a cron schedule expression to ensure that it's formatted properly.  Expects standard cron notation of
 #       min hr dom mon dow
-#    where min is 0-59, hr 0-23, dom is 1-31, mon is 1-12 (or names)
-#    and dow is 0-7 (or names).  Fields can have ranges (a-e), lists
-#    separated by commas (a,c,z), or an asterisk. Note that the step
-#    value notation of Vixie cron is not supported (e.g., 2-6/2).
+#    where min is 0-59, hr 0-23, dom is 1-31, mon is 1-12 (or names) and dow is 0-7 (or names).  Fields can have ranges (a-e), lists
+#    separated by commas (a,c,z), or an asterisk. Note that the step value notation of Vixie cron is not supported (e.g., 2-6/2).
+#
+#    Based on prior "verifycron" script circulating on the internets
+#    This is a simplified and modified version, adapted to receive one cron schedule expression in an argument.
 
 
 #### Functions
@@ -90,19 +88,19 @@ fi
 read min hour dom mon dow extra <<< "$@"
 
 if [ ! -z "$extra" ]; then
-        echo ""
+	echo ""
 	echo "Error: Too many arguments! I don't know what to do with \"$extra\"!"
-        echo "Example: \"0 4 * * 6\"" >&2
-        echo ""
+	echo "Example: \"0 4 * * 6\"" >&2
+	echo ""
 	exit 1;
 fi
 
 if [ -z "$min" ]; then
 # if there is nothing to check
-        echo ""
+	echo ""
 	echo "This script requires crontab schedule line as an argument!" >&2
-        echo "Example: \"0 4 * * 6\"" >&2
-        echo ""
+	echo "Example: \"0 4 * * 6\"" >&2
+	echo ""
 	exit 1
 fi
 
@@ -143,19 +141,19 @@ fixvars
   for monslice in $(echo "$mon" | sed 's/[,-]/ /g') ; do
     if ! validNum $monslice 12 ; then
       if ! validMon "$monslice" ; then
-        echo "Invalid month value \"$monslice\""
-        errors="$(( $errors + 1 ))"
+	echo "Invalid month value \"$monslice\""
+	errors="$(( $errors + 1 ))"
       fi
     fi
   done
 
 # day of week check
 
-  for dowslice in $(echo "$dow" | sed 's/[,-]/ /g') ; do
+for dowslice in $(echo "$dow" | sed 's/[,-]/ /g') ; do
     if ! validNum $dowslice 7 ; then
       if ! validDay $dowslice ; then
-        echo "Invalid day of week value \"$dowslice\""
-        errors="$(( $errors + 1 ))"
+	echo "Invalid day of week value \"$dowslice\""
+	errors="$(( $errors + 1 ))"
       fi
     fi
   done
