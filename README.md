@@ -11,6 +11,7 @@ To install:
 1) Install prerequisites. On Debian and derivatives run: sudo apt install ipset jq wget
 2) Download *all* scripts in this collection into same folder
 3) run "sudo bash geoblocker_bash-install -c [country_code]"
+ 
  To uninstall:
  run "sudo geoblocker_bash-uninstall"
 
@@ -70,14 +71,14 @@ It also can be used separately from this collection, as it does its own pre-requ
 
 **NOTES**:
 
-Most scripts accept the -d argument for debug (in case troubleshooting is needed).
+- Most scripts accept the -d argument for debug (in case troubleshooting is needed).
 
-Since these scripts are intended to be used on servers (including on my own server), I invested much effort to ensure reliability and proper error handling. Yet, I can not guarantee that they will work as intended in your environment. You should test on your own (and I will be interested to hear about your experience).
+- Since these scripts are intended to be used on servers (including on my own server), I invested much effort to ensure reliability and proper error handling. Yet, I can not guarantee that they will work as intended in your environment. You should test on your own (and I will be interested to hear about your experience).
 
-The run, fetch and apply scripts write to syslog in case critical errors occur. The run script also writes a syslog line upon success.
+- The run, fetch and apply scripts write to syslog in case critical errors occur. The run script also writes a syslog line upon success.
 
-Changes applied to the iptables are made persistent via cron. If you want to test without persistence, delete the 2 cron jobs created by the install script. In that case, changes will be reverted upon system reboot.
+- Changes applied to the iptables are made persistent via cron. If you want to test without persistence, delete the 2 cron jobs created by the install script. In that case, changes will be reverted upon system reboot.
 
-**Note** that the install script creates cron jobs that **will be run as root**. Make appropriate security arrangements to prevent it from getting modified by unauthorized third parties.
+- **Note** that the install script creates cron jobs that **will be run as root**. Make appropriate security arrangements to prevent it from getting modified by unauthorized third parties.
 
-I will be interested to hear your feedback, for example whether it works or doesn't work on your system (please specify which), or if you find a bug, or would like to suggest code improvements. You can use the "Discussions" or "Issues" tab for that.
+- I will be interested to hear your feedback, for example whether it works or doesn't work on your system (please specify which), or if you find a bug, or would like to suggest code improvements. You can use the "Discussions" or "Issues" tab for that.
