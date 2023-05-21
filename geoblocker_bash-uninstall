@@ -1,5 +1,8 @@
 #!/bin/bash
 
+
+echo ""
+
 #### Checks
 
 # check for root
@@ -14,29 +17,46 @@ datapath="/var/lib/geoblocker_bash"
 preinstall_policies_file="$datapath/preinstall_policies.bak"
 whitelist_path="$datapath/ip_lists"
 ipset_name="geoblocker_whitelist"
+iptables_comment="geoblocker_bash"
+
 
 ### Delete associated cron jobs
 echo "Deleting cron jobs for geoip-whitelist..."
 crontab -u root -l 2>/dev/null |  grep -v 'geoblocker_bash-run' | sudo crontab -u root -
 
-### Delete associated iptables rules
-iptables -D INPUT -m set --match-set "$ipset_name" src -j ACCEPT
-
-### Destroy associated ipset
-ipset destroy "$ipset_name"
-
 ### Restore pre-install state of default policies for INPUT and FORWARD
 
-while IFS= read -r preinstall_policy; do
+while read -r preinstall_policy; do
 	chain_name=$(echo "$preinstall_policy" | cut -f 1 -d " ")
 	oldpolicy=$(echo "$preinstall_policy" | cut -f 2 -d " ")
 	echo "Restoring pre-install iptables policy with command: \"iptables -P $chain_name $oldpolicy\""
-	iptables -P $chain_name $oldpolicy; rv=$?
-	if [ $rv -ne 0 ]; then
-		echo "Error $rv trying to change iptables policy with command \"iptables -P $chain_name $oldpolicy\". Exiting."
-		exit 1
-        fi
+	if [ ! -z "$chain_name" ] && [ ! -z "oldpolicy" ]; then
+		iptables -P $chain_name $oldpolicy; rv=$?
+		if [ $rv -ne 0 ]; then
+			echo "Error $rv trying to change iptables policy with command \"iptables -P $chain_name $oldpolicy\". Exiting."
+			exit 1
+        	fi
+	else
+		echo "Could not restore pre-install iptables policies. Apparently the file $preinstall_policies_file is empty, missing or misconfigured."
+	fi
 done < "$preinstall_policies_file"
+
+
+### Delete associated iptables rules
+
+# iptables-save command just dumps the table, then we pipe the contents into sed
+# sed executes iptables -D (delete) command on matching rules. execution is promtped by the switch /e
+
+echo "Deleting associated iptables rules."
+iptables-save | sed -r "/OUTPUT.*comment.*$iptables_comment/s/-A/iptables -D/e" &>/dev/null
+iptables-save | sed -r "/INPUT.*comment.*$iptables_comment/s/-A/iptables -D/e" &>/dev/null
+
+
+
+### Destroy associated ipset
+echo "Destroying ipset $ipset_name."
+ipset destroy "$ipset_name"
+
 
 ### Delete app data and directory
 rm -rf "$datapath"
@@ -49,3 +69,4 @@ rm "$install_dir/geoblocker_bash-install"
 rm "$install_dir/validate_cron_schedule.sh"
 
 echo "Uninstall complete."
+echo ""
