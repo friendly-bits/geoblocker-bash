@@ -2,14 +2,16 @@
 
 # Based on a prior script by mivk, called get-ripe-ips.
 #
-# Gets country IP addresses from RIPE and compile them into separate ipv4 and ipv6 plain lists
+# Fetches ipv4 subnets for a given country from RIPE
+# Then parses, validates and compiles them into plain list, and saves to a file
 ## See https://stat.ripe.net/docs/data_api
-#
-# Attempts to determine local subnet for the main network interface and adds that to the end of the list
-#
+
+# Attempts to determine local subnet for the main network interface and appends it to the list
+
 # Depends on jq - JSON processor.
 ## On Debian and derivatives, if you are missing jq then install it using this command:
 ## apt install jq
+
 
 me=$(basename "$0")
 
@@ -26,45 +28,44 @@ usage() {
     Options:
 	-c tld		: tld/country code
 	-p path		: Path to store downloaded ip lists (default: /var/lib/geoblocker_bash)
-	-S size		: minimum ipv4 list file size to trust the data (default = 5000)
-	-s size		: minimum ipv6 list file size to trust the data (default = 2000)
 
 	-d		: Debug
 	-h		: This help
+
 EOF
 }
 
 die() {
-        echo "$@" 1>&2
-        echo ""
-        logger -t geoblocker_bash-fetch "$@"
-        exit 1
+	echo "$@" 1>&2
+	echo ""
+	logger -t geoblocker_bash-fetch "$@"
+	exit 1
 }
 
 
+validate_ipv4_subnet() {
+## attempts to make sure that the argument is a valid ipv4 subnet
+
+# regex compiled from 2 suggestions found here:
+# https://stackoverflow.com/questions/5284147/validating-ipv4-addresses-with-regexp
+	regex_pattern='^((25[0-5]|(2[0-4]|1\d|[1-9]|)\d)\.?\b){4}(/([01]?\d\d?|2[0-4]\d|25[0-5]))$'
+	echo "$1" | grep -P $regex_pattern; rv=$?
+	# outputs grep result, effectively filtering out invalid subnets
+
+	return $rv
+}
 
 
-findlocalsubnet () {
-### NOTE: works for me. May not work on your system. Test!!!
-# Requires following tools: ip, awk, grep, sed
+findlocalsubnet() {
+# attempts to find local subnet for the main network interface
 
-	# find local ip (ipv4)
 	localip="$(ip addr | grep 'state UP' -A2 | tail -n1 | awk '{print $2}')"
-	# another way to get it:
-	# IP=$(ip addr show | grep 'inet'| grep -v '127.0.0.1' | cut -d: -f2 | awk 'NF>0{ print $2}');
-
 
 	# transform into subnet
 	localsubnet=$(echo "$localip" | sed 's|\([0-9]*\.[0-9]*\.[0-9]*\.\)[0-9]*|\10|')
 
-
 	# Sanity check
-	# Attempts to make sure that what we have is a valid ipv4 subnet
-	# regex compiled from 2 suggestions found here:
-	# https://stackoverflow.com/questions/5284147/validating-ipv4-addresses-with-regexp
-
-	regex_pattern='^((25[0-5]|(2[0-4]|1\d|[1-9]|)\d)\.?\b){4}(/([01]?\d\d?|2[0-4]\d|25[0-5]))$'
-	(echo "$localsubnet" | grep -Pq $regex_pattern); rv=$?
+	(validate_ipv4_subnet "$localsubnet") &>/dev/null; rv=$?
 
 	if [ $rv -ne 0 ]; then
 		# if validation fails, return empty string
@@ -72,20 +73,20 @@ findlocalsubnet () {
 	else
 		echo "$localsubnet"
 	fi
+	return $rv
 }
+
 
 
 
 #### Parse arguments
 
-while getopts "c:p:S:s:dh" opt; do
+while getopts "c:p:dh" opt; do
     case $opt in
-        c) country=$OPTARG;;
-        p) whitelist_path=$OPTARG;;
-        S) min_size_ipv4=$OPTARG;;
-        s) min_size_ipv6=$OPTARG;;
-        d) debug=true;;
-        h) usage;;
+	c) country=$OPTARG;;
+	p) whitelist_path=$OPTARG;;
+	d) debug=true;;
+	h) usage; exit 0;;
     esac
 done
 shift $((OPTIND -1))
@@ -93,8 +94,8 @@ shift $((OPTIND -1))
 
 #### Initialize variables
 
-min_size_ipv4=${min_size_ipv4:-5000}  # default is 5000 bytes
-min_size_ipv6=${min_size_ipv6:-2000}  # default is 2000 bytes
+min_size_ipv4=5000  # default is 5000 bytes
+min_size_ipv6=2000  # default is 2000 bytes
 whitelist_path=${whitelist_path:-/var/lib/geoblocker_bash}  # default is /var/lib/geoblocker_bash
 
 #### Checks
@@ -144,7 +145,6 @@ if [ ! "$status" = "ok" ]; then
 	echo "Error: RIPE replied with status = '$status'."
 	echo "The requested url was '$url'"
 	echo "and the messages in their reply were: '$ripe_msg'"
-	echo "The full response is in $tmpfile"
 	err="Error: could not fetch ip list from RIPE. Exiting"
 	die "$err"
 fi
@@ -155,68 +155,85 @@ date_new=$(date -d "$ripe_db_time" +%s)
 
 family="ipv4"
 
-for family in ipv4 ipv6; do
+## only parsing the ipv4 section at this time
 
-	filename="${family}_$country"
-	out_list="$whitelist_path/$filename"
+filename="${family}_$country"
+out_list="$whitelist_path/$filename"
 
-	if [ "$family" = "ipv6" ]; then min_size="$min_size_ipv6"; else min_size="$min_size_ipv4"; fi
+if [ "$family" = "ipv6" ]; then min_size="$min_size_ipv6"; else min_size="$min_size_ipv4"; fi
 
-	if [ -f "$out_list" ]; then
-		date_old=$(stat --printf "%Y" "$out_list")
+if [ -f "$out_list" ]; then
+	date_old=$(stat --printf "%Y" "$out_list")
+else
+	date_old=0
+fi
+
+if [ ! $date_new -gt $date_old ]; then
+	echo "Note: Not updating $filename because data querytime is the same as existing list time: $date_old ($(date --date=@$date_old))." >&2
+fi
+
+if [ $date_new -gt $date_old ]; then
+
+	[ $debug ]  && echo "Debug: Querytime is newer than of old list $filename, updating..."
+
+	errorcount=0
+	subnetcount=0
+	for testsubnet in `jq -r ".data.resources.$family | .[]" "$tmpfile"`; do
+		validate_ipv4_subnet "$testsubnet" >> "$out_list.new"; rv=$?
+		errorcount=$(($errorcount + $rv))
+		subnetcount=$(($subnetcount + 1))
+	done
+
+	if [ $errorcount -ne 0 ]; then
+		echo "Warning: encountered $errorcount errors while validating subnets in fetched list." >&2
+		echo "Invalid subnets removed from the list." >&2
 	else
-		date_old=0
+		echo "Successfully validated all fetched subnets."
 	fi
 
-	if [ ! $date_new -gt $date_old ]; then
-		echo "Note: Not updating $filename because data querytime is the same as existing list time: $date_old ($(date --date=@$date_old))." >&2
-	fi
-	if [ $date_new -gt $date_old ]; then
+	echo "Total validated subnets: $(($subnetcount - $errorcount))"
+	echo ""
+	touch -d "$ripe_db_time" "$out_list.new"
 
-		[ $debug ]  && echo "Debug: Querytime is newer than of old list $filename, updating..."
-		jq -r ".data.resources.$family | .[]" "$tmpfile" > "$out_list.new"
-		touch -d "$ripe_db_time" "$out_list.new"
+	### Check for minimum size before updating our list
 
-		### Check for minimum size before updating our list
+	size=$(stat --printf %s "$out_list.new")
 
-		size=$(stat --printf %s "$out_list.new")
+	[ $debug ] && echo "Debug: $filename size: $size"
+	[ $debug ] && echo "Debug: min_size for $family: $min_size"
 
-                [ $debug ] && echo "Debug: $filename size: $size"
-	        [ $debug ] && echo "Debug: min_size for $family: $min_size"
+	if [ "$size" -ge "$min_size" ]; then
+		echo "Updating $out_list"
+		mv "$out_list.new" "$out_list"
 
-		if [ "$size" -gt "$min_size" ]; then
-			echo "Updating $out_list"
-			mv "$out_list.new" "$out_list"
-
-			# Add local subnet to the list, only for ipv4
-			if [ "$family" = "ipv4" ]; then
-				subnet="$(findlocalsubnet)";
-				if [ -z $subnet ]; then
-			                err="Error: couldn't determine local subnet."
-					rm "$out_list"
-					rm "$tmpfile"
-					die "$err"
-				else
-					echo "$subnet" >> "$out_list"
-					[ $debug ] && echo "Debug: found local subnet: \"$subnet\""
-				fi
+		# Add local subnet to the list, only for ipv4
+		if [ "$family" = "ipv4" ]; then
+			subnet="$(findlocalsubnet)";
+			if [ -z "$subnet" ]; then
+				err="Error: couldn't determine local subnet."
+				rm "$out_list"
+				rm "$tmpfile"
+				die "$err"
+			else
+				echo "$subnet" >> "$out_list"
+				[ $debug ] && echo "Debug: found local subnet: \"$subnet\""
 			fi
-
-		else
-			echo "Error: fetched $filename size of $size bytes not greater than minimum $min_size bytes. Probably a download error. Not updating $filename." >&2
-			err="Error: Fetched $filename is too small: $size bytes. Possibly a download error. Exiting"
-			dt=$(date +%F_%H%M%S)
-
-                        echo "Removing previous bad lists for $filename" >&2
-                        rm "$out_list"*.bad
-
-  			echo "Saving downloaded list for reference as $out_list-$dt.bad" >&2
-			mv "$out_list.new" "$out_list-$dt.bad"
-			rm "$tmpfile"
-			die "$err"
 		fi
+
+	else
+		echo "Error: fetched file $out_list.new size of $size bytes smaller than minimum $min_size bytes. Probably a download error. Not updating $filename." >&2
+		err="Error: Fetched file $out_list.new is too small: $size bytes. Possibly a download error. Exiting."
+
+		[ $debug ] && echo "Removing previous bad lists for $filename" >&2
+		rm "$out_list"*.bad &>/dev/null
+
+		dt=$(date +%F_%H%M%S)
+		echo "Saving downloaded list for reference as $out_list-$dt.bad" >&2
+		mv "$out_list.new" "$out_list-$dt.bad"
+		rm "$tmpfile"
+		die "$err"
 	fi
-done
+fi
 
 rm "$tmpfile"
 echo ""
