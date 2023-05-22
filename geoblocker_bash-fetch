@@ -27,7 +27,7 @@ usage() {
 
     Options:
 	-c tld		: tld/country code
-	-p path		: Path to store downloaded ip lists (default: /var/lib/geoblocker_bash)
+	-p path		: Path to store downloaded ip lists (default: /var/lib/geoblocker_bash/ip_lists)
 
 	-d		: Debug
 	-h		: This help
@@ -96,7 +96,7 @@ shift $((OPTIND -1))
 
 min_size_ipv4=5000  # default is 5000 bytes
 min_size_ipv6=2000  # default is 2000 bytes
-whitelist_path=${whitelist_path:-/var/lib/geoblocker_bash}  # default is /var/lib/geoblocker_bash
+whitelist_path=${whitelist_path:-/var/lib/geoblocker_bash/ip_lists}  # default is /var/lib/geoblocker_bash/ip_lists
 
 #### Checks
 
