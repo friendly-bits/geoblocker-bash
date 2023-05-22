@@ -303,7 +303,7 @@ if [ ! $no_persistence ]; then
 	### Create cron jobs
 
 	[ $debug ] && echo ""
-	[ $debug ] && echo "Debug: deleting previous cron jobs for geoip-whitelist..."
+	[ $debug ] && echo "Debug: deleting previous cron jobs..."
 	crontab -u root -l 2>/dev/null |  grep -v 'geoblocker_bash-run' | sudo crontab -u root -
 
 	[ $debug ] && echo ""
