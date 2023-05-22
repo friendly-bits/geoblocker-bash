@@ -1,16 +1,17 @@
 #!/usr/bin/env bash
 #
-# Installs script for geoip blocking collection of scripts
+# Installer for geoip blocking collection of bash scripts
 # Must be run as root
 #
-# Creates system folders for lists storage and copies the scripts into /usr/local/bin
+# Creates system folder to store the whitelist in /var/lib/geoblocker_bash/ip_lists
+# Copies all scripts included in the collection into /usr/local/bin
 # Copies itself into /usr/local/bin as well, so it can be run later from there
-# Then runs geoblocker_bash-apply to immediately apply new firewall config
+# Then runs geoblocker_bash-run to immediately fetch and apply the new firewall config
 #
 # Only applies ipv4 config, if you need ipv6 then you can add code for that
 #
 # Requires the following additional scripts (included in the distribution):
-## geoblocker_bash-fetch, geoblocker_bash-apply, geoblocker_bash-run
+# geoblocker_bash-fetch, geoblocker_bash-apply, geoblocker_bash-run, geoblocker_bash-uninstall, validate_cron_schedule.sh
 
 
 me=$(basename "$0")
@@ -20,15 +21,16 @@ me=$(basename "$0")
 usage() {
     cat <<EOF
 
-    Usage: $me -c country [-s "schedule"] [-d] [-h]
+    Usage: $me -c country [-s "schedule"] [-n] [-d] [-h]
 
     Options:
-		-c tld	  : tld / country code
-		-s "schedule"	: schedule expression for update cron job, must be inside double quotes
-					default: "0 4 * * *" (at 4:00 [am] every day)
+	-c tld		: tld / country code
+	-s "schedule"	: schedule expression for update cron job, must be inside double quotes
+				default: "0 4 * * *" (at 4:00 [am] every day)
 
-		-d	      : Debug
-		-h	      : This help
+	-n		: No persistence (will not create cron jobs)
+	-d		: Debug
+	-h		: This help
 
 EOF
 }
@@ -57,13 +59,14 @@ install_failed() {
 
 #### PARSE ARGUMENTS
 
-while getopts "c:s:dh" opt; do
-    case $opt in
+while getopts "c:s:ndh" opt; do
+	case $opt in
 		c) country=$OPTARG;;
 		s) cron_schedule=$OPTARG;;
+		n) no_persistence=true;;
 		d) debug="-d";;
 		h) usage; exit 0;;
-    esac
+	esac
 done
 
 #### Initialize variables
@@ -125,7 +128,6 @@ fi
 
 # cd into script directory
 scriptdir="$(get_script_dir)"
-[ $debug ] && echo "Debug: scriptdir: \"$scriptdir\""
 cd "$scriptdir"
 
 # check that geoblocker_bash-fetch exists
@@ -164,27 +166,30 @@ if [ ! -f "geoblocker_bash-uninstall" ]; then
 fi
 
 
-
-# validate cron schedule
-bash validate_cron_schedule.sh "$cron_schedule"; rv=$?
-if [ $rv -ne 0 ]; then
-	echo "Error validating cron schedule. Exiting." >&2
-	echo ""
-	exit 1
-fi
-
-
-# Make sure that cron is enabled
-(systemctl is-enabled cron.service) > /dev/null; rv=$?
-
-if [ $rv -ne 0 ]; then
-	echo "Enabling cron service..."
-	systemctl enable cron.service; rv=$?
+if [ ! $no_persistence ]; then
+	# validate cron schedule
+	bash validate_cron_schedule.sh "$cron_schedule"; rv=$?
 	if [ $rv -ne 0 ]; then
-		echo "Error $rv enabling cron.service. Exiting." >&2
+		echo "Error validating cron schedule. Exiting." >&2
 		echo ""
 		exit 1
 	fi
+
+
+	# Make sure that cron is enabled
+	(systemctl is-enabled cron.service) > /dev/null; rv=$?
+
+	if [ $rv -ne 0 ]; then
+		echo "Enabling cron service..."
+		systemctl enable cron.service; rv=$?
+		if [ $rv -ne 0 ]; then
+			echo "Error $rv enabling cron.service. Exiting." >&2
+			echo ""
+			exit 1
+		fi
+	fi
+else
+	[ $debug ] && echo "Debug: No persistence was requested, skipping cron checks."
 fi
 
 
@@ -261,6 +266,7 @@ if [ "$scriptdir" != "$install_dir" ]; then
 	chmod +x "$install_dir/validate_cron_schedule.sh"
 fi
 
+
 ### Back up pre-install policies for INPUT and FORWARD chains
 
 [ $debug ] && echo ""
@@ -293,43 +299,48 @@ fi
 
 
 
-### Create cron jobs
+if [ ! $no_persistence ]; then
+	### Create cron jobs
 
-[ $debug ] && echo ""
-[ $debug ] && echo "Debug: deleting previous cron jobs for geoip-whitelist..."
-crontab -u root -l 2>/dev/null |  grep -v 'geoblocker_bash-run' | sudo crontab -u root -
+	[ $debug ] && echo ""
+	[ $debug ] && echo "Debug: deleting previous cron jobs for geoip-whitelist..."
+	crontab -u root -l 2>/dev/null |  grep -v 'geoblocker_bash-run' | sudo crontab -u root -
 
-[ $debug ] && echo ""
-echo "Creating periodic cron job..."
-echo -e "$(sudo crontab -u root -l 2>/dev/null)\n$cron_schedule $install_dir/geoblocker_bash-run -c $country 2>&1" | sudo crontab -u root -
-rv=$?
+	[ $debug ] && echo ""
+	echo "Creating periodic cron job..."
+	echo -e "$(sudo crontab -u root -l 2>/dev/null)\n$cron_schedule $install_dir/geoblocker_bash-run -c $country 2>&1" | sudo crontab -u root -
+	rv=$?
 
-if [ $rv -ne 0 ]; then
-	echo "Error $rv creating the cron job. Exiting." >&2
-	echo ""
-	install_failed
+	if [ $rv -ne 0 ]; then
+		echo "Error $rv creating the cron job. Exiting." >&2
+		echo ""
+		install_failed
+	else
+		echo "Successfully created periodic cron job."
+	fi
+
+	cron_line_result=$(crontab -u root -l 2>/dev/null |  grep 'geoblocker_bash-run')
+	echo "Applied cron line: $cron_line_result"
+
+	[ $debug ] && echo ""
+	echo "Creating reboot cron job..."
+	echo -e "$(sudo crontab -u root -l 2>/dev/null)\n@reboot sleep 30 && $install_dir/geoblocker_bash-run -c $country 2>&1" | sudo crontab -u root -
+	rv=$?
+
+	if [ $rv -ne 0 ]; then
+		echo "Error $rv creating the cron job. Exiting." >&2
+		echo ""
+		install_failed
+	else
+		echo "Successfully created reboot cron job."
+		echo ""
+		echo "View cron jobs with \"crontab -l\""
+	fi
 else
-	echo "Successfully created periodic cron job."
+	echo "NOTE: No persistence was requested, skipping cron jobs creation."
 fi
 
-cron_line_result=$(crontab -u root -l 2>/dev/null |  grep 'geoblocker_bash-run')
-echo "Applied cron line: $cron_line_result"
-
-[ $debug ] && echo ""
-echo "Creating reboot cron job..."
-echo -e "$(sudo crontab -u root -l 2>/dev/null)\n@reboot sleep 30 && $install_dir/geoblocker_bash-run -c $country 2>&1" | sudo crontab -u root -
-rv=$?
-
-if [ $rv -ne 0 ]; then
-	echo "Error $rv creating the cron job. Exiting." >&2
-	echo ""
-	install_failed
-else
-	echo "Successfully created reboot cron job."
-	echo ""
-	echo "View cron jobs with \"crontab -l\""
-fi
-
+echo ""
 echo "View iptables rules with \"iptables -L\""
 echo ""
 
