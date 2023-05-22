@@ -78,7 +78,7 @@ It also can be used separately from this collection, as it does its own pre-requ
 
 - If accessing your server remotely, make sure that you do not lock yourself out by using this script! Meaning, verify that your ipv4 subnet is indeed included in the list that the script receives from RIPE.
 
-- Changes applied to iptables are made persistent via cron jobs: a periodic job running at a schedule (which you can optionally specify when running the install script), and a job run at system reboot (after 30 seconds delay).
+- Changes applied to iptables are made persistent via cron jobs: a periodic job running at a daily schedule (which you can optionally change when running the install script), and a job which runs at system reboot (after 30 seconds delay).
 
 - To test before deployment, you can install with the "-n" parameter to avoid creating cron jobs. This way, a simple server restart will undo all changes made to the firewall. To enable persistence later, simply uninstall with "bash geoblocker_bash-uninstall" and install again without the "-n" parameter.
 
