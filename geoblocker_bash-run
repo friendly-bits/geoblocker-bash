@@ -14,11 +14,11 @@ usage() {
     Usage: $me -c country [-p path] [-d] [-h]
 
     Options:
-		-c tld		: tld / country code
-		-p path		: Path to store downloaded ip lists (default: /var/lib/geoblocker_bash)
+	-c tld		: tld / country code
+	-p path		: Path to store the compiled whitelist (default: /var/lib/geoblocker_bash/ip_lists)
 
-		-d		: Debug
-		-h		: This help
+	-d		: Debug
+	-h		: This help
 
 EOF
 }
@@ -45,7 +45,7 @@ shift $((OPTIND -1))
 
 #### Initialize variables
 
-whitelist_path=${whitelist_path:-/var/lib/geoblocker_bash}  # default is /var/lib/geoblocker_bash
+whitelist_path=${whitelist_path:-/var/lib/geoblocker_bash/ip_lists}  # default is /var/lib/geoblocker_bash/ip_lists
 
 echo ""
 
