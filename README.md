@@ -7,9 +7,11 @@ Intended use case is a server that needs to be publically accessible in your cou
 
 **TL;DR**
 
+Recommended to read the NOTES section below before deployment in a production environment.
+
 To install:
 1) Install prerequisites. On Debian and derivatives run: sudo apt install ipset jq wget
-2) Download *all* scripts in this collection into same folder
+2) Download *all* scripts in this collection into the same folder
 3) run "sudo bash geoblocker_bash-install -c [country_code]"
  
  To uninstall:
@@ -47,20 +49,21 @@ The collection includes 6 scripts:
 https://github.com/mivk/ip-country/blob/master/get-ripe-ips
 So it's basically a fork.
 It can be used separately from this collection, as it does its own pre-requisite checks and input validation and accepts arguments.
-- Gets country IP addresses from RIPE and compiles them into separate ipv4 and ipv6 plain lists
+- Fetches ipv4 subnets from RIPE for a given country, validates them and compiles them into a list
 - Attempts to determine local ipv4 subnet for the main network interface and adds that to the end of the list
+- Writes the resulting list to a plaintext file
 
 **The apply script**:
 - Creates or updates a named ipset from a user-specified file (which should contain a plain ipv4 subnets list).
 - Sets default policy on INPUT and FORWARD iptables chains to DROP
-- Then creates iptables rules that allow connection from subnets included in the ipset (ipv4 only).
+- Then creates iptables rules that allow connection from subnets included in the ipset.
 
 It also can be used separately from this collection, as it does its own pre-requisite checks and input validation and accepts arguments.
 
-**The validate_cron_schedule script** is used by the install script. It accepts cron schedule expression and attempts to make sure that it complies with format that cron expects.
+**The validate_cron_schedule script** is used by the install script. It accepts cron schedule expression and attempts to make sure that it complies with the format that cron expects.
 
 **Prerequisites**:
-- Linux running systemd (tested on Debian, may or may not work on other distributions)
+- Linux running systemd (tested on Debian, should work on any Debian derivative, may or may not work on other distributions)
 - Root access
 - iptables (default firewall on most linux distributions)
 - standard linux tools including awk, sed, grep
@@ -71,13 +74,17 @@ It also can be used separately from this collection, as it does its own pre-requ
 
 **NOTES**:
 
+- Since these scripts are intended to be used on servers (including on my own server), much effort has gone into ensuring reliability and error handling. Yet, I can not guarantee that they will work as intended (or at all...) in your environment. You should test by yourself.
+
+- If accessing your server remotely, make sure that you do not lock yourself out by using this script! Meaning, verify that your ipv4 subnet is indeed included in the list that the script receives from RIPE.
+
+- Changes applied to iptables are made persistent via cron jobs: a periodic job running at a schedule (which you can optionally specify when running the install script), and a job run at system reboot (after 30 seconds delay).
+
+- To test before deployment, you can install with the "-n" parameter to avoid creating cron jobs. This way, a simple server restart will undo all changes made to the firewall. To enable persistence later, simply uninstall with "bash geoblocker_bash-uninstall" and install again without the "-n" parameter.
+
 - Most scripts accept the -d argument for debug (in case troubleshooting is needed).
 
-- Since these scripts are intended to be used on servers (including on my own server), I invested much effort to ensure reliability and proper error handling. Yet, I can not guarantee that they will work as intended in your environment. You should test on your own (and I will be interested to hear about your experience).
-
 - The run, fetch and apply scripts write to syslog in case critical errors occur. The run script also writes a syslog line upon success.
-
-- Changes applied to the iptables are made persistent via cron. If you want to test without persistence, delete the 2 cron jobs created by the install script. In that case, changes will be reverted upon system reboot.
 
 - **Note** that the install script creates cron jobs that **will be run as root**. Make appropriate security arrangements to prevent it from getting modified by unauthorized third parties.
 
