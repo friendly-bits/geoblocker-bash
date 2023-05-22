@@ -20,14 +20,13 @@ me=$(basename "$0")
 usage() {
     cat <<EOF
 
-    Usage: $me -p iplist_file_path [-t timeout] [-d] [-h]
+    Usage: $me -p path [-d] [-h]
 
     Options:
-		-p path		: path to a file with raw list in the format of xxx.xxx.xxx.xxx/xx
-		-t timeout	: timeout in seconds. new entries to the list will be destroyed after timeout (default: -1, no timeout)
+	-p path		: path to whitelist file containing raw subnets list in the format of xxx.xxx.xxx.xxx/xxx
 
-		-d		: Debug
-		-h		: This help
+	-d		: Debug
+	-h		: This help
 
 EOF
 }
@@ -48,23 +47,21 @@ family="inet"
 
 #### PARSE ARGUMENTS
 
-while getopts "p:f:t:dh" opt; do
+while getopts "p:f:dh" opt; do
     case $opt in
-		p) iplist_file=$OPTARG;;
-		t) timeout=$OPTARG;;
+		p) whitelist_path=$OPTARG;;
 		d) debug=true;;
 		h) usage; exit 0;;
     esac
 done
 shift $((OPTIND -1))
 
-timeout=${timeout:-"0"}  # default is 0 - no timeout
 echo ""
 
 #### Checks
 
-# check that we have iplist file path
-if [ -z "$iplist_file" ]; then
+# check that we have whitelist file path
+if [ -z "$whitelist_path" ]; then
 	err="Error: iplist file path can not be empty. Exiting."
 	usage
 	echo ""
@@ -87,8 +84,8 @@ fi
 echo ""
 
 # check that the input iplist file exists
-if [ ! -f "$iplist_file" ]; then
-	err="Error: Cannot find the iplist file at path: \"$iplist_file\". Exiting."
+if [ ! -f "$whitelist_path" ]; then
+	err="Error: Cannot find the whitelist file at path: \"$whitelist_path\". Exiting."
 	die "$err"
 fi
 
@@ -139,8 +136,8 @@ fi
 
 #create new ipset
 
-[ $debug ] && echo "Creating new ipset \"$ipset_name\", for family \"$family\", with timeout \"$timeout\"."
-ipset create "$ipset_name" hash:net family "$family" timeout "$timeout"; rv=$?
+[ $debug ] && echo "Creating new ipset \"$ipset_name\", for family \"$family\"."
+ipset create "$ipset_name" hash:net family "$family"; rv=$?
 
 if [ $rv -ne 0 ]; then
 	err="Error $rv trying to create ipset \"$ipset_name\". Exiting."
@@ -151,7 +148,7 @@ fi
 
 # import ip list into ipset from file
 
-for ip in `cat $iplist_file`; do
+for ip in `cat $whitelist_path`; do
 	ipset add "$ipset_name" "$ip"; rv=$?
 	if [ $rv -ne 0 ]; then
 		err="Error $rv trying to run command: \"ipset add $ipset_name $ip\". Exiting."
