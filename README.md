@@ -12,9 +12,11 @@ Intended use case is a server that needs to be publically accessible in your cou
 Recommended to read the NOTES section below before.
 
 To install:
-1) Install prerequisites. On Debian and derivatives run: sudo apt install ipset jq wget
-2) Download *all* scripts in this collection into the same folder
-3) run "sudo bash geoblocker_bash-install -c [country_code]"
+1) Download the latest realease:
+https://github.com/blunderful-scripts/geoblocker_bash/releases
+2) Install prerequisites. On Debian and derivatives run: sudo apt install ipset jq wget
+3) Download *all* scripts in this collection into the same folder
+4) run "sudo bash geoblocker_bash-install -c [country_code]"
  
  To uninstall:
  run "sudo geoblocker_bash-uninstall"
