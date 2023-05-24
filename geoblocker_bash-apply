@@ -289,6 +289,14 @@ for ip in `cat $whitelist_path`; do
 done
 echo "Ok."
 
+echo -n "Inserting rule to allow all traffic from the loopback interface... "
+iptables -I INPUT -i lo -j ACCEPT -m comment --comment "$iptables_comment"; rv=$?
+if [ $rv -ne 0 ]; then
+	err="Error $rv trying to insert rules with command \"iptables -A INPUT -i lo -j ACCEPT\". Exiting."
+	die "$err"
+fi
+echo "Ok."
+
 
 echo -n "Inserting rule to allow established/related connections... "
 iptables -I INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT -m comment --comment "$iptables_comment"; rv=$?
