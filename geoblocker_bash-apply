@@ -26,14 +26,14 @@ me=$(basename "$0")
 usage() {
     cat <<EOF
 This script:
-1) Creates or updates a named ipset from a file.
+1) Creates or updates an ipset from a user-specified whitelist file (which should contain a plain ipv4 subnets list).
 2) Creates iptables rules that allow connection from subnets included in the ipset
 3) Sets default policy on INPUT and FORWARD iptables chains to DROP
-4) Once all above completed successfully, saves a backup of the current (known-good) iptables state and current ipset
+4) Saves a backup of the current (known-good) iptables state and current ipset
 5) In case of an error, attempts to restore last known-good state from the backup
 6) If that fails, the script assumes that something is horribly broken and runs the uninstall script
-        which will attempt to remove any rules we have set, delete cron jobs
-        and restore policies for INPUT and FORWARD chains to pre-install state
+        which will attempt to remove any rules we have set, delete the associated cron jobs
+        and restore policies for INPUT and FORWARD chains to the pre-install state
 
     Usage: $me -p path -k path [-d] [-t] [-h]
 
