@@ -2,12 +2,12 @@
 #
 # geoblocker_bash-install
 #
-# Installer for geoip blocking collection of bash scripts
+# Installer for geoip blocking suite of bash scripts
 # Must be run as root
 #
 # Checks prerequisites
 # Creates system folder to store the whitelist and other data in /var/lib/geoblocker_bash
-# Copies all scripts included in the collection to /usr/local/bin
+# Copies all scripts included in the suite to /usr/local/bin
 # Creates a backup of pre-install policies for INPUT and FORWARD chains
 # Runs geoblocker_bash-run to immediately fetch and apply new firewall config
 # Verifies that crond service is enabled. Enables it if not.
@@ -32,13 +32,13 @@ usage() {
 # Only applies ipv4 config, if you need ipv6 then you can add code for that
 
     cat <<EOF
-Installer for geoip blocking collection of bash scripts.
+Installer for geoip blocking suite of bash scripts.
 Must be run as root.
 
 This script:
 1) Checks prerequisites
 2) Creates system folder to store the whitelist and other data in /var/lib/geoblocker_bash
-3) Copies all scripts included in the collection to /usr/local/bin
+3) Copies all scripts included in the suite to /usr/local/bin
 4) Creates a backup of pre-install policies for INPUT and FORWARD chains
 5) Runs geoblocker_bash-run to immediately fetch and apply new firewall config
 6) Verifies that crond service is enabled. Enables it if not.
