@@ -317,7 +317,7 @@ if [ ! $no_persistence ]; then
 		install_failed
 	else
 		echo "Success."
-		cron_line_result=$(crontab -u root -l 2>/dev/null |  grep "\"$install_dir/geoblocker_bash-run\" -c \"$country\" -p \"$whitelist_path\" -k \"$knowngood_file\" &>/dev/null")
+		cron_line_result=$(crontab -u root -l 2>/dev/null |  grep "\"$install_dir/geoblocker_bash-run\" -c \"$country\" -p \"$whitelist_path\" -k \"$knowngood_file\"")
 		echo "Cron line: $cron_line_result"
 	fi
 
@@ -329,7 +329,7 @@ if [ ! $no_persistence ]; then
 	## otherwise if there was no internet connection at reboot time, *fetch would fail which would cause *run to fail,
 	## so *apply wouldn't run, which would leave the system without geoblocking rules
 
-	echo -e "$(sudo crontab -u root -l 2>/dev/null)\n@reboot sleep 30 && \"$install_dir/geoblocker_bash-run\" -s -c \"$country\" -p \"$whitelist_path\" -k \"$knowngood_file\"" | sudo crontab -u root -
+	echo -e "$(sudo crontab -u root -l 2>/dev/null)\n@reboot sleep 30 && \"$install_dir/geoblocker_bash-run\" -s -c \"$country\" -p \"$whitelist_path\" -k \"$knowngood_file\" &>/dev/null" | sudo crontab -u root -
 	rv=$?
 
 	if [ $rv -ne 0 ]; then
