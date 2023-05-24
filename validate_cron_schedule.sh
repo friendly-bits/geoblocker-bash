@@ -6,7 +6,7 @@
 #    separated by commas (a,c,z), or an asterisk. Note that the step value notation of Vixie cron is not supported (e.g., 2-6/2).
 #
 #    Based on prior "verifycron" script circulating on the internets
-#    This is a simplified and modified version, adapted to receive one cron schedule expression in an argument.
+#    This is a simplified version, adapted to receive one cron schedule expression in a parameter.
 
 
 #### Functions
@@ -33,7 +33,7 @@ validDay()
 
   case $(echo $1 | tr '[:upper:]' '[:lower:]') in
     sun|mon|tue|wed|thu|fri|sat) return 0 ;;
-    X) return 0	;; # special case - it's an "*"
+    X) return 0    ;; # special case - it's an "*"
     *) return 1
   esac
 }
@@ -43,10 +43,10 @@ validMon()
   # return 0 if a valid month name, 1 otherwise
 
    case $(echo $1 | tr '[:upper:]' '[:lower:]') in 
-     jan|feb|mar|apr|may|jun|jul|aug) return 0		;;
-     sep|oct|nov|dec)		     return 0		;;
+     jan|feb|mar|apr|may|jun|jul|aug) return 0        ;;
+     sep|oct|nov|dec)             return 0        ;;
      X) return 0 ;; # special case, it's an "*"
-     *) return 1	;;
+     *) return 1    ;;
    esac
 }
 
@@ -78,30 +78,30 @@ echo "Validating cron schedule \"$@\" ..."
 
 # check that we received exactly 1 argument
 if [ $# -ne 1 ] ; then
-	echo ""
-	echo "Use double braces around your arguments!" >&2
-	echo "Example: \"0 4 * * 6\"" >&2
-	echo ""
-	exit 1
+    echo ""
+    echo "Use double braces around your arguments!" >&2
+    echo "Example: \"0 4 * * 6\"" >&2
+    echo ""
+    exit 1
 fi
 
 read min hour dom mon dow extra <<< "$@"
 
 if [ ! -z "$extra" ]; then
-	echo ""
-	echo "Error: Too many arguments! I don't know what to do with \"$extra\"!"
-	echo "Example: \"0 4 * * 6\"" >&2
-	echo ""
-	exit 1;
+    echo ""
+    echo "Error: Too many arguments! I don't know what to do with \"$extra\"!"
+    echo "Example: \"0 4 * * 6\"" >&2
+    echo ""
+    exit 1;
 fi
 
 if [ -z "$min" ]; then
 # if there is nothing to check
-	echo ""
-	echo "This script requires crontab schedule line as an argument!" >&2
-	echo "Example: \"0 4 * * 6\"" >&2
-	echo ""
-	exit 1
+    echo ""
+    echo "This script requires crontab schedule line as an argument!" >&2
+    echo "Example: \"0 4 * * 6\"" >&2
+    echo ""
+    exit 1
 fi
 
 
@@ -141,8 +141,8 @@ fixvars
   for monslice in $(echo "$mon" | sed 's/[,-]/ /g') ; do
     if ! validNum $monslice 12 ; then
       if ! validMon "$monslice" ; then
-	echo "Invalid month value \"$monslice\""
-	errors="$(( $errors + 1 ))"
+		echo "Invalid month value \"$monslice\""
+		errors="$(( $errors + 1 ))"
       fi
     fi
   done
@@ -152,15 +152,15 @@ fixvars
 for dowslice in $(echo "$dow" | sed 's/[,-]/ /g') ; do
     if ! validNum $dowslice 7 ; then
       if ! validDay $dowslice ; then
-	echo "Invalid day of week value \"$dowslice\""
-	errors="$(( $errors + 1 ))"
+		echo "Invalid day of week value \"$dowslice\""
+		errors="$(( $errors + 1 ))"
       fi
     fi
   done
 
   if [ $errors -gt 0 ] ; then
-	exitstatus=1
-	echo "$sourceline"
+    exitstatus=1
+    echo "$sourceline"
   fi
 
 echo "Successfully validated cron schedule."
