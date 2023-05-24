@@ -1,6 +1,7 @@
 #!/bin/bash -l
 
 # geoblocker_bash-fetch
+#
 # Based on a prior script by mivk, called get-ripe-ips.
 #
 # Fetches ipv4 subnets for a given country from RIPE
@@ -30,7 +31,7 @@ This script:
 
     Options:
     -c tld    : tld/country code
-    -p path   : Path to store downloaded and compiled subnet lists
+    -p path   : Path to directory where downloaded and compiled subnet lists will be stored
 
     -d        : Debug
     -h        : This help
@@ -72,7 +73,7 @@ findlocalsubnet() {
 	(validate_ipv4_subnet "$localsubnet") &>/dev/null; rv=$?
 
 	if [ $rv -ne 0 ]; then
-		# if validation fails, return empty string
+		# if validation fails, output empty string
 		echo ""
 	else
 		echo "$localsubnet"
@@ -138,27 +139,30 @@ fi
 tmpfile=$(mktemp "/tmp/ripe-$country-XXXX.json")
 
 [ $debug ] && echo "Debug: Trying: $curl_or_wget '$url'" >&2
+echo -n "Fetching iplist from RIPE... "
 
 $curl_or_wget "$url" > "$tmpfile"
 rv=$?
 
 if [ $rv -ne 0 ]; then
+	echo "Failed."
 	err="Error $rv trying to run $curl_or_wget $url. Exiting."
 	die "$err"
-else
-	echo "Successfully fetched $url"
 fi
 
 
 status=$(jq -r '.status' $tmpfile)
 if [ ! "$status" = "ok" ]; then
 	ripe_msg=$(jq -r -c '.messages' $tmpfile)
+	echo "Failed."
 	echo "Error: RIPE replied with status = '$status'."
 	echo "The requested url was '$url'"
 	echo "and the messages in their reply were: '$ripe_msg'"
 	err="Error: could not fetch ip list from RIPE. Exiting"
 	die "$err"
 fi
+
+echo "Success."
 
 ripe_db_time=$(jq -r '.data.query_time' $tmpfile)
 [ $debug ] && echo "Debug: ripe_db_time=$ripe_db_time" >&2
@@ -179,11 +183,9 @@ else
 fi
 
 if [ ! $date_new -gt $date_old ]; then
-	echo "Note: Not updating $filename because data querytime is the same as existing list time: $date_old ($(date --date=@$date_old))." >&2
-fi
-
-if [ $date_new -gt $date_old ]; then
-	[ $debug ]  && echo "Debug: Querytime is newer than of old list $filename, updating..."
+	echo "Note: Not updating $filename because data querytime did not change: $date_old ($(date --date=@$date_old))." >&2
+else
+	[ $debug ]  && echo "Debug: Querytime changed, updating..."
 	errorcount=0
 	subnetcount=0
 	for testsubnet in `jq -r ".data.resources.$family | .[]" "$tmpfile"`; do
@@ -193,7 +195,9 @@ if [ $date_new -gt $date_old ]; then
 	done
 
 	if [ $errorcount -ne 0 ]; then
-		echo "Warning: encountered $errorcount errors while validating subnets in fetched list." >&2
+		warn="Warning: encountered $errorcount errors while validating subnets in the fetched list."
+		echo "warn" >&2
+		logger -t geoblocker_bash-fetch "$warn"
 		echo "Invalid subnets removed from the list." >&2
 	else
 		echo "Successfully validated all fetched subnets."
@@ -208,11 +212,18 @@ if [ $date_new -gt $date_old ]; then
 	size=$(stat --printf %s "$out_list.new")
 
 	[ $debug ] && echo "Debug: $filename size: $size"
-	[ $debug ] && echo "Debug: min_size for $family: $min_size"
 
 	if [ "$size" -ge "$min_size" ]; then
-		echo "Updating $out_list"
-		mv "$out_list.new" "$out_list"
+		echo -n "Updating $out_list... "
+		mv "$out_list.new" "$out_list"; rv=$?
+		if [ $rv -ne 0 ]; then
+			echo "Failed."
+			err="Error while attempting to overwrite the file $out_list"
+			rm "$out_list.new"
+			rm "$tmpfile"
+			die "$err"
+		fi
+		echo "Ok."
 
 		# Add local subnet to the list, only for ipv4
 		if [ "$family" = "ipv4" ]; then
@@ -223,8 +234,8 @@ if [ $date_new -gt $date_old ]; then
 				rm "$tmpfile"
 				die "$err"
 			else
+				echo "Found local subnet: \"$subnet\". Adding it to the list."
 				echo "$subnet" >> "$out_list"
-				[ $debug ] && echo "Debug: found local subnet: \"$subnet\""
 			fi
 		fi
 
