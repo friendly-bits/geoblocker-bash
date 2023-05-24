@@ -82,7 +82,7 @@ It can be used separately from this collection, as it does its own prerequisite 
 
 - Since these scripts are intended to be used on servers (including on my own server), much effort has gone into ensuring reliability and error handling. Yet, I can not guarantee that they will work as intended (or at all...) in your environment. You should test by yourself.
 
-- If accessing your server remotely, make sure that you do not lock yourself out by using this script! Meaning, verify that your ipv4 subnet is indeed included in the list that the script receives from RIPE. You can do that by running the "fetch" script separately and then simply checking inside the output file (by default, it should be found in /var/lib/geoblocker_bash/ip_lists/).
+- If accessing your server remotely, make sure that you do not lock yourself out by using this script! Meaning, verify that your ipv4 subnet is indeed included in the list that the script receives from RIPE. You can do that by running the "fetch" script separately and then simply checking inside the output file.
 
 - Changes applied to iptables are made persistent via cron jobs: a periodic job running at a daily schedule (which you can optionally change when running the install script), and a job which runs at system reboot (after 30 seconds delay).
 
