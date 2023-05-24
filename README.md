@@ -9,7 +9,7 @@ Intended use case is a server that needs to be publically accessible in your cou
 
 **TL;DR**
 
-Recommended to read the NOTES section below before.
+Recommended to read the NOTES section below.
 
 To install:
 1) Download the latest realease:
