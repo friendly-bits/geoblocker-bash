@@ -57,10 +57,9 @@ So it's basically a fork.
 - Fetches ipv4 subnets for a given country from RIPE
 - Parses, validates and compiles the downloaded (JSON formatted) list into a plain list, and saves to a file
 - Attempts to determine the local ipv4 subnet for the main network interface and appends it to the file
-It can be used separately from this suite, as it does its own prerequisite checks and input validation and accepts parameters.
 
 **The apply script**:
-- Creates or updates an ipset from a user-specified whitelist file (which should contain a plain ipv4 subnets list).
+- Creates or updates an ipset from a user-specified whitelist file (which should contain a plain ipv4 subnets list)
 - Creates iptables rules that allow connection from subnets included in the ipset
 - Sets default policy on INPUT and FORWARD iptables chains to DROP
 - Saves a backup of the current (known-good) iptables state and current ipset
