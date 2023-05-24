@@ -88,9 +88,9 @@ So it's basically a fork.
 - To test before deployment, you can install with the "-n" switch to avoid creating cron jobs. This way, a simple server restart will undo all changes made to the firewall. To enable persistence later, simply uninstall with "bash geoblocker_bash-uninstall" and install again without the "-n" switch.
 
 - Most scripts accept the -d switch for debug (in case troubleshooting is needed).
-- The "apply" script also accepts the -t switch to simulate a fault and test recovery from backup. To use it, you will need to use the install script first in order to have the conditions for testing.
+- The "apply" script also accepts the -t switch to simulate a fault and to test recovery. To use it, you will need to install the suite first.
 
-- The run, fetch and apply scripts write to syslog in case critical errors occur. The run script also writes a syslog line upon success.
+- The run, fetch and apply scripts write to syslog in case an error occurs. The run script also writes a syslog line upon success.
 
 - **Note** that the install script creates cron jobs that **will be run as root**. Make appropriate security arrangements to prevent it from getting modified by unauthorized third parties.
 
