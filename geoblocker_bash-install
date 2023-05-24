@@ -1,113 +1,356 @@
-#!/bin/bash
+#!/usr/bin/env bash
+#
+# geoblocker_bash-install
+#
+# Installer for geoip blocking collection of bash scripts
+# Must be run as root
+#
+# Checks prerequisites
+# Creates system folder to store the whitelist and other data in /var/lib/geoblocker_bash
+# Copies all scripts included in the collection to /usr/local/bin
+# Creates a backup of pre-install policies for INPUT and FORWARD chains
+# Runs geoblocker_bash-run to immediately fetch and apply new firewall config
+# Verifies that crond service is enabled. Enables it if not.
+# Validates optionally user-specified cron schedule expression (if not specified then uses default schedule "0 4 * * *" (at 4:00 [am] every day).
+# Creates periodic cron task based on that and a reboot task. Both cron tasks call the geoblocker_bash-run script with the necessary arguments.
+# If error occurs at any step during installation, calls the uninstall script to revert any changes to the system.
 
-# Deletes associated cron jobs
-# Restores pre-install state of default policies for INPUT and FORWARD chains
-# Deletes associated iptables rules and removes the whitelist ipset
-# Removes the data folder used by the scripts
-# Deletes the scripts
+#
+# NOTE: ipv4 only, ipv6 not implemented
+#
+# Requires the following additional scripts (included in the distribution):
+# geoblocker_bash-fetch, geoblocker_bash-apply, geoblocker_bash-run, geoblocker_bash-uninstall, validate_cron_schedule.sh
+
+
+me=$(basename "$0")
 
 #### FUNCTIONS
 
 usage() {
+# Then runs geoblocker_bash-run to immediately fetch and apply the new firewall config
+#
+# Only applies ipv4 config, if you need ipv6 then you can add code for that
+
     cat <<EOF
+Installer for geoip blocking collection of bash scripts.
+Must be run as root.
+
 This script:
-1) Deletes associated cron jobs
-2) Restores pre-install state of default policies for INPUT and FORWARD chains
-3) Deletes associated iptables rules and removes the whitelist ipset
-4) Removes the data folder used by the scripts
-5) Deletes the scripts
+1) Checks prerequisites
+2) Creates system folder to store the whitelist and other data in /var/lib/geoblocker_bash
+3) Copies all scripts included in the collection to /usr/local/bin
+4) Creates a backup of pre-install policies for INPUT and FORWARD chains
+5) Runs geoblocker_bash-run to immediately fetch and apply new firewall config
+6) Verifies that crond service is enabled. Enables it if not.
+7) Validates optionally user-specified cron schedule expression (if not specified then uses default schedule "0 4 * * *" (at 4:00 [am] every day).
+8) Creates periodic cron task based on that and a reboot task. Both cron tasks call the geoblocker_bash-run script with the necessary arguments.
+If error occurs at any step during installation, calls the uninstall script to revert any changes to the system.
 
 
-    Usage: $me [-p]
+    Usage: $me -c country [-s "schedule"] [-n] [-d] [-h]
 
     Options:
-    -p     : partial uninstall: restores iptables to pre-install state and removes cron jobs but leaves files in place
-	-h     : This help
+    -c tld          : tld / country code
+    -s "schedule"   : schedule expression for update cron job, must be inside double quotes
+                          default: "0 4 * * *" (at 4:00 [am] every day)
+
+    -n              : No persistence (will not create cron jobs)
+    -d              : Debug
+    -h              : This help
 
 EOF
 }
 
+
+get_script_dir () {
+# source for this function:
+## https://stackoverflow.com/questions/59895/how-do-i-get-the-directory-where-a-bash-script-is-located-from-within-the-script
+	SOURCE=${BASH_SOURCE[0]}
+	while [ -L "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symlink
+		DIR=$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )
+		SOURCE=$(readlink "$SOURCE")
+		[[ $SOURCE != /* ]] && SOURCE=$DIR/$SOURCE
+		# if $SOURCE was a relative symlink, we need to resolve it relative to the path where the symlink file was located
+	done
+	DIR=$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )
+	echo "$DIR"
+}
+
+install_failed() {
+	echo "Error: Installation failed." >&2
+	echo "Uninstalling geoblocker_bash..."
+	bash geoblocker_bash-uninstall
+	exit 1
+}
+
+check_file_exists() {
+if [ ! -f "$1" ]; then
+	echo "Error: Cannot find $1" >&2
+	echo ""
+	exit 1
+fi
+}
+
+copyscript() {
+	scriptfile="$1"; destination="$2"; errormessage="$3"
+	cp "$scriptfile" "$destination"; rv=$?
+	if [ $rv -ne 0 ]; then
+		echo "$errormessage" >&2
+		echo ""
+		install_failed
+	else
+		[ $debug ] && echo "Debug: Successfully copied geoblocker_bash-fetch to $install_dir."
+	fi
+	chmod +x "$install_dir/$scriptfile"
+}
+
 #### PARSE ARGUMENTS
 
-while getopts "ph" opt; do
+while getopts "c:s:ndh" opt; do
 	case $opt in
-		p) partial_uninstall="true";;
+		c) country=$OPTARG;;
+		s) cron_schedule=$OPTARG;;
+		n) no_persistence=true;;
+		d) debug="-d";;
 		h) usage; exit 0;;
-esac
+	esac
 done
-shift $((OPTIND -1))
+
+#### Initialize variables
+install_dir="/usr/local/bin"
+datadir="/var/lib/geoblocker_bash"
+preinstall_policies_file="$datadir/preinstall_policies.bak"
+knowngood_file="$datadir/iptables_knowngood.bak"
+whitelist_path="$datadir/ip_lists"
+cron_schedule="${cron_schedule:-0 4 * * *}"
 
 echo ""
 
 #### Checks
 
+if [ -z "$country" ]; then
+	echo "Specify country with -c !"
+	echo ""
+	usage
+	exit 1
+fi
+
 # check for root
-if [ "$EUID" -ne 0 ]
-  then echo "This needs to be run as root."
-  exit
+if [ "$EUID" -ne 0 ]; then
+	echo "This needs to be run as root."
+	echo ""
+	exit 1
 fi
 
-### Initialize variables
-install_dir="/usr/local/bin"
-datapath="/var/lib/geoblocker_bash"
-preinstall_policies_file="$datapath/preinstall_policies.bak"
-whitelist_path="$datapath/ip_lists"
-ipset_name="geoblocker_whitelist"
-iptables_comment="geoblocker_bash"
+# check for systemd
+if [ $(! ps -p 1 -o comm=) != "systemd" ]; then
+	echo "Error: systemd is required but this sytem does not appear to be running systemd. Exiting."
+	echo ""
+	exit 1
+fi
+
+# check for curl or wget
+curl_or_wget=$(if hash curl 2>/dev/null; then echo "curl -s"; elif hash wget 2>/dev/null; then echo "wget -qO-"; fi);
+if [ -z "$curl_or_wget" ]; then
+	echo "Error: Neither curl nor wget found. Exiting."
+	echo ""
+	exit 1
+fi
+
+# Check that we have the ipset utility
+if ! command -v "ipset" &> /dev/null; then
+	echo "Error: Cannot find 'ipset'. Install it with 'apt install ipset' or similar. Exiting."
+	echo ""
+	exit 1
+fi
+
+# Check that we have the iptables-save utility
+if ! command -v "iptables-save" &> /dev/null; then
+	echo "Error: Cannot find 'iptables-save'. Exiting."
+	echo ""
+	exit 1
+fi
+
+# Check that we have the iptables-restore utility
+if ! command -v "iptables-restore" &> /dev/null; then
+	echo "Error: Cannot find 'iptables-restore'. Exiting."
+	echo ""
+	exit 1
+fi
+
+# check that we have jq
+if ! command -v jq &> /dev/null; then
+	echo "Error: Cannot find the jq Json processor. Install it with 'apt install jq' or similar. Exiting"
+	echo ""
+	exit 1
+fi
 
 
-### Delete associated cron jobs
-echo "Deleting cron jobs for geoblocker_bash..."
-crontab -u root -l 2>/dev/null |  grep -v 'geoblocker_bash-run' | sudo crontab -u root -
+# cd into script directory
+scriptdir="$(get_script_dir)"
+cd "$scriptdir"
 
-### Restore pre-install state of default policies for INPUT and FORWARD
+check_file_exists "geoblocker_bash-fetch"
+check_file_exists "geoblocker_bash-apply"
+check_file_exists "geoblocker_bash-apply"
+check_file_exists "validate_cron_schedule.sh"
+check_file_exists "geoblocker_bash-uninstall"
 
-while read -r preinstall_policy; do
-	chain_name=$(echo "$preinstall_policy" | cut -f 1 -d " ")
-	oldpolicy=$(echo "$preinstall_policy" | cut -f 2 -d " ")
-	echo "Restoring pre-install iptables policy with command: \"iptables -P $chain_name $oldpolicy\""
-	if [ ! -z "$chain_name" ] && [ ! -z "oldpolicy" ]; then
-		iptables -P $chain_name $oldpolicy; rv=$?
-		if [ $rv -ne 0 ]; then
-			echo "Error $rv trying to change iptables policy with command \"iptables -P $chain_name $oldpolicy\". Exiting."
-			exit 1
-			fi
-	else
-		echo "Could not restore pre-install iptables policies. Apparently the file $preinstall_policies_file is empty, missing or misconfigured."
+if [ ! $no_persistence ]; then
+	# validate cron schedule
+	bash validate_cron_schedule.sh "$cron_schedule"; rv=$?
+	if [ $rv -ne 0 ]; then
+		echo "Error validating cron schedule. Exiting." >&2
+		echo ""
+		exit 1
 	fi
-done < "$preinstall_policies_file"
 
 
-### Delete associated iptables rules
+	# Make sure that cron is enabled
+	(systemctl is-enabled cron.service) > /dev/null; rv=$?
 
-# iptables-save command just dumps the table, then we pipe the contents into sed
-# sed executes iptables -D (delete) command on matching rules. execution is promtped by the switch /e
-
-echo "Deleting associated iptables rules..."
-iptables-save | sed -r "/OUTPUT.*comment.*$iptables_comment/s/-A/iptables -D/e" &>/dev/null
-iptables-save | sed -r "/INPUT.*comment.*$iptables_comment/s/-A/iptables -D/e" &>/dev/null
-
-
-
-### Destroy associated ipset
-echo "Destroying ipset $ipset_name..."
-ipset destroy "$ipset_name"
-
-
-if [ ! $partial_uninstall ]; then
-	echo "Deleting script's data folder $datapath..."
-	### Delete app data and directory
-	rm -rf "$datapath"
-
-	### Delete scripts
-	echo "Deleting scripts from $install_dir..."
-	rm "$install_dir/geoblocker_bash-fetch"
-	rm "$install_dir/geoblocker_bash-apply"
-	rm "$install_dir/geoblocker_bash-run"
-	rm "$install_dir/geoblocker_bash-install"
-	rm "$install_dir/validate_cron_schedule.sh"
-
-	echo "Uninstall complete."
+	if [ $rv -ne 0 ]; then
+		echo "Enabling cron service..."
+		systemctl enable cron.service; rv=$?
+		if [ $rv -ne 0 ]; then
+			echo "Error enabling cron.service. Exiting." >&2
+			echo ""
+			exit 1
+		fi
+	fi
+else
+	[ $debug ] && echo "Debug: No persistence was requested, skipping cron checks."
 fi
+
+
+#### Main
+
+# Create the directory for downloaded lists and, if required, parent directories
+mkdir -p "$whitelist_path"
+
+
+## Create a backup file for known-good iptables state and save current state to the file
+
+echo ""
+echo -n "Creating file for backup of iptables state..."
+
+# if a backup file already exists, continue installing but skip overwriting the backup file
+if [ -f "$knowngood_file" ]; then
+	echo ""; echo "Backup file already exists, skipping."
+else
+	touch "$knowngood_file"; rv=$?
+	if [ $rv -ne 0 ]; then
+		echo "Error."
+		install_failed
+	fi
+	echo "Success."
+	echo "Backup file: \"$knowngood_file\""
+fi
+
+## Copy scripts into $install_dir
+
+# if we are running from $install_dir, assume that all other necessary scripts have already been installed, skip copying
+if [ "$scriptdir" != "$install_dir" ]; then
+	echo ""
+	echo -n "Copying scripts to $install_dir... "
+	copyscript "geoblocker_bash-fetch" "$install_dir/geoblocker_bash-fetch" "Error copying geoblocker_bash-fetch to $install_dir. Exiting."
+	copyscript "geoblocker_bash-apply" "$install_dir/geoblocker_bash-apply" "Error copying geoblocker_bash-apply to $install_dir. Exiting."
+	copyscript "geoblocker_bash-install" "$install_dir/geoblocker_bash-install" "Error copying geoblocker_bash-install to $install_dir. Exiting."
+	copyscript "geoblocker_bash-run" "$install_dir/geoblocker_bash-run" "Error copying geoblocker_bash-run to $install_dir. Exiting."
+	copyscript "geoblocker_bash-uninstall" "$install_dir/geoblocker_bash-uninstall" "Error copying geoblocker_bash-uninstall to $install_dir. Exiting."
+	copyscript "validate_cron_schedule.sh" "$install_dir/validate_cron_schedule.sh" "Error copying validate_cron_schedule.sh to $install_dir. Exiting."
+	echo "Ok."
+fi
+
+
+### Back up pre-install policies for INPUT and FORWARD chains
+
+echo ""
+echo -n "Creating backup of current INPUT and FORWARD iptables chains policies... "
+
+# if a backup file already exists, continue installing but skip overwriting the backup file
+if [ -f "$preinstall_policies_file" ]; then
+	echo ""; echo "Backup file already exists, skipping creation of iptables policies backup." >&2
+else
+	preinstall_input_policy=$(iptables -nL | grep "Chain INPUT" | awk -F'policy |)' '{print $2}')
+	preinstall_forward_policy=$(iptables -nL | grep "Chain FORWARD" | awk -F'policy |)' '{print $2}')
+	if [ -z $preinstall_input_policy ] || [ -z $preinstall_forward_policy ]; then
+		echo "Error: failed to determine current policies."
+		install_failed
+	fi
+	touch "$preinstall_policies_file"; rv=$?
+	if [ $rv -ne 0 ]; then
+		echo "Error: failed to create backup file." >&2
+		install_failed
+	fi
+	echo "INPUT $preinstall_input_policy" >> "$preinstall_policies_file"
+	echo "FORWARD $preinstall_forward_policy" >> "$preinstall_policies_file"
+	echo "Ok."
+	[ $debug ] && echo ""
+	[ $debug ] && echo "Current policies:"
+	[ $debug ] && echo "INPUT: $preinstall_input_policy, FORWARD: $preinstall_forward_policy"
+fi
+
+### Fetch and apply the whitelist
+geoblocker_bash-run $debug -c $country -p "$whitelist_path" -k "$knowngood_file"; rv=$?
+
+if [ $rv -ne 0 ]; then
+	install_failed
+fi
+
+
+# if no persistence was requested, skip adding cron jobs
+if [ ! $no_persistence ]; then
+	### Create cron jobs
+
+	[ $debug ] && echo ""
+	[ $debug ] && echo "Debug: deleting previous cron jobs for geoblocker_bash..."
+	crontab -u root -l 2>/dev/null |  grep -v 'geoblocker_bash-run' | sudo crontab -u root -
+
+	[ $debug ] && echo ""
+	echo -n "Creating periodic cron job... "
+	echo -e "$(sudo crontab -u root -l 2>/dev/null)\n$cron_schedule \"$install_dir/geoblocker_bash-run\" -c \"$country\" -p \"$whitelist_path\" -k \"$knowngood_file\"" | sudo crontab -u root -
+	rv=$?
+
+	if [ $rv -ne 0 ]; then
+		echo "Error running crontab command." >&2
+		install_failed
+	else
+		echo "Success."
+		cron_line_result=$(crontab -u root -l 2>/dev/null |  grep "\"$install_dir/geoblocker_bash-run\" -c \"$country\" -p \"$whitelist_path\" -k \"$knowngood_file\"")
+		echo "Cron line: $cron_line_result"
+	fi
+
+
+	[ $debug ] && echo ""
+	echo -n "Creating reboot cron job... "
+
+	# using the -s switch for the *run script to skip fetching at reboot
+	## otherwise if there was no internet connection at reboot time, *fetch would fail which would cause *run to fail,
+	## so *apply wouldn't run, which would leave the system without geoblocking rules
+
+	echo -e "$(sudo crontab -u root -l 2>/dev/null)\n@reboot sleep 30 && \"$install_dir/geoblocker_bash-run\" -s -c \"$country\" -p \"$whitelist_path\" -k \"$knowngood_file\"" | sudo crontab -u root -
+	rv=$?
+
+	if [ $rv -ne 0 ]; then
+		echo "Error running crontab command." >&2
+		echo ""
+		install_failed
+	else
+		echo "Success."
+		cron_line_result=$(crontab -u root -l 2>/dev/null |  grep "\"$install_dir/geoblocker_bash-run\" -s -c \"$country\" -p \"$whitelist_path\" -k \"$knowngood_file\"")
+		echo "Cron line: $cron_line_result"
+		echo ""
+		echo "View cron jobs with \"crontab -l\""
+	fi
+else
+	echo "NOTE: No persistence was requested, skipping cron jobs creation."
+fi
+
+echo ""
+echo "View iptables rules with \"iptables -L\""
+echo ""
+
+echo "Install done."
 
 echo ""
