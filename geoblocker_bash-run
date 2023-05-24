@@ -1,5 +1,7 @@
 #!/bin/bash -l
 
+# geoblocker_bash-run
+
 # runs the geoblocker_bash-fetch script to fetch ip list from RIPE
 # then runs geoblocker_bash-apply to apply the ip list to iptables
 
