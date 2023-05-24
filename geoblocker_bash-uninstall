@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# geoblocker_bash-uninstall
+
 # Deletes associated cron jobs
 # Restores pre-install state of default policies for INPUT and FORWARD chains
 # Deletes associated iptables rules and removes the whitelist ipset
