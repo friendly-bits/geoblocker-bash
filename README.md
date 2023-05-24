@@ -9,7 +9,7 @@ Intended use case is a server that needs to be publically accessible in your cou
 
 **TL;DR**
 
-Recommended to read the NOTES section below before deployment in a production environment.
+Recommended to read the NOTES section below before.
 
 To install:
 1) Install prerequisites. On Debian and derivatives run: sudo apt install ipset jq wget
