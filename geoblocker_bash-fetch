@@ -188,6 +188,7 @@ else
 	[ $debug ]  && echo "Debug: Querytime changed, updating..."
 	errorcount=0
 	subnetcount=0
+	echo -n "Validating downloaded subnets... "
 	for testsubnet in `jq -r ".data.resources.$family | .[]" "$tmpfile"`; do
 		validate_ipv4_subnet "$testsubnet" >> "$out_list.new"; rv=$?
 		errorcount=$(($errorcount + $rv))
@@ -196,11 +197,12 @@ else
 
 	if [ $errorcount -ne 0 ]; then
 		warn="Warning: encountered $errorcount errors while validating subnets in the fetched list."
+		echo "Issues found."
 		echo "warn" >&2
 		logger -t geoblocker_bash-fetch "$warn"
 		echo "Invalid subnets removed from the list." >&2
 	else
-		echo "Successfully validated all fetched subnets."
+		echo "Success."
 	fi
 
 	echo "Total validated subnets: $(($subnetcount - $errorcount))"
