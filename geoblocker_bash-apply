@@ -1,10 +1,11 @@
 #!/bin/bash -l
 
 # geoblocker_bash-apply
-# Creates or updates a named ipset from a file.
+#
+# Creates or updates an ipset from a user-specified whitelist file (which should contain a plain ipv4 subnets list).
 # Creates iptables rules that allow connection from subnets included in the ipset
-# Then sets default policy on INPUT and FORWARD iptables chains to DROP
-# Once all above completed successfully, saves a backup of the current (known-good) iptables state and current ipset
+# Sets default policy on INPUT and FORWARD iptables chains to DROP
+# Saves a backup of the current (known-good) iptables state and current ipset
 # In case of an error, attempts to restore last known-good state from the backup
 # If that fails, the script assumes that something is horribly broken and runs the uninstall script
 #        which will attempt to remove any rules we have set, delete cron jobs
@@ -82,6 +83,7 @@ restore_knowngood_iptables() {
 
 	echo -n "Restoring last known good iptables state from backup... "
 	if [ $line_cnt -ne 0 ]; then
+		# reads $restorefile from beginning to [IPSET] and pipes the result into iptables-restore
 		sed -e '/\[IPSET\]/Q' "$restorefile" 2>&1 | iptables-restore; rv="${PIPESTATUS[1]}"
 		if [ $rv -eq 0 ]; then
 			echo "Success"; return 0
@@ -90,15 +92,16 @@ restore_knowngood_iptables() {
 			[ $test ] && echo "$err1"
 		fi
 	else
-		err1="Error: itables backup appears to be empty."
+		err1="Error: iptables backup appears to be empty."
 		[ $test ] && echo "$err1"
 	fi
 
 	# if we are here then something is seriously broken
 	# run the uninstall script with -p switch to restore iptables to pre-install state but leave files in place
 	err2="*** Rolling back all changes to iptables to pre-install state and removing cron jobs ***"
+	
+	# if the -t switch wasn't specified at launch then it's not a test. proceed to 2nd stage of fault recovery.
 	[ ! $test ] && knowngood_failed "$err1" "$err2"
-	logger -t geoblocker_bash-apply  "Successfully restored known-good iptables state from backup."
 	echo ""; echo ""
 }
 
@@ -110,6 +113,7 @@ restore_knowngood_ipset() {
 
 	echo -n "Restoring last known good ipset state from backup... "
 	if [ $line_cnt -ne 0 ]; then
+		# reads $restorefile from "create $ipset_name" to the end and pipes the result into "ipset restore"
 		sed -n "/create ${ipset_name}/,\$p" "$restorefile" 2>&1 | ipset restore; rv="${PIPESTATUS[1]}"
 		if [ $rv -eq 0 ]; then
 			echo "Success"; return 0
@@ -125,8 +129,9 @@ restore_knowngood_ipset() {
 	# if we are here then something is seriously broken
 	# run the uninstall script with -p switch to restore iptables to pre-install state but leave files in place
 	err2="*** Rolling back all changes to iptables to pre-install state and removing cron jobs ***"
+	
+	# if the -t switch wasn't specified at launch then it's not a test. proceed to 2nd stage of fault recovery.
 	[ ! $test ] && knowngood_failed "$err1" "$err2"
-	logger -t geoblocker_bash-apply  "Successfully restored known-good ipset state from backup."
 	echo ""; echo ""
 }
 
@@ -143,6 +148,7 @@ restoreknowngood() {
 
 	restore_knowngood_ipset "$restorefile"
 	restore_knowngood_iptables "$restorefile"
+	logger -t geoblocker_bash-apply  "Successfully restored known-good ipset and iptables state from backup."
 }
 
 die() {
