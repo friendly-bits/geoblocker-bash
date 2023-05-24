@@ -1,9 +1,9 @@
 # geoblocker_bash
 Automatic geoip blocker for Linux based on a whitelist for a specific country.
 
-Fetches, parses and validates an ipv4 subnets whitelist for a given country, then blocks incoming traffic from anywhere except whitelisted subnets. Uses iptables. Collection of bash scripts with easy install and uninstall.
+Fetches, parses and validates an ipv4 subnets whitelist for a given country, then blocks incoming traffic from anywhere except whitelisted subnets. Uses iptables. Implements multiple layers of fault tolerance and recovery. Suite of bash scripts with easy install and uninstall.
 
-Subnets list is fetched from RIPE - regional Internet registry for Europe, the Middle East and parts of Central Asia.
+ip/subnets list is fetched from RIPE - regional Internet registry for Europe, the Middle East and parts of Central Asia. RIPE appears to store ip lists for countries in other regions as well, although I did not check every country in the world.
 
 Intended use case is a server that needs to be publically accessible in your country but does not need to be internationally accessible. For example, a server you run your CRM application on.
 
@@ -30,18 +30,20 @@ The collection includes 6 scripts:
 6. validate_cron_schedule.sh
 
 **The install script**:
-- Checks for prerequisites
-- Copies the scripts (including itself) into /usr/local/bin
-- Creates system folder for scripts' data in /var/lib/geoblocker_bash. Data consists of a file storing pre-install iptables policies for the INPUT and FORWARD chains (for backup), and fetched subnet lists from RIPE.
-- Calls geoblocker_bash-run that, in turn, calls geoblocker_bash-fetch and geoblocker_bash-apply to immediately fetch and apply new firewall config.
+- Checks prerequisites
+- Creates system folder to store data in /var/lib/geoblocker_bash. Data consists of fetched subnet lists from RIPE, a file storing pre-install iptables policies for the INPUT and FORWARD chains (for backup), and a file storing last known-good iptables config (for backup and fault recovery).
+- Copies all scripts included in this collection to /usr/local/bin
+- Creates a backup of pre-install policies for INPUT and FORWARD chains
+- Calls geoblocker_bash-run to immediately fetch and apply new firewall config.
 - Verifies that crond service is enabled. Enables it if not.
-- Calls validate_cron_schedule.sh to verify optionally user-specified cron schedule expression (if not specified then uses default schedule "0 4 * * *" (at 4:00 [am] every day).
+- Validates optionally user-specified cron schedule expression (if not specified then uses default schedule "0 4 * * *" (at 4:00 [am] every day).
 - Creates periodic cron task based on that and a reboot task. Both cron tasks call the geoblocker_bash-run script with the necessary arguments.
+- If error occurs at any point during installation, calls the uninstall script to revert any changes made to the system.
 
 **The uninstall script**:
-- Removes associated iptables rules
-- Removes the associated ipset
-- Restores pre-install iptables policies for INPUT and FORWARD chains from backup
+- Deletes associated cron jobs
+- Restores pre-install state of default policies for INPUT and FORWARD chains
+- Deletes associated iptables rules and removes the whitelist ipset
 - Deletes scripts' data folder /var/lib/geoblocker_bash
 - Deletes the scripts from /usr/local/bin
 
@@ -50,17 +52,18 @@ The collection includes 6 scripts:
 **The fetch script** is based on a prior script by @mivk, called get-ripe-ips, located here:
 https://github.com/mivk/ip-country/blob/master/get-ripe-ips
 So it's basically a fork.
-It can be used separately from this collection, as it does its own pre-requisite checks and input validation and accepts arguments.
-- Fetches ipv4 subnets from RIPE for a given country, validates them and compiles them into a list
-- Attempts to determine local ipv4 subnet for the main network interface and adds that to the end of the list
-- Writes the resulting list to a plaintext file
+- Fetches ipv4 subnets for a given country from RIPE
+- Parses, validates and compiles the downloaded (JSON formatted) list into a plain list, and saves to a file
+- Attempts to determine the local ipv4 subnet for the main network interface and appends it to the file
+It can be used separately from this collection, as it does its own prerequisite checks and input validation and accepts parameters.
 
 **The apply script**:
-- Creates or updates a named ipset from a user-specified file (which should contain a plain ipv4 subnets list).
+- Creates or updates an ipset from a user-specified whitelist file (which should contain a plain ipv4 subnets list).
+- Creates iptables rules that allow connection from subnets included in the ipset
 - Sets default policy on INPUT and FORWARD iptables chains to DROP
-- Then creates iptables rules that allow connection from subnets included in the ipset.
-
-It also can be used separately from this collection, as it does its own pre-requisite checks and input validation and accepts arguments.
+- Saves a backup of the current (known-good) iptables state and current ipset
+- In case of an error, attempts to restore last known-good state from the backup
+- If that fails, the script assumes that something is horribly broken and runs the uninstall script which will attempt to remove any rules we have set, delete the associated cron jobs and restore policies for INPUT and FORWARD chains to the pre-install state
 
 **The validate_cron_schedule script** is used by the install script. It accepts cron schedule expression and attempts to make sure that it complies with the format that cron expects.
 
@@ -68,11 +71,10 @@ It also can be used separately from this collection, as it does its own pre-requ
 - Linux running systemd (tested on Debian, should work on any Debian derivative, may or may not work on other distributions)
 - Root access
 - iptables (default firewall on most linux distributions)
-- standard linux tools including awk, sed, grep
+- standard linux utilities including awk, sed, grep
 - either curl or wget
-- ipset (install it with 'apt install ipset' or similar)
+- ipset utility (install it with 'apt install ipset' or similar)
 - jq - Json processor (install it with 'apt install jq' or similar)
-- RIPE having lists for your country (if not, you may need to fetch from elsewhere and modify the scripts accordingly)
 
 **NOTES**:
 
@@ -85,6 +87,7 @@ It also can be used separately from this collection, as it does its own pre-requ
 - To test before deployment, you can install with the "-n" switch to avoid creating cron jobs. This way, a simple server restart will undo all changes made to the firewall. To enable persistence later, simply uninstall with "bash geoblocker_bash-uninstall" and install again without the "-n" switch.
 
 - Most scripts accept the -d switch for debug (in case troubleshooting is needed).
+- The "apply" script also accepts the -t switch to simulate a fault and test recovery from backup. To use it, you will need to use the install script first in order to have the conditions for testing.
 
 - The run, fetch and apply scripts write to syslog in case critical errors occur. The run script also writes a syslog line upon success.
 
