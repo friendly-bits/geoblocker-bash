@@ -15,7 +15,7 @@ To install:
 1) Download the latest realease:
 https://github.com/blunderful-scripts/geoblocker_bash/releases
 2) Install prerequisites. On Debian and derivatives run: sudo apt install ipset jq wget
-3) Download *all* scripts in this collection into the same folder
+3) Download *all* scripts in this suite into the same folder
 4) run "sudo bash geoblocker_bash-install -c [country_code]"
  
  To uninstall:
@@ -23,7 +23,7 @@ https://github.com/blunderful-scripts/geoblocker_bash/releases
 
 **Detailed description**
 
-The collection includes 6 scripts:
+The suite includes 6 scripts:
 1. geoblocker_bash-install
 2. geoblocker_bash-uninstall
 3. geoblocker_bash-run
@@ -34,7 +34,7 @@ The collection includes 6 scripts:
 **The install script**:
 - Checks prerequisites
 - Creates system folder to store data in /var/lib/geoblocker_bash. Data consists of fetched subnet lists from RIPE, a file storing pre-install iptables policies for the INPUT and FORWARD chains (for backup), and a file storing last known-good iptables config (for backup and fault recovery).
-- Copies all scripts included in this collection to /usr/local/bin
+- Copies all scripts included in this suite to /usr/local/bin
 - Creates a backup of pre-install policies for INPUT and FORWARD chains
 - Calls geoblocker_bash-run to immediately fetch and apply new firewall config.
 - Verifies that crond service is enabled. Enables it if not.
@@ -57,7 +57,7 @@ So it's basically a fork.
 - Fetches ipv4 subnets for a given country from RIPE
 - Parses, validates and compiles the downloaded (JSON formatted) list into a plain list, and saves to a file
 - Attempts to determine the local ipv4 subnet for the main network interface and appends it to the file
-It can be used separately from this collection, as it does its own prerequisite checks and input validation and accepts parameters.
+It can be used separately from this suite, as it does its own prerequisite checks and input validation and accepts parameters.
 
 **The apply script**:
 - Creates or updates an ipset from a user-specified whitelist file (which should contain a plain ipv4 subnets list).
