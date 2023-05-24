@@ -10,15 +10,19 @@ me=$(basename "$0")
 
 usage() {
     cat <<EOF
+Runs the geoblocker_bash-fetch script to fetch ip list from RIPE.
+Then runs geoblocker_bash-apply to apply the ip list to iptables.
 
-    Usage: $me -c country [-p path] [-d] [-h]
+    Usage: $me -c country -p path -k path [-d] [-h]
 
     Options:
-	-c tld		: tld / country code
-	-p path		: Path to store the compiled whitelist (default: /var/lib/geoblocker_bash/ip_lists)
+    -c tld     : tld / country code
+    -p path    : Path to store the compiled whitelist
+    -k path    : Path to file where last known-good iptables state will be saved
+    -s         : Skip fetching (only run the apply script)
 
-	-d		: Debug
-	-h		: This help
+    -d         : Debug
+    -h         : This help
 
 EOF
 }
@@ -32,27 +36,27 @@ die() {
 
 #### PARSE ARGUMENTS
 
-while getopts "c:p:dh" opt; do
-    case $opt in
-		c) country=$OPTARG;;
-		p) whitelist_path=$OPTARG;;
-		d) debug="-d";;
-		h) usage; exit 0;;
-    esac
+while getopts "c:p:k:sdh" opt; do
+	case $opt in
+	c) country=$OPTARG;;
+	p) whitelist_path=$OPTARG;;
+	k) knowngood_file=$OPTARG;;
+	s) skipfetch="true";;
+	d) debug="-d";;
+	h) usage; exit 0;;
+	esac
 done
 shift $((OPTIND -1))
 
 
 #### Initialize variables
 
-whitelist_path=${whitelist_path:-/var/lib/geoblocker_bash/ip_lists}  # default is /var/lib/geoblocker_bash/ip_lists
-
 echo ""
 
 #### Checks
 
 # check that we have geoblocker_bash-fetch
-if ! command -v geoblocker_bash-fetch &> /dev/null; then
+[ ! $skipfetch ] && if ! command -v geoblocker_bash-fetch &> /dev/null; then
 	err="Error: Cannot find \"geoblocker_bash-fetch\". Did you run setup? Exiting."
 	die "$err"
 fi
@@ -71,26 +75,45 @@ if [ -z "$country" ]; then
 	die "$err"
 fi
 
+if [ -z "$knowngood_file" ]; then
+	err="Error: Known-good file path can not be empty! Exiting."
+	usage
+	echo ""
+	die "$err"
+fi
+
+if [ -z "$whitelist_path" ]; then
+	err="Error: Whitelist file path can not be empty! Exiting."
+	usage
+	echo ""
+	die "$err"
+fi
+
 
 #### Main
 
-geoblocker_bash-fetch $debug -c "$country" -p "$whitelist_path"; rv=$?
-if [ $rv -ne 0 ]; then
-	echo ""
-	exit $rv
+if [ ! $skipfetch ]; then
+	geoblocker_bash-fetch $debug -c "$country" -p "$whitelist_path"; rv=$?
+	if [ $rv -ne 0 ]; then
+		echo ""
+		exit 1
+	else
+		[ $debug ] && echo "Successfully retrieved ip list from RIPE."
+		logger -t geoblocker_bash-run "Successfully applied the whitelist."
+	fi
 else
-	[ $debug ] && echo "Successfully retrieved ip list from RIPE."
+	echo "Note: Skipped fetching because -s switch was used"
 fi
 
-geoblocker_bash-apply $debug -p "$whitelist_path/ipv4_$country"; rv=$?
+geoblocker_bash-apply $debug -p "$whitelist_path/ipv4_$country" -k "$knowngood_file"; rv=$?
 if [ $rv -ne 0 ]; then
 	echo ""
-	exit $rv
+	exit 1
 else
 	[ $debug ] && echo "Successfully applied the whitelist."
 fi
 
-logger -t geoblocker_bash-run "Successfully fetched and applied whitelist."
+logger -t geoblocker_bash-run "Successfully applied the whitelist."
 
 echo ""
 
