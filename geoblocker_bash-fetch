@@ -1,36 +1,39 @@
 #!/bin/bash -l
 
+# geoblocker_bash-fetch
 # Based on a prior script by mivk, called get-ripe-ips.
 #
 # Fetches ipv4 subnets for a given country from RIPE
-# Then parses, validates and compiles them into plain list, and saves to a file
 ## See https://stat.ripe.net/docs/data_api
+#
+# Then parses, validates and compiles them into plain list, and saves to a file
+# Next attempts to determine local subnet for the main network interface and appends it to the file
 
-# Attempts to determine local subnet for the main network interface and appends it to the list
-
-# Depends on jq - JSON processor.
+# Requires jq - JSON processor.
 ## On Debian and derivatives, if you are missing jq then install it using this command:
 ## apt install jq
 
 
 me=$(basename "$0")
 
-ripe_url="https://stat.ripe.net/data/country-resource-list/data.json?v4_format=prefix&resource="
-
-
 #### FUNCTIONS
 
 usage() {
     cat <<EOF
+This script:
+1) Fetches ipv4 subnets for a given country from RIPE
+2) Then parses, validates and compiles them into plain list, and saves to a file
+3) Attempts to determine local subnet for the main network interface and appends it to the file
 
-    Usage: $me -c country [more options]
+
+    Usage: $me -c country -p path [-d] [-h]
 
     Options:
-	-c tld		: tld/country code
-	-p path		: Path to store downloaded ip lists (default: /var/lib/geoblocker_bash/ip_lists)
+    -c tld    : tld/country code
+    -p path   : Path to store downloaded and compiled subnet lists
 
-	-d		: Debug
-	-h		: This help
+    -d        : Debug
+    -h        : This help
 
 EOF
 }
@@ -59,9 +62,10 @@ validate_ipv4_subnet() {
 findlocalsubnet() {
 # attempts to find local subnet for the main network interface
 
+	# returns local ip with subnet mask
 	localip="$(ip addr | grep 'state UP' -A2 | tail -n1 | awk '{print $2}')"
 
-	# transform into subnet
+	# Change last ipv4 octet to 0
 	localsubnet=$(echo "$localip" | sed 's|\([0-9]*\.[0-9]*\.[0-9]*\.\)[0-9]*|\10|')
 
 	# Sanity check
@@ -77,26 +81,24 @@ findlocalsubnet() {
 }
 
 
-
-
 #### Parse arguments
 
 while getopts "c:p:dh" opt; do
-    case $opt in
+	case $opt in
 	c) country=$OPTARG;;
-	p) whitelist_path=$OPTARG;;
+	p) iplist_path=$OPTARG;;
 	d) debug=true;;
 	h) usage; exit 0;;
-    esac
+	esac
 done
 shift $((OPTIND -1))
 
 
 #### Initialize variables
-
+ripe_url="https://stat.ripe.net/data/country-resource-list/data.json?v4_format=prefix&resource="
 min_size_ipv4=5000  # default is 5000 bytes
 min_size_ipv6=2000  # default is 2000 bytes
-whitelist_path=${whitelist_path:-/var/lib/geoblocker_bash/ip_lists}  # default is /var/lib/geoblocker_bash/ip_lists
+
 
 #### Checks
 
@@ -104,6 +106,14 @@ if [ -z "$country" ]; then
 	usage
 	echo ""
 	err="Error: Specify country with -c! Exiting."
+	die "$err"
+fi
+
+# check that we have iplist file path
+if [ -z "$iplist_path" ]; then
+	usage
+	err="Error: iplist file path can not be empty. Exiting."
+	echo ""
 	die "$err"
 fi
 
@@ -122,13 +132,14 @@ if ! command -v jq &> /dev/null; then
 	die "$err"
 fi
 
+
 #### Main
 
 tmpfile=$(mktemp "/tmp/ripe-$country-XXXX.json")
 
 [ $debug ] && echo "Debug: Trying: $curl_or_wget '$url'" >&2
 
-$curl_or_wget "$url" > $tmpfile
+$curl_or_wget "$url" > "$tmpfile"
 rv=$?
 
 if [ $rv -ne 0 ]; then
@@ -154,11 +165,10 @@ ripe_db_time=$(jq -r '.data.query_time' $tmpfile)
 date_new=$(date -d "$ripe_db_time" +%s)
 
 family="ipv4"
-
 ## only parsing the ipv4 section at this time
 
 filename="${family}_$country"
-out_list="$whitelist_path/$filename"
+out_list="$iplist_path/$filename"
 
 if [ "$family" = "ipv6" ]; then min_size="$min_size_ipv6"; else min_size="$min_size_ipv4"; fi
 
@@ -173,9 +183,7 @@ if [ ! $date_new -gt $date_old ]; then
 fi
 
 if [ $date_new -gt $date_old ]; then
-
 	[ $debug ]  && echo "Debug: Querytime is newer than of old list $filename, updating..."
-
 	errorcount=0
 	subnetcount=0
 	for testsubnet in `jq -r ".data.resources.$family | .[]" "$tmpfile"`; do
@@ -221,7 +229,7 @@ if [ $date_new -gt $date_old ]; then
 		fi
 
 	else
-		echo "Error: fetched file $out_list.new size of $size bytes smaller than minimum $min_size bytes. Probably a download error. Not updating $filename." >&2
+		echo "Error: fetched file $out_list.new size of $size bytes is smaller than minimum $min_size bytes. Probably a download error. Not updating $filename." >&2
 		err="Error: Fetched file $out_list.new is too small: $size bytes. Possibly a download error. Exiting."
 
 		[ $debug ] && echo "Removing previous bad lists for $filename" >&2
