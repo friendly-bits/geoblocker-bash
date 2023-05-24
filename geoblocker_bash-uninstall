@@ -1,5 +1,41 @@
 #!/bin/bash
 
+# Deletes associated cron jobs
+# Restores pre-install state of default policies for INPUT and FORWARD chains
+# Deletes associated iptables rules and removes the whitelist ipset
+# Deletes scripts' data folder /var/lib/geoblocker_bash
+# Deletes the scripts from /usr/local/bin
+
+#### FUNCTIONS
+
+usage() {
+    cat <<EOF
+This script:
+1) Deletes associated cron jobs
+2) Restores pre-install state of default policies for INPUT and FORWARD chains
+3) Deletes associated iptables rules and removes the whitelist ipset
+4) Deletes scripts' data folder /var/lib/geoblocker_bash
+5) Deletes the scripts from /usr/local/bin
+
+
+    Usage: $me [-p]
+
+    Options:
+    -p     : partial uninstall: restores iptables to pre-install state and removes cron jobs but leaves files in place
+	-h     : This help
+
+EOF
+}
+
+#### PARSE ARGUMENTS
+
+while getopts "ph" opt; do
+	case $opt in
+		p) partial_uninstall="true";;
+		h) usage; exit 0;;
+esac
+done
+shift $((OPTIND -1))
 
 echo ""
 
@@ -21,7 +57,7 @@ iptables_comment="geoblocker_bash"
 
 
 ### Delete associated cron jobs
-echo "Deleting cron jobs for geoip-whitelist..."
+echo "Deleting cron jobs for geoblocker_bash..."
 crontab -u root -l 2>/dev/null |  grep -v 'geoblocker_bash-run' | sudo crontab -u root -
 
 ### Restore pre-install state of default policies for INPUT and FORWARD
@@ -35,7 +71,7 @@ while read -r preinstall_policy; do
 		if [ $rv -ne 0 ]; then
 			echo "Error $rv trying to change iptables policy with command \"iptables -P $chain_name $oldpolicy\". Exiting."
 			exit 1
-        	fi
+			fi
 	else
 		echo "Could not restore pre-install iptables policies. Apparently the file $preinstall_policies_file is empty, missing or misconfigured."
 	fi
@@ -47,26 +83,31 @@ done < "$preinstall_policies_file"
 # iptables-save command just dumps the table, then we pipe the contents into sed
 # sed executes iptables -D (delete) command on matching rules. execution is promtped by the switch /e
 
-echo "Deleting associated iptables rules."
+echo "Deleting associated iptables rules..."
 iptables-save | sed -r "/OUTPUT.*comment.*$iptables_comment/s/-A/iptables -D/e" &>/dev/null
 iptables-save | sed -r "/INPUT.*comment.*$iptables_comment/s/-A/iptables -D/e" &>/dev/null
 
 
 
 ### Destroy associated ipset
-echo "Destroying ipset $ipset_name."
+echo "Destroying ipset $ipset_name..."
 ipset destroy "$ipset_name"
 
 
-### Delete app data and directory
-rm -rf "$datapath"
+if [ ! $partial_uninstall ]; then
+	echo "Deleting script's data folder $datapath..."
+	### Delete app data and directory
+	rm -rf "$datapath"
 
-### Delete scripts
-rm "$install_dir/geoblocker_bash-fetch"
-rm "$install_dir/geoblocker_bash-apply"
-rm "$install_dir/geoblocker_bash-run"
-rm "$install_dir/geoblocker_bash-install"
-rm "$install_dir/validate_cron_schedule.sh"
+	### Delete scripts
+	echo "Deleting scripts from $install_dir..."
+	rm "$install_dir/geoblocker_bash-fetch"
+	rm "$install_dir/geoblocker_bash-apply"
+	rm "$install_dir/geoblocker_bash-run"
+	rm "$install_dir/geoblocker_bash-install"
+	rm "$install_dir/validate_cron_schedule.sh"
 
-echo "Uninstall complete."
+	echo "Uninstall complete."
+fi
+
 echo ""
