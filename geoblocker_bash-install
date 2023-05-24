@@ -1,13 +1,20 @@
 #!/usr/bin/env bash
 #
+# geoblocker_bash-install
+#
 # Installer for geoip blocking collection of bash scripts
 # Must be run as root
 #
-# Creates system folder to store the whitelist in /var/lib/geoblocker_bash
-# Copies all scripts included in the collection into /usr/local/bin
+# Checks prerequisites
+# Creates system folder to store the whitelist and other data in /var/lib/geoblocker_bash
+# Copies all scripts included in the collection to /usr/local/bin
 # Creates a backup of pre-install policies for INPUT and FORWARD chains
-# Then runs geoblocker_bash-run to immediately fetch and apply the new firewall config
+# Runs geoblocker_bash-run to immediately fetch and apply new firewall config
+# Verifies that crond service is enabled. Enables it if not.
+# Validates optionally user-specified cron schedule expression (if not specified then uses default schedule "0 4 * * *" (at 4:00 [am] every day).
+# Creates periodic cron task based on that and a reboot task. Both cron tasks call the geoblocker_bash-run script with the necessary arguments.
 # If error occurs at any step during installation, calls the uninstall script to revert any changes to the system.
+
 #
 # NOTE: ipv4 only, ipv6 not implemented
 #
@@ -31,9 +38,12 @@ Must be run as root.
 This script:
 1) Checks prerequisites
 2) Creates system folder to store the whitelist and other data in /var/lib/geoblocker_bash
-3) Copies all scripts included in the collection into /usr/local/bin
+3) Copies all scripts included in the collection to /usr/local/bin
 4) Creates a backup of pre-install policies for INPUT and FORWARD chains
-5) Runs geoblocker_bash-run to immediately fetch and apply the new config
+5) Runs geoblocker_bash-run to immediately fetch and apply new firewall config
+6) Verifies that crond service is enabled. Enables it if not.
+7) Validates optionally user-specified cron schedule expression (if not specified then uses default schedule "0 4 * * *" (at 4:00 [am] every day).
+8) Creates periodic cron task based on that and a reboot task. Both cron tasks call the geoblocker_bash-run script with the necessary arguments.
 If error occurs at any step during installation, calls the uninstall script to revert any changes to the system.
 
 
