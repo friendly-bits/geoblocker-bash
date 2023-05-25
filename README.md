@@ -85,7 +85,7 @@ https://github.com/mivk/ip-country/blob/master/get-ripe-ips
 
 - Changes applied to iptables are made persistent via cron jobs: a periodic job running at a daily schedule (which you can optionally change when running the install script), and a job which runs at system reboot (after 30 seconds delay).
 
-- To test before deployment, you can install with the "-n" switch to avoid creating cron jobs. This way, a simple server restart will undo all changes made to the firewall. To enable persistence later, simply uninstall with "bash geoblocker_bash-uninstall" and install again without the "-n" switch.
+- To test before deployment, you can run the install script with the "-n" switch to skip creating cron jobs. This way, a simple server restart will undo all changes made to the firewall. To enable persistence later, simply uninstall with "bash geoblocker_bash-uninstall" and install again without the "-n" switch.
 
 - Most scripts accept the -d switch for debug (in case troubleshooting is needed).
 - The "apply" script also accepts the -t switch to simulate a fault and to test recovery. To use it, you will need to install the suite first and then call the "apply" script manually with the correct parameters.
