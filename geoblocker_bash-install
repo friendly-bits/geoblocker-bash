@@ -341,14 +341,14 @@ if [ ! $no_persistence ]; then
 		cron_line_result=$(crontab -u root -l 2>/dev/null |  grep "\"$install_dir/geoblocker_bash-run\" -s -c \"$country\" -p \"$whitelist_path\" -k \"$knowngood_file\"")
 		echo "Cron line: $cron_line_result"
 		echo ""
-		echo "View cron jobs with \"crontab -l\""
+		echo "View cron jobs with \"sudo crontab -l\""
 	fi
 else
 	echo "NOTE: No persistence was requested, skipping cron jobs creation."
 fi
 
 echo ""
-echo "View iptables rules with \"iptables -L\""
+echo "View iptables rules with \"sudo iptables -L\""
 echo ""
 
 echo "Install done."
