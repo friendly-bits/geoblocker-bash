@@ -5,20 +5,17 @@
 # Creates or updates an ipset from a user-specified whitelist file (which should contain a plain ipv4 subnets list).
 # Creates iptables rules that allow connection from subnets included in the ipset
 # Sets default policy on INPUT and FORWARD iptables chains to DROP
-# Saves a backup of the current (known-good) iptables state and current ipset
+# Saves backup of the current (known-good) iptables state and current ipset
 # In case of an error, attempts to restore last known-good state from the backup
 # If that fails, the script assumes that something is horribly broken and runs the uninstall script
 #        which will attempt to remove any rules we have set, delete cron jobs
 #        and restore policies for INPUT and FORWARD chains to pre-install state
 #
-# Depends on 'ipset' utility. To install it on Debian derivatives, use the command:
+# Requires the 'ipset' utility. To install it on Debian or derivatives, use the command:
 ## apt install ipset
 #
 # For input, requires a plaintext file with ip subnet list in the format xxx.xxx.xxx.xxx/xxx
-#
-# Manuals used to make this script:
-## https://ipset.netfilter.org/ipset.man.html
-## https://www.thegeekdiary.com/how-to-use-ipset-command-in-linux/
+
 
 me=$(basename "$0")
 
@@ -30,7 +27,7 @@ This script:
 1) Creates or updates an ipset from a user-specified whitelist file (which should contain a plain ipv4 subnets list).
 2) Creates iptables rules that allow connection from subnets included in the ipset
 3) Sets default policy on INPUT and FORWARD iptables chains to DROP
-4) Saves a backup of the current (known-good) iptables state and current ipset
+4) Creates backup of the current (known-good) iptables state and current ipset
 5) In case of an error, attempts to restore last known-good state from the backup
 6) If that fails, the script assumes that something is horribly broken and runs the uninstall script
         which will attempt to remove any rules we have set, delete the associated cron jobs
@@ -361,9 +358,9 @@ echo "Ok."
 # This line is to simulate fault and test recovery from backup
 [ $test ] && die "Test test test"
 
-## Create a backup file for known-good iptables state and save current state to the file
+## Create backup file for known-good iptables state and save current state to the file
 
-echo -n "Creating a backup of current iptables state... "
+echo -n "Creating backup of current iptables state... "
 touch "$knowngood_file.new"
 
 iptables-save > "$knowngood_file.new"; rv=$?
