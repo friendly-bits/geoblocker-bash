@@ -163,6 +163,7 @@ restoreknowngood() {
 	echo "$msg1"
 	logger -t geoblocker_bash-apply  "$msg1"
 
+	echo "Setting INPUT chain policy to ACCEPT... "
 	iptables -P INPUT ACCEPT
 	echo "Flushing the INPUT chain... "
 	iptables -F INPUT
