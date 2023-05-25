@@ -71,7 +71,7 @@ https://github.com/mivk/ip-country/blob/master/get-ripe-ips
 **Prerequisites**:
 - Linux running systemd (tested on Debian, should work on any Debian derivative, may or may not work on other distributions)
 - Root access
-- iptables (default firewall on most linux distributions)
+- iptables (default firewall management utility on most linux distributions)
 - standard linux utilities including awk, sed, grep
 - either curl or wget
 - ipset utility (install it with 'apt install ipset' or similar)
