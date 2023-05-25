@@ -33,14 +33,14 @@ The suite includes 6 scripts:
 
 **The install script**:
 - Checks prerequisites
-- Creates system folder to store data in /var/lib/geoblocker_bash. Data consists of fetched subnet lists from RIPE, a file storing pre-install iptables policies for the INPUT and FORWARD chains (for backup), and a file storing last known-good iptables config (for backup and fault recovery).
+- Creates system folder to store data in /var/lib/geoblocker_bash. Data consists of fetched subnet lists from RIPE, a file storing pre-install iptables policies for the INPUT and FORWARD chains (for backup), and a file storing last known-good ipset and iptables config (for backup and fault recovery).
 - Copies all scripts included in this suite to /usr/local/bin
-- Creates a backup of pre-install policies for INPUT and FORWARD chains
+- Creates backup of pre-install policies for INPUT and FORWARD chains
 - Calls geoblocker_bash-run to immediately fetch and apply new firewall config.
 - Verifies that crond service is enabled. Enables it if not.
 - Validates optionally user-specified cron schedule expression (if not specified then uses default schedule "0 4 * * *" (at 4:00 [am] every day).
-- Creates periodic cron task based on that and a reboot task. Both cron tasks call the geoblocker_bash-run script with the necessary arguments.
-- If error occurs at any point during installation, calls the uninstall script to revert any changes made to the system.
+- Creates periodic cron task based on that schedule and a reboot task. Both cron tasks call the geoblocker_bash-run script with the necessary arguments.
+- If an error occurs at any point during installation, calls the uninstall script to revert any changes made to the system.
 
 **The uninstall script**:
 - Deletes associated cron jobs
@@ -49,24 +49,24 @@ The suite includes 6 scripts:
 - Deletes scripts' data folder /var/lib/geoblocker_bash
 - Deletes the scripts from /usr/local/bin
 
-**The run script** simply calls the fetch script, then calls the apply script, passing required arguments.
+**The run script** simply calls the fetch script, then calls the apply script, passing required arguments. Used for easier triggering from cron jobs.
 
 **The fetch script** is based on a prior script by @mivk, called get-ripe-ips, located here:
 https://github.com/mivk/ip-country/blob/master/get-ripe-ips
-So it's basically a fork.
+
 - Fetches ipv4 subnets for a given country from RIPE
-- Parses, validates and compiles the downloaded (JSON formatted) list into a plain list, and saves to a file
+- Parses, validates and compiles the downloaded (JSON formatted) list into a plain list, and saves that to a file
 - Attempts to determine the local ipv4 subnet for the main network interface and appends it to the file
 
 **The apply script**:
 - Creates or updates an ipset from a user-specified whitelist file (which should contain a plain ipv4 subnets list)
-- Creates iptables rules that allow connection from subnets included in the ipset
+- Creates iptables rule that allows connection from subnets included in the ipset
 - Sets default policy on INPUT and FORWARD iptables chains to DROP
-- Saves a backup of the current (known-good) iptables state and current ipset
+- Saves a backup of the current (known-good) iptables state and the current ipset
 - In case of an error, attempts to restore last known-good state from the backup
-- If that fails, the script assumes that something is horribly broken and runs the uninstall script which will attempt to remove any rules we have set, delete the associated cron jobs and restore policies for INPUT and FORWARD chains to the pre-install state
+- If that fails, the script assumes that something is broken and calls the uninstall script which will attempt to remove any rules we have set, delete the associated cron jobs and restore policies for INPUT and FORWARD chains to the pre-install state
 
-**The validate_cron_schedule script** is used by the install script. It accepts cron schedule expression and attempts to make sure that it complies with the format that cron expects.
+**The validate_cron_schedule script** is used by the install script. It accepts cron schedule expression and attempts to make sure that it complies with the format that cron expects. Used to validate optionally user-specified cron schedule expressions.
 
 **Prerequisites**:
 - Linux running systemd (tested on Debian, should work on any Debian derivative, may or may not work on other distributions)
@@ -81,14 +81,14 @@ So it's basically a fork.
 
 - Since these scripts are intended to be used on servers (including on my own server), much effort has gone into ensuring reliability and error handling. Yet, I can not guarantee that they will work as intended (or at all...) in your environment. You should test by yourself.
 
-- If accessing your server remotely, make sure that you do not lock yourself out by using this script! Meaning, verify that your ipv4 subnet is indeed included in the list that the script receives from RIPE. You can do that by running the "fetch" script separately and then simply checking inside the output file.
+- If accessing your server remotely, make sure that you do not lock yourself out by using this script! Meaning, before running the install script verify that your ipv4 subnet is indeed included in the list that the script receives from RIPE. You can do that by running the "fetch" script separately and then simply checking inside the output file. (the "fetch" script on its own doesn't make any changes to the firewall)
 
 - Changes applied to iptables are made persistent via cron jobs: a periodic job running at a daily schedule (which you can optionally change when running the install script), and a job which runs at system reboot (after 30 seconds delay).
 
 - To test before deployment, you can install with the "-n" switch to avoid creating cron jobs. This way, a simple server restart will undo all changes made to the firewall. To enable persistence later, simply uninstall with "bash geoblocker_bash-uninstall" and install again without the "-n" switch.
 
 - Most scripts accept the -d switch for debug (in case troubleshooting is needed).
-- The "apply" script also accepts the -t switch to simulate a fault and to test recovery. To use it, you will need to install the suite first.
+- The "apply" script also accepts the -t switch to simulate a fault and to test recovery. To use it, you will need to install the suite first and then call the "apply" script manually with the correct parameters.
 
 - The run, fetch and apply scripts write to syslog in case an error occurs. The run script also writes a syslog line upon success.
 
