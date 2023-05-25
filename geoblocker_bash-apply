@@ -75,18 +75,35 @@ knowngood_failed() {
 	exit 1
 }
 
+# fail2ban doesn't handle well flushing INPUT chain then restoring iptables
+# this function is used to restart fail2ban service after these operations to work around that issue
+restart_fail2ban() {
+	systemctl is-enabled fail2ban &> /dev/null; rv=$?
+	if [ $rv -eq 0 ]; then
+		[ $debug ] && echo -n "Debug: Restarting fail2ban..."
+		systemctl restart fail2ban; rv=$?
+		if [ $rv -eq 0 ]; then
+			[ $debug ] && echo "Ok."
+		else
+			[ $debug ] && echo "Failed."
+		fi
+	fi
+}
+
 restore_knowngood_iptables() {
 	restorefile="$@"
 	line_cnt="$(sed -e '/\[IPSET\]/Q' $restorefile | wc -l)"
 	[ $debug ] && echo "Debug: Iptables lines number in backup: $line_cnt"
 	[ $debug ] && echo "Debug: restorefile: $restorefile"
 
-	echo -n "Restoring last known good iptables state from backup... "
+	echo -n "Restoring iptables state from backup... "
 	if [ $line_cnt -ne 0 ]; then
 		# reads $restorefile from beginning to [IPSET] and pipes the result into iptables-restore
 		sed -e '/\[IPSET\]/Q' "$restorefile" 2>&1 | iptables-restore; rv="${PIPESTATUS[1]}"
 		if [ $rv -eq 0 ]; then
-			echo "Success"; return 0
+			echo "Success"
+			restart_fail2ban
+			return 0
 		else
 			err1="Failed to restore ipset known-good state from backup."
 			[ $test ] && echo "$err1"
@@ -95,6 +112,8 @@ restore_knowngood_iptables() {
 		err1="Error: iptables backup appears to be empty."
 		[ $test ] && echo "$err1"
 	fi
+
+	restart_fail2ban
 
 	# if we are here then something is seriously broken
 	# run the uninstall script with -p switch to restore iptables to pre-install state but leave files in place
@@ -111,12 +130,13 @@ restore_knowngood_ipset() {
 	[ $debug ] && echo "Debug: Ipset lines number in backup: $line_cnt"
 	[ $debug ] && echo "Debug: restorefile: $restorefile"
 
-	echo -n "Restoring last known good ipset state from backup... "
+	echo -n "Restoring ipset state from backup... "
 	if [ $line_cnt -ne 0 ]; then
 		# reads $restorefile from "create $ipset_name" to the end and pipes the result into "ipset restore"
 		sed -n "/create ${ipset_name}/,\$p" "$restorefile" 2>&1 | ipset restore; rv="${PIPESTATUS[1]}"
 		if [ $rv -eq 0 ]; then
-			echo "Success"; return 0
+			echo "Success"
+			return 0
 		else
 			err1="Failed to restore iptables known-good state from backup."
 			[ $test ] && echo "$err1"
@@ -137,9 +157,12 @@ restore_knowngood_ipset() {
 
 restoreknowngood() {
 	restorefile="$@"
-	echo "NOTE: Restoring last known good ipset from backup... "
-	echo ""
-	echo "Setting INPUT chain policy to ACCEPT... "
+
+	echo ""; echo ""
+	msg1="NOTE: Restoring last known-good ipset and iptables from backup... "
+	echo "$msg1"
+	logger -t geoblocker_bash-apply  "$msg1"
+
 	iptables -P INPUT ACCEPT
 	echo "Flushing the INPUT chain... "
 	iptables -F INPUT
@@ -148,7 +171,9 @@ restoreknowngood() {
 
 	restore_knowngood_ipset "$restorefile"
 	restore_knowngood_iptables "$restorefile"
-	logger -t geoblocker_bash-apply  "Successfully restored known-good ipset and iptables state from backup."
+	msg1="Successfully restored known-good ipset and iptables state from backup."
+	echo "$msg1"; echo ""
+	logger -t geoblocker_bash-apply  "$msg1"
 }
 
 die() {
