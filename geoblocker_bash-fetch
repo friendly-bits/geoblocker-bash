@@ -21,6 +21,7 @@ me=$(basename "$0")
 
 usage() {
     cat <<EOF
+
 This script:
 1) Fetches ipv4 subnets for a given country from RIPE
 2) Then parses, validates and compiles them into plain list, and saves to a file
@@ -90,6 +91,7 @@ while getopts "c:p:dh" opt; do
 	p) iplist_path=$OPTARG;;
 	d) debug=true;;
 	h) usage; exit 0;;
+	\?) usage; exit 1;;
 	esac
 done
 shift $((OPTIND -1))
