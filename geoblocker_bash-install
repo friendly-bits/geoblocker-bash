@@ -192,7 +192,7 @@ cd "$scriptdir"
 
 check_file_exists "geoblocker_bash-fetch"
 check_file_exists "geoblocker_bash-apply"
-check_file_exists "geoblocker_bash-apply"
+check_file_exists "geoblocker_bash-run"
 check_file_exists "validate_cron_schedule.sh"
 check_file_exists "geoblocker_bash-uninstall"
 
