@@ -12,6 +12,7 @@
 
 usage() {
     cat <<EOF
+
 This script:
 1) Deletes associated cron jobs
 2) Restores pre-install state of default policies for INPUT and FORWARD chains
@@ -35,7 +36,8 @@ while getopts "ph" opt; do
 	case $opt in
 		p) partial_uninstall="true";;
 		h) usage; exit 0;;
-esac
+		\?) usage; exit 1;;
+	esac
 done
 shift $((OPTIND -1))
 
