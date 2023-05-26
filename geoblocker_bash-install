@@ -8,12 +8,12 @@
 # Checks prerequisites
 # Creates system folder to store the whitelist and other data in /var/lib/geoblocker_bash
 # Copies all scripts included in the suite to /usr/local/bin
-# Creates a backup of pre-install policies for INPUT and FORWARD chains
+# Creates backup of pre-install policies for INPUT and FORWARD chains
 # Runs geoblocker_bash-run to immediately fetch and apply new firewall config
 # Verifies that crond service is enabled. Enables it if not.
 # Validates optionally user-specified cron schedule expression (if not specified then uses default schedule "0 4 * * *" (at 4:00 [am] every day).
 # Creates periodic cron task based on that and a reboot task. Both cron tasks call the geoblocker_bash-run script with the necessary arguments.
-# If error occurs at any step during installation, calls the uninstall script to revert any changes to the system.
+# If an error occurs at any step during installation, calls the uninstall script to revert any changes made to the system.
 
 #
 # NOTE: ipv4 only, ipv6 not implemented
@@ -32,6 +32,7 @@ usage() {
 # Only applies ipv4 config, if you need ipv6 then you can add code for that
 
     cat <<EOF
+
 Installer for geoip blocking suite of bash scripts.
 Must be run as root.
 
@@ -39,12 +40,12 @@ This script:
 1) Checks prerequisites
 2) Creates system folder to store the whitelist and other data in /var/lib/geoblocker_bash
 3) Copies all scripts included in the suite to /usr/local/bin
-4) Creates a backup of pre-install policies for INPUT and FORWARD chains
+4) Creates backup of pre-install policies for INPUT and FORWARD chains
 5) Runs geoblocker_bash-run to immediately fetch and apply new firewall config
 6) Verifies that crond service is enabled. Enables it if not.
 7) Validates optionally user-specified cron schedule expression (if not specified then uses default schedule "0 4 * * *" (at 4:00 [am] every day).
 8) Creates periodic cron task based on that and a reboot task. Both cron tasks call the geoblocker_bash-run script with the necessary arguments.
-If error occurs at any step during installation, calls the uninstall script to revert any changes to the system.
+If an error occurs at any step during installation, calls the uninstall script to revert any changes made to the system.
 
 
     Usage: $me -c country [-s "schedule"] [-n] [-d] [-h]
@@ -63,8 +64,6 @@ EOF
 
 
 get_script_dir () {
-# source for this function:
-## https://stackoverflow.com/questions/59895/how-do-i-get-the-directory-where-a-bash-script-is-located-from-within-the-script
 	SOURCE=${BASH_SOURCE[0]}
 	while [ -L "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symlink
 		DIR=$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )
@@ -114,6 +113,7 @@ while getopts "c:s:ndh" opt; do
 		n) no_persistence=true;;
 		d) debug="-d";;
 		h) usage; exit 0;;
+		\?) usage; exit 1;;
 	esac
 done
 
@@ -130,9 +130,9 @@ echo ""
 #### Checks
 
 if [ -z "$country" ]; then
+	usage
 	echo "Specify country with -c !"
 	echo ""
-	usage
 	exit 1
 fi
 
