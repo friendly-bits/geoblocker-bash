@@ -12,6 +12,7 @@ me=$(basename "$0")
 
 usage() {
     cat <<EOF
+
 Runs the geoblocker_bash-fetch script to fetch ip list from RIPE.
 Then runs geoblocker_bash-apply to apply the ip list to iptables.
 
@@ -46,6 +47,7 @@ while getopts "c:p:k:sdh" opt; do
 	s) skipfetch="true";;
 	d) debug="-d";;
 	h) usage; exit 0;;
+	\?) usage; exit 1;;
 	esac
 done
 shift $((OPTIND -1))
@@ -101,7 +103,7 @@ if [ ! $skipfetch ]; then
 		exit 1
 	else
 		[ $debug ] && echo "Successfully retrieved ip list from RIPE."
-		logger -t geoblocker_bash-run "Successfully applied the whitelist."
+		logger -t geoblocker_bash-run "Successfully fetched the whitelist."
 	fi
 else
 	echo "Note: Skipped fetching because -s switch was used"
