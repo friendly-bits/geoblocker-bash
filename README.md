@@ -81,17 +81,18 @@ https://github.com/mivk/ip-country/blob/master/get-ripe-ips
 
 - Since these scripts are intended to be used on servers (including on my own server), much effort has gone into ensuring reliability and error handling. Yet, I can not guarantee that they will work as intended (or at all...) in your environment. You should test by yourself.
 
-- If accessing your server remotely, make sure that you do not lock yourself out by using this script! Meaning, before running the install script verify that your ipv4 subnet is indeed included in the list that the script receives from RIPE. You can do that by running the "fetch" script separately and then simply checking inside the output file. (the "fetch" script on its own doesn't make any changes to the firewall)
+- If accessing your server remotely, make sure that you do not lock yourself out by using these scripts! Meaning, before running the install script verify that your ipv4 subnet is indeed included in the list that the fetch script receives from RIPE. You can do that by running the fetch script separately and then simply checking inside the output file. (the fetch script on its own doesn't make any changes to the firewall)
 
-- Changes applied to iptables are made persistent via cron jobs: a periodic job running at a daily schedule (which you can optionally change when running the install script), and a job which runs at system reboot (after 30 seconds delay).
+- Changes applied to iptables are made persistent via cron jobs: a periodic job running at a daily schedule (which you can optionally change when running the install script), and a job that runs at system reboot (after 30 seconds delay).
 
-- To test before deployment, you can run the install script with the "-n" switch to skip creating cron jobs. This way, a simple server restart will undo all changes made to the firewall. To enable persistence later, simply uninstall with "bash geoblocker_bash-uninstall" and install again without the "-n" switch.
+- To test before deployment, you can run the install script with the "-n" switch to skip creating cron jobs. This way, a simple server restart will undo all changes made to the firewall. To enable persistence later, simply install again without the "-n" switch.
 
 - Most scripts accept the -d switch for debug (in case troubleshooting is needed).
-- The "apply" script also accepts the -t switch to simulate a fault and to test recovery. To use it, you will need to install the suite first and then call the "apply" script manually with the correct parameters.
+
+- The "apply" script also accepts the -t switch to simulate a fault and to test recovery. To use it, you will need to install the suite first and then run the "apply" script manually with the correct arguments.
 
 - The run, fetch and apply scripts write to syslog in case an error occurs. The run script also writes a syslog line upon success.
 
-- **Note** that the install script creates cron jobs that **will be run as root**. Make appropriate security arrangements to prevent it from getting modified by unauthorized third parties.
+- **Note** that the install script creates cron jobs that **will be run as root**.
 
 - I will be interested to hear your feedback, for example whether it works or doesn't work on your system (please specify which), or if you find a bug, or would like to suggest code improvements. You can use the "Discussions" or "Issues" tab for that.
