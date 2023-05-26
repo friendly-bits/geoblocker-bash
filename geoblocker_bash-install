@@ -92,14 +92,15 @@ fi
 }
 
 copyscript() {
-	scriptfile="$1"; destination="$2"; errormessage="$3"
+	scriptfile="$1"; destination="$2"
+	errormessage="Error copying $scriptfile to $destination. Exiting."
 	cp "$scriptfile" "$destination"; rv=$?
 	if [ $rv -ne 0 ]; then
 		echo "$errormessage" >&2
 		echo ""
 		install_failed
 	else
-		[ $debug ] && echo "Debug: Successfully copied geoblocker_bash-fetch to $install_dir."
+		[ $debug ] && echo "Debug: Successfully copied $scriptfile to $install_dir."
 	fi
 	chmod +x "$install_dir/$scriptfile"
 }
@@ -253,12 +254,12 @@ fi
 if [ "$scriptdir" != "$install_dir" ]; then
 	echo ""
 	echo -n "Copying scripts to $install_dir... "
-	copyscript "geoblocker_bash-fetch" "$install_dir/geoblocker_bash-fetch" "Error copying geoblocker_bash-fetch to $install_dir. Exiting."
-	copyscript "geoblocker_bash-apply" "$install_dir/geoblocker_bash-apply" "Error copying geoblocker_bash-apply to $install_dir. Exiting."
-	copyscript "geoblocker_bash-install" "$install_dir/geoblocker_bash-install" "Error copying geoblocker_bash-install to $install_dir. Exiting."
-	copyscript "geoblocker_bash-run" "$install_dir/geoblocker_bash-run" "Error copying geoblocker_bash-run to $install_dir. Exiting."
-	copyscript "geoblocker_bash-uninstall" "$install_dir/geoblocker_bash-uninstall" "Error copying geoblocker_bash-uninstall to $install_dir. Exiting."
-	copyscript "validate_cron_schedule.sh" "$install_dir/validate_cron_schedule.sh" "Error copying validate_cron_schedule.sh to $install_dir. Exiting."
+	copyscript "geoblocker_bash-fetch" "$install_dir/geoblocker_bash-fetch"
+	copyscript "geoblocker_bash-apply" "$install_dir/geoblocker_bash-apply"
+	copyscript "geoblocker_bash-install" "$install_dir/geoblocker_bash-install"
+	copyscript "geoblocker_bash-run" "$install_dir/geoblocker_bash-run"
+	copyscript "geoblocker_bash-uninstall" "$install_dir/geoblocker_bash-uninstall"
+	copyscript "validate_cron_schedule.sh" "$install_dir/validate_cron_schedule.sh"
 	echo "Ok."
 fi
 
