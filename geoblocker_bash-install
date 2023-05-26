@@ -51,7 +51,7 @@ If error occurs at any step during installation, calls the uninstall script to r
 
     Options:
     -c tld          : tld / country code
-    -s "schedule"   : schedule expression for update cron job, must be inside double quotes
+    -s "schedule"   : schedule expression for the cron job, must be inside double quotes
                           default: "0 4 * * *" (at 4:00 [am] every day)
 
     -n              : No persistence (will not create cron jobs)
