@@ -26,11 +26,12 @@ https://github.com/blunderful-scripts/geoblocker_bash/releases
 - Root access
 - iptables (default firewall management utility on most linux distributions)
 - standard GNU utilities including awk, sed, grep
-- additional utilities: to install, run 'sudo apt install ipset wget jq grepcidr"
--- wget (or alternatively curl) is used by the "fetch" and "check_ip_in_ripe" scripts to download lists from RIPE
--- ipset utility is a companion tool to iptables (used by the "apply" script to create an efficient iptables whitelist rule)
--- jq - Json processor (used to parse lists downloaded from RIPE)
--- grepcidr - filters ip addresses matching CIDR patterns (used by check_ip_in_ripe.sh to check if an ip address belongs to a subnet from a list of subnets)
+
+additional utilities: to install, run 'sudo apt install ipset wget jq grepcidr'
+- wget (or alternatively curl) is used by the "fetch" and "check_ip_in_ripe" scripts to download lists from RIPE
+- ipset utility is a companion tool to iptables (used by the "apply" script to create an efficient iptables whitelist rule)
+- jq - Json processor (used to parse lists downloaded from RIPE)
+- grepcidr - filters ip addresses matching CIDR patterns (used by check_ip_in_ripe.sh to check if an ip address belongs to a subnet from a list of subnets)
 
 **Detailed description**
 
