@@ -23,13 +23,14 @@ https://github.com/blunderful-scripts/geoblocker_bash/releases
 
 **Detailed description**
 
-The suite includes 6 scripts:
+The suite includes 7 scripts:
 1. geoblocker_bash-install
 2. geoblocker_bash-uninstall
 3. geoblocker_bash-run
 4. geoblocker_bash-fetch
 5. geoblocker_bash-apply
 6. validate_cron_schedule.sh
+7. check_ip_in_ripe.sh
 
 **The install script**:
 - Checks prerequisites
@@ -66,7 +67,9 @@ https://github.com/mivk/ip-country/blob/master/get-ripe-ips
 - In case of an error, attempts to restore last known-good state from the backup
 - If that fails, the script assumes that something is broken and calls the uninstall script which will attempt to remove any rules we have set, delete the associated cron jobs and restore policies for INPUT and FORWARD chains to the pre-install state
 
-**The validate_cron_schedule script** is used by the install script. It accepts cron schedule expression and attempts to make sure that it complies with the format that cron expects. Used to validate optionally user-specified cron schedule expressions.
+**The validate_cron_schedule.sh script** is used by the install script. It accepts cron schedule expression and attempts to make sure that it complies with the format that cron expects. Used to validate optionally user-specified cron schedule expressions.
+
+**The check_ip_in_ripe.sh script** can be used to verify that a certain ip address belongs to a subnet found in RIPE's records for a given country. For example, you can use it before running the install script to make sure that you won't get locked out of your (presumably remote) server.
 
 **Prerequisites**:
 - Linux running systemd (tested on Debian, should work on any Debian derivative, may or may not work on other distributions)
@@ -76,12 +79,13 @@ https://github.com/mivk/ip-country/blob/master/get-ripe-ips
 - either curl or wget
 - ipset utility (install it with 'apt install ipset' or similar)
 - jq - Json processor (install it with 'apt install jq' or similar)
+- for check_ip_in_ripe.sh script - either curl or wget, and then jq and grepcidr (install it with 'apt install grepcidr' or similar)
 
 **NOTES**:
 
 - Since these scripts are intended to be used on servers (including on my own server), much effort has gone into ensuring reliability and error handling. Yet, I can not guarantee that they will work as intended (or at all...) in your environment. You should test by yourself.
 
-- If accessing your server remotely, make sure that you do not lock yourself out by using these scripts! Meaning, before running the install script verify that your ipv4 subnet is indeed included in the list that the fetch script receives from RIPE. You can do that by running the fetch script separately and then simply checking inside the output file. (the fetch script on its own doesn't make any changes to the firewall)
+- If accessing your server remotely, make sure that you do not lock yourself out by using these scripts! Meaning, before running the install script verify that your ipv4 subnet is indeed included in the list that the fetch script receives from RIPE. You can do that with help of check_ip_in_ripe.sh script (included in this suite).
 
 - Changes applied to iptables are made persistent via cron jobs: a periodic job running at a daily schedule (which you can optionally change when running the install script), and a job that runs at system reboot (after 30 seconds delay).
 
