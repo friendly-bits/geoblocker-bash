@@ -267,7 +267,7 @@ if [ "$scriptdir" != "$install_dir" ]; then
 	copyscript "geoblocker_bash-run" "$install_dir/geoblocker_bash-run"
 	copyscript "geoblocker_bash-uninstall" "$install_dir/geoblocker_bash-uninstall"
 	copyscript "validate_cron_schedule.sh" "$install_dir/validate_cron_schedule.sh"
-	copyscript "check_ip_in_ripe.sh" "$install_dir/validate_cron_schedule.sh"
+	copyscript "check_ip_in_ripe.sh" "$install_dir/check_ip_in_ripe.sh"
 	echo "Ok."
 fi
 
