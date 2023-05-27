@@ -140,8 +140,8 @@ fi
 
 tmpfile=$(mktemp "/tmp/ripe-$country-XXXX.json")
 
-[ $debug ] && echo "Debug: Trying: $curl_or_wget '$url'" >&2
 echo -n "Fetching iplist from RIPE... "
+[ $debug ] && echo "Debug: Trying: $curl_or_wget '$url'" >&2
 
 $curl_or_wget "$url" > "$tmpfile"
 rv=$?
@@ -190,7 +190,7 @@ else
 	[ $debug ]  && echo "Debug: Querytime changed, updating..."
 	errorcount=0
 	subnetcount=0
-	echo -n "Validating downloaded subnets... "
+	echo -n "Parsing and validating downloaded subnets... "
 	for testsubnet in `jq -r ".data.resources.$family | .[]" "$tmpfile"`; do
 		validate_ipv4_subnet "$testsubnet" >> "$out_list.new"; rv=$?
 		errorcount=$(($errorcount + $rv))
@@ -198,9 +198,9 @@ else
 	done
 
 	if [ $errorcount -ne 0 ]; then
-		warn="Warning: encountered $errorcount errors while validating subnets in the fetched list."
 		echo "Issues found."
-		echo "warn" >&2
+		warn="Warning: encountered $errorcount errors while validating subnets in the fetched list."
+		echo "$warn" >&2
 		logger -t geoblocker_bash-fetch "$warn"
 		echo "Invalid subnets removed from the list." >&2
 	else
