@@ -131,7 +131,7 @@ echo ""
 
 if [ -z "$country" ]; then
 	usage
-	echo "Specify country with -c !"
+	echo "Specify country with \"-c <country>\"!"
 	echo ""
 	exit 1
 fi
@@ -255,7 +255,7 @@ else
 	echo "Backup file: \"$knowngood_file\""
 fi
 
-## Copy scripts into $install_dir
+## Copy scripts to $install_dir
 
 # if we are running from $install_dir, assume that all other necessary scripts have already been installed, skip copying
 if [ "$scriptdir" != "$install_dir" ]; then
