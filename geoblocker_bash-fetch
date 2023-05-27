@@ -131,7 +131,7 @@ fi
 
 # check that we have jq
 if ! command -v jq &> /dev/null; then
-	err="Error: Cannot find "jq" - Json processor. Install it with 'apt install jq' or similar. Exiting"
+	err="Error: Cannot find \"jq\" - Json processor. Install it with 'apt install jq' or similar. Exiting"
 	die "$err"
 fi
 
