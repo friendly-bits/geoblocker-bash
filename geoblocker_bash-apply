@@ -88,70 +88,62 @@ restart_fail2ban() {
 			echo "Failed." >&2
 		fi
 	fi
+	echo ""
 }
 
-restore_knowngood_iptables() {
-	restorefile="$@"
-	line_cnt="$(sed -e '/\[IPSET\]/Q' $restorefile | wc -l)"
-	[ $debug ] && echo "Debug: Iptables lines number in backup: $line_cnt"
-	[ $debug ] && echo "Debug: restorefile: $restorefile"
-
-	echo -n "Restoring iptables state from backup... "
-	if [ $line_cnt -ne 0 ]; then
-		# reads $restorefile from beginning to [IPSET] and pipes the result into iptables-restore
-		sed -e '/\[IPSET\]/Q' "$restorefile" 2>&1 | iptables-restore; rv="${PIPESTATUS[1]}"
-		if [ $rv -eq 0 ]; then
-			echo "Success"
-			restart_fail2ban
-			return 0
-		else
-			err1="Failed to restore ipset known-good state from backup."
-			[ $test ] && echo "$err1"
-		fi
-	else
-		err1="Error: iptables backup appears to be empty."
-		[ $test ] && echo "$err1"
-	fi
-
-	restart_fail2ban
-
-	# if we are here then something is seriously broken
-	# run the uninstall script with -p switch to restore iptables to pre-install state but leave files in place
-	err2="*** Rolling back all changes to iptables to pre-install state and removing cron jobs ***"
+restore_from_file() {
+	restoretarget="$1"
+	restorefile="$2"
+	echo "Checking the $restoretarget portion of the backup file..."
 	
-	# if the -t switch wasn't specified at launch then it's not a test. proceed to 2nd stage of fault recovery.
-	[ ! $test ] && knowngood_failed "$err1" "$err2"
-	echo ""; echo ""
-}
+	# count lines in the corresponding portion of the backup file
+	case $restoretarget in
+		iptables) line_cnt=$(sed -e '/\[IPSET\]/Q' $restorefile | wc -l) ;;
+		ipset) line_cnt=$(sed -n "/create ${ipset_name}/,\$p" "$restorefile" | wc -l) ;;
+	esac
+	[ $debug ] && echo "Debug: $restoretarget lines number in backup: $line_cnt"
 
-restore_knowngood_ipset() {
-	restorefile="$@"
-	line_cnt=$(sed -n "/create ${ipset_name}/,\$p" "$restorefile" | wc -l)
-	[ $debug ] && echo "Debug: Ipset lines number in backup: $line_cnt"
-	[ $debug ] && echo "Debug: restorefile: $restorefile"
+	if [ $line_cnt -gt 0 ]; then
+		echo -n "Restoring $restoretarget state from backup... "
 
-	echo -n "Restoring ipset state from backup... "
-	if [ $line_cnt -ne 0 ]; then
-		# reads $restorefile from "create $ipset_name" to the end and pipes the result into "ipset restore"
-		sed -n "/create ${ipset_name}/,\$p" "$restorefile" 2>&1 | ipset restore; rv="${PIPESTATUS[1]}"
+		case $restoretarget in
+			# reads <$restorefile> from beginning to [IPSET] and pipes the result into iptables-restore
+			iptables) sed -e '/\[IPSET\]/Q' "$restorefile" 2>&1 | iptables-restore; rv="${PIPESTATUS[1]}" ;;
+
+			# reads <$restorefile> from "create <$ipset_name>" to the end and pipes the result into "ipset restore"
+			ipset) sed -n "/create ${ipset_name}/,\$p" "$restorefile" 2>&1 | ipset restore; rv="${PIPESTATUS[1]}" ;;
+		esac
+		
 		if [ $rv -eq 0 ]; then
-			echo "Success"
+			echo "Success."
+			if [ $restoretarget = "iptables" ]; then restart_fail2ban; fi
 			return 0
 		else
-			err1="Failed to restore iptables known-good state from backup."
-			[ $test ] && echo "$err1"
+			echo "Failure."
+			err1="Failed to restore $restoretarget known-good state from backup."
 		fi
 	else
-		err1="Error: ipset backup appears to be empty."
-		[ $test ] && echo "$err1"
+		err1="Error: $restoretarget backup appears to be empty or non-existing."
 	fi
 
-	# if we are here then something is seriously broken
+	# if we are here then something is seriously broken (unless the script ran in test mode with the -t switch)
 	# run the uninstall script with -p switch to restore iptables to pre-install state but leave files in place
-	err2="*** Rolling back all changes to iptables to pre-install state and removing cron jobs ***"
-
-	# if the -t switch wasn't specified at launch then it's not a test. proceed to 2nd stage of fault recovery.
-	[ ! $test ] && knowngood_failed "$err1" "$err2"
+	err2="*** Rolling back all changes made to $restoretarget to pre-install state and removing cron jobs ***"
+	
+	# if -t switch wasn't specified at launch then it's not a test. proceed to 2nd stage of fault recovery.
+	if [ ! $test ]; then
+		knowngood_failed "$err1" "$err2"
+	else
+		echo "$err1"
+		echo "-t switch was specified, which means we are in test mode. Skipping uninstall."
+		echo "WARNING: RECOVERY TEST FAILED AND GEOBLOCKER IS CURRENTLY INACTIVE"
+		
+		# still need to restart fail2ban if it's installed
+		if [ $restoretarget = "iptables" ]; then
+			restart_fail2ban
+			exit 1
+		fi
+	fi
 	echo ""; echo ""
 }
 
@@ -159,8 +151,8 @@ restoreknowngood() {
 	restorefile="$@"
 
 	echo ""; echo ""
-	msg1="NOTE: Restoring last known-good ipset and iptables from backup... "
-	echo "$msg1"
+	msg1="NOTE: Resetting iptables rules for Geoblocker... "
+	echo "$msg1" >&2
 	logger -t geoblocker_bash-apply  "$msg1"
 
 	echo "Setting INPUT chain policy to ACCEPT... "
@@ -170,21 +162,28 @@ restoreknowngood() {
 	echo "Destroying ipset $ipset_name..."
 	ipset destroy "$ipset_name"
 
-	restore_knowngood_ipset "$restorefile"
-	restore_knowngood_iptables "$restorefile"
+	echo ""
+	msg1="NOTE: Restoring last known-good ipset and iptables from backup... "
+	echo "$msg1" >&2
+	echo "Backup file: $restorefile"
+	echo ""
+	
+	restore_from_file "ipset" "$restorefile"
+	restore_from_file "iptables" "$restorefile"
 	msg1="Successfully restored known-good ipset and iptables state from backup."
 	echo "$msg1"; echo ""
 	logger -t geoblocker_bash-apply  "$msg1"
 }
 
 die() {
-# echoes out the error and writes it into syslog
-# then attempts to restore iptables and ipset from backup
+	# echo out the error passed in 1st argument and write it to syslog
 	echo ""
-	echo "$@" 1>&2
+	echo "$1" 1>&2
 	echo ""
-	logger -t geoblocker_bash-apply "$@"
-	restoreknowngood "$knowngood_file"
+	logger -t geoblocker_bash-apply "$1"
+
+	# if "norestore" wasn't specified in 2nd argument, attempt to restore iptables and ipset from backup
+	[ ! "$2" = "norestore" ] && restoreknowngood "$knowngood_file"
 	exit 1
 }
 
@@ -201,49 +200,50 @@ if [ -z "$whitelist_path" ]; then
 	usage
 	err="Error: whitelist file path can not be empty. Exiting."
 	echo ""
-	die "$err"
+	die "$err" "norestore"
 fi
 
 # check that we have knowngood file path
 if [ -z "$knowngood_file" ]; then
 	usage
-	echo "Error: known-good file path can not be empty. Exiting."
+	err="Error: known-good file path can not be empty. Exiting."
 	echo ""
-	exit 1
+	die "$err" "norestore"
 fi
 
 # Check that we have the ipset utility
 if ! command -v "ipset" &> /dev/null; then
 	err="Error: Cannot find 'ipset'. Install it with 'apt install ipset' or similar. Exiting."
 	echo ""
-	die "$err"
+	die "$err" "norestore"
 fi
 
 # Check that we have the iptables-save utility
 if ! command -v "iptables-save" &> /dev/null; then
 	err="Error: Cannot find 'iptables-save'. Exiting."
 	echo ""
-	die "$err"
+	die "$err" "norestore"
 fi
 
 # Check that we have the iptables-restore utility
 if ! command -v "iptables-restore" &> /dev/null; then
 	err="Error: Cannot find 'iptables-restore'. Exiting."
 	echo ""
-	die "$err"
+	die "$err" "norestore"
 fi
 
 ## check that we have ipset_name
 if [ -z "$ipset_name" ]; then
 	err="Error: ipset name can not be empty. Exiting."
 	echo ""
-	die "$err"
+	die "$err" "norestore"
 fi
 
 # check that the whitelist file exists
 if [ ! -f "$whitelist_path" ]; then
 	err="Error: Cannot find the whitelist file at path: \"$whitelist_path\". Exiting."
-	die "$err"
+	echo ""
+	die "$err" "norestore"
 fi
 
 
@@ -253,32 +253,33 @@ fi
 echo -n "Temporarily setting INPUT chain policy to ACCEPT... "
 iptables -P INPUT ACCEPT; rv=$?
 if [ $rv -ne 0 ]; then
-	err="Error $rv trying to change iptables policy with command \"iptables -P INPUT ACCEPT\". Exiting."
+	err="Error trying to change iptables policy with command \"iptables -P INPUT ACCEPT\". Exiting."
 	echo ""
 	die "$err"
 fi
 echo "Ok."
 
-## delete existing iptables rules matching comment "$iptables_comment"
-
-# iptables-save command dumps the table to stdout, then we pipe the contents into sed
-# sed executes iptables -D (delete) command on matching rules. execution is promtped by the switch /e (only available in GNU sed)
+## delete existing iptables rules matching comment "$iptables_comment" which we use to mark our rules
 
 echo -n "Removing existing iptables rules for geoblocker_bash... "
+
+# iptables-save command dumps the table to stdout, then we pipe the contents into sed
+# sed looks for rules with the comment $iptables_comment which we use to stamp our rules
+# sed executes iptables -D (delete) command on matching rules. execution is promtped by the switch /e (only available in GNU sed)
 iptables-save | sed -r "/INPUT.*comment.*$iptables_comment/s/-A/iptables -D/e" &>/dev/null; rv=$?
 
 # sed will return return 0 regardless of whether it matched any rule
 # sed will return other values if it fails for other reasons
 if [ $rv -ne 0 ]; then
 	echo "Failure."
-	err="Error $rv trying to remove existing rules with command: iptables-save | sed -r \"/INPUT.*comment.*$iptables_comment/s/-A/iptables -D/e\". Exiting."
+	err="Error trying to remove existing rules with command: iptables-save | sed -r \"/INPUT.*comment.*$iptables_comment/s/-A/iptables -D/e\". Exiting."
 	echo ""
 	die "$err"
 fi
 echo "Ok."
 
 ## check if ipset with given name already exists and is non-empty
-# we query ipset and check how many lines it gives for given name.
+# we query ipset and check how many lines it gives for given ipset name.
 # for non-existing sets that should be 0
 # for existing empty sets that should be 7
 # for existing non-empty sets that should be >7
@@ -298,6 +299,9 @@ fi
 
 if [ $ipset_length -eq 0 ]; then
 	[ $debug ] && echo "Debug: Ipset \"$ipset_name\" doesn't exist yet."
+	# to avoid being dependent on ipset output staying constant down the road,
+	# still trying to delete the ipset, just in case, but not checking the return value
+	ipset destroy "$ipset_name" &>/dev/null
 fi
 
 
@@ -305,7 +309,7 @@ fi
 echo -n "Creating new ipset \"$ipset_name\"... "
 ipset create "$ipset_name" hash:net family "$family"; rv=$?
 if [ $rv -ne 0 ]; then
-	err="Error $rv trying to create ipset \"$ipset_name\". Exiting."
+	err="Error trying to create ipset \"$ipset_name\". Exiting."
 	echo ""
 	die "$err"
 fi
@@ -316,7 +320,7 @@ echo -n "Importing the whitelist file into ipset... "
 for ip in `cat $whitelist_path`; do
 	ipset add "$ipset_name" "$ip"; rv=$?
 	if [ $rv -ne 0 ]; then
-		err="Error $rv trying to run the command: \"ipset add $ipset_name $ip\". Exiting."
+		err="Error trying to run the command: \"ipset add $ipset_name $ip\". Exiting."
 		echo ""
 		die "$err"
 	fi
@@ -371,7 +375,8 @@ if [ $rv -ne 0 ]; then
 fi
 echo "Ok."
 
-# This line is to simulate fault and test recovery from backup
+# This line is to simulate a simple fault and test recovery from backup
+# Activates when running the script with the -t switch
 [ $test ] && die "Test test test"
 
 ## Create backup file for known-good iptables state and save current state to the file
@@ -382,20 +387,22 @@ touch "$knowngood_file.new"
 iptables-save > "$knowngood_file.new"; rv=$?
 if [ $rv -ne 0 ]; then
 	echo ""
-	echo "Error $rv trying to create backup of iptables state with command: iptables-save > \"$knowngood_file.new\". Exiting." >&2
-	echo ""
-	exit 1
+	err="Error trying to create backup of iptables state with command: iptables-save > \"$knowngood_file.new\". Exiting." >&2
+	die "$err"
 fi
 echo "Ok."
 
 echo -n "Creating backup of current ipset... "
+
+# we use the same file for iptables and ipset backup
+# the "[IPSET]" line separates the two portions of the file
 echo "[IPSET]" >> "$knowngood_file.new"
+
 ipset save "$ipset_name" >> "$knowngood_file.new"; rv=$?
 if [ $rv -ne 0 ]; then
 	echo ""
-	echo "Error $rv saving backup of ipset \"$ipset_name\". Exiting."
-	echo ""
-	exit 1
+	err="Error creating backup of ipset \"$ipset_name\". Exiting."
+	die "$err"
 fi
 echo "Ok."
 
@@ -403,11 +410,10 @@ echo "Backup file: \"$knowngood_file\""
 
 mv "$knowngood_file.new" "$knowngood_file"; rv=$?
 if [ $rv -ne 0 ]; then
-	echo "Error $rv while trying to overwrite backup file for ipset and iptables state. Exiting." >&2
-	echo ""
-	exit 1
+	err="Error overwriting backup file for ipset and iptables state. Exiting." >&2
+	die "$err"
 fi
-echo ""
 
+echo ""
 echo "Successfully applied new iptables rules."
 echo ""
