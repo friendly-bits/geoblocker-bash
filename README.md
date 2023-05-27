@@ -43,7 +43,7 @@ The suite includes 7 scripts:
 6. validate_cron_schedule.sh
 7. check_ip_in_ripe.sh
 
-**The install script**:
+**The install script**
 - Checks prerequisites
 - Creates system folder to store data in /var/lib/geoblocker_bash.
 - Copies all scripts included in this suite to /usr/local/bin
@@ -54,7 +54,7 @@ The suite includes 7 scripts:
 - Creates periodic cron job based on that schedule and a reboot job. Cron jobs implement persistence and automatic list updates.
 - If an error occurs during installation, calls the uninstall script to revert any changes made to the system.
 
-**The uninstall script**:
+**The uninstall script**
 - Deletes associated cron jobs
 - Restores pre-install state of default policies for INPUT and FORWARD chains
 - Deletes associated iptables rules and removes the whitelist ipset
@@ -68,7 +68,7 @@ The suite includes 7 scripts:
 - Parses, validates and compiles the downloaded (JSON formatted) list into a plain list, and saves that to a file
 - Attempts to determine the local ipv4 subnet for the main network interface and appends it to the file
 
-**The apply script**:
+**The apply script**
 - Creates or updates an ipset from a whitelist file
 - Creates iptables rule that allows connection from subnets included in the ipset
 - Sets default policy on INPUT and FORWARD iptables chains to DROP
@@ -80,7 +80,7 @@ The suite includes 7 scripts:
 
 **The check_ip_in_ripe.sh script** can be used to verify that a certain ip address belongs to a subnet found in RIPE's records for a given country. For example, you can use it before running the install script to make sure that you won't get locked out of your (presumably remote) server.
 
-**NOTES**:
+**NOTES**
 
 - While writing these scripts, much effort has gone into ensuring reliability and error handling. Yet, I can not guarantee that they will work as intended (or at all...) in your environment. You should test by yourself.
 
