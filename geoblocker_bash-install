@@ -186,6 +186,12 @@ if ! command -v jq &> /dev/null; then
 	exit 1
 fi
 
+# check that we have grepcidr
+if ! command -v grepcidr &> /dev/null; then
+	echo "Error: Cannot find grepcidr. Install it with 'apt install grepcidr' or similar. Exiting"
+	echo ""
+	exit 1
+fi
 
 # cd into script directory
 scriptdir="$(get_script_dir)"
@@ -196,6 +202,7 @@ check_file_exists "geoblocker_bash-apply"
 check_file_exists "geoblocker_bash-run"
 check_file_exists "validate_cron_schedule.sh"
 check_file_exists "geoblocker_bash-uninstall"
+check_file_exists "check_ip_in_ripe.sh"
 
 if [ ! $no_persistence ]; then
 	# validate cron schedule
@@ -260,6 +267,7 @@ if [ "$scriptdir" != "$install_dir" ]; then
 	copyscript "geoblocker_bash-run" "$install_dir/geoblocker_bash-run"
 	copyscript "geoblocker_bash-uninstall" "$install_dir/geoblocker_bash-uninstall"
 	copyscript "validate_cron_schedule.sh" "$install_dir/validate_cron_schedule.sh"
+	copyscript "check_ip_in_ripe.sh" "$install_dir/validate_cron_schedule.sh"
 	echo "Ok."
 fi
 
