@@ -49,7 +49,7 @@ die() {
 
 
 validate_ipv4_subnet() {
-## attempts to make sure that the argument is a valid ipv4 subnet
+## Verifies that the argument is a valid ipv4 subnet
 
 # regex compiled from 2 suggestions found here:
 # https://stackoverflow.com/questions/5284147/validating-ipv4-addresses-with-regexp
@@ -100,7 +100,7 @@ shift $((OPTIND -1))
 #### Initialize variables
 ripe_url="https://stat.ripe.net/data/country-resource-list/data.json?v4_format=prefix&resource="
 min_size_ipv4=5000  # default is 5000 bytes
-min_size_ipv6=2000  # default is 2000 bytes
+# min_size_ipv6=2000  # default is 2000 bytes
 
 
 #### Checks
@@ -108,14 +108,14 @@ min_size_ipv6=2000  # default is 2000 bytes
 if [ -z "$country" ]; then
 	usage
 	echo ""
-	err="Error: Specify country with -c! Exiting."
+	err="Specify country with \"-c <country>\"!"
 	die "$err"
 fi
 
 # check that we have iplist file path
 if [ -z "$iplist_path" ]; then
 	usage
-	err="Error: iplist file path can not be empty. Exiting."
+	err="Specify iplist file path with \"-p <path-to-file>\"!"
 	echo ""
 	die "$err"
 fi
@@ -131,7 +131,7 @@ fi
 
 # check that we have jq
 if ! command -v jq &> /dev/null; then
-	err="Error: Cannot find the jq Json processor. Install it with 'apt install jq' or similar. Exiting"
+	err="Error: Cannot find "jq" - Json processor. Install it with 'apt install jq' or similar. Exiting"
 	die "$err"
 fi
 
@@ -176,7 +176,8 @@ family="ipv4"
 filename="${family}_$country"
 out_list="$iplist_path/$filename"
 
-if [ "$family" = "ipv6" ]; then min_size="$min_size_ipv6"; else min_size="$min_size_ipv4"; fi
+# if [ "$family" = "ipv6" ]; then min_size="$min_size_ipv6"; else min_size="$min_size_ipv4"; fi
+min_size="$min_size_ipv4"
 
 if [ -f "$out_list" ]; then
 	date_old=$(stat --printf "%Y" "$out_list")
