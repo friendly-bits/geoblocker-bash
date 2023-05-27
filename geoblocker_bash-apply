@@ -75,9 +75,9 @@ knowngood_failed() {
 	exit 1
 }
 
+restart_fail2ban() {
 # fail2ban doesn't handle well flushing the INPUT chain then restoring iptables
 # this function restarts fail2ban service after these operations in order to work around that issue
-restart_fail2ban() {
 	systemctl is-enabled fail2ban &> /dev/null; rv=$?
 	if [ $rv -eq 0 ]; then
 		echo -n "Restarting fail2ban..." >&2
