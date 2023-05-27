@@ -14,7 +14,7 @@ Recommended to read the NOTES section below.
 To install:
 1) Download the latest realease:
 https://github.com/blunderful-scripts/geoblocker_bash/releases
-2) Install prerequisites. On Debian and derivatives run: sudo apt install ipset jq wget
+2) Install prerequisites. On Debian and derivatives run: sudo apt install ipset jq wget grepcidr
 3) Download *all* scripts in this suite into the same folder
 4) run "sudo bash geoblocker_bash-install -c [country_code]"
  
