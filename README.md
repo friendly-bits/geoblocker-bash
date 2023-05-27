@@ -21,6 +21,17 @@ https://github.com/blunderful-scripts/geoblocker_bash/releases
  To uninstall:
  run "sudo geoblocker_bash-uninstall"
 
+**Prerequisites**:
+- Linux running systemd (tested on Debian and Mint, should work on any Debian derivative, may or may not work on other distributions)
+- Root access
+- iptables (default firewall management utility on most linux distributions)
+- standard GNU utilities including awk, sed, grep
+- additional utilities: to install, run 'sudo apt install ipset wget jq grepcidr"
+-- wget (or alternatively curl) is used by the "fetch" and "check_ip_in_ripe" scripts to download lists from RIPE
+-- ipset utility is a companion tool to iptables (used by the "apply" script to create an efficient iptables whitelist rule)
+-- jq - Json processor (used to parse lists downloaded from RIPE)
+-- grepcidr - filters ip addresses matching CIDR patterns (used by check_ip_in_ripe.sh to check if an ip address belongs to a subnet from a list of subnets)
+
 **Detailed description**
 
 The suite includes 7 scripts:
@@ -68,16 +79,6 @@ The suite includes 7 scripts:
 **The validate_cron_schedule.sh script** is used by the install script. It accepts cron schedule expression and attempts to make sure that it complies with the format that cron expects. Used to validate optionally user-specified cron schedule expressions.
 
 **The check_ip_in_ripe.sh script** can be used to verify that a certain ip address belongs to a subnet found in RIPE's records for a given country. For example, you can use it before running the install script to make sure that you won't get locked out of your (presumably remote) server.
-
-**Prerequisites**:
-- Linux running systemd (tested on Debian, should work on any Debian derivative, may or may not work on other distributions)
-- Root access
-- iptables (default firewall management utility on most linux distributions)
-- standard linux utilities including awk, sed, grep
-- either curl or wget
-- ipset utility (install it with 'apt install ipset' or similar)
-- jq - Json processor (install it with 'apt install jq' or similar)
-- for check_ip_in_ripe.sh script - either curl or wget, and then jq and grepcidr (install it with 'apt install grepcidr' or similar)
 
 **NOTES**:
 
