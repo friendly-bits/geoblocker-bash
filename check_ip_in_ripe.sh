@@ -1,6 +1,9 @@
 #/bin/bash
 
-# Checks whether a given IP address is found in RIPE's records for a given country
+# check_ip_in_ripe.sh
+#
+#
+# Checks whether a given IP address is belongs to a subnet found in RIPE's records for a given country
 #
 # Based on a prior script by mivk, called get-ripe-ips.
 #
@@ -10,12 +13,9 @@
 # Parses and compiles them into a plain list, and saves to a temporary file
 # Goes through the fetched list from RIPE and checks whether the specified IP adress belongs to one of the subnets
 #
-# Requires jq - JSON processor.
-## On Debian and derivatives, if you are missing jq then install it using this command:
-## apt install jq
-#
-# Requires grepcidr - utility that filters IPv4 and IPv6 addresses matching CIDR patterns
-# On Debian and derivatives, use "apt install grepcidr"
+# Requires jq - JSON processor, and grepcidr - utility that filters IPv4 and IPv6 addresses matching CIDR patterns.
+## On Debian and derivatives, if you are missing jq then install both with this command:
+## apt install jq grepcidr
 
 me=$(basename "$0")
 
