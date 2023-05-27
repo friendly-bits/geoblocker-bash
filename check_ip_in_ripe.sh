@@ -93,14 +93,14 @@ min_size_ipv4=5000  # default is 5000 bytes
 if [ -z "$country" ]; then
 	usage
 	echo ""
-	err="Error: Specify country with -c! Exiting."
+	err="Specify country with \"-c <country>\"!"
 	die "$err"
 fi
 
 # make sure that we have an ip address to check
 if [ -z "$userip" ]; then
 	usage
-	err="Error: You did not specify the ip address you want to test. Exiting."
+	err="Specify the ip address you want to check with \"-i <ip>\"!"
 	echo ""
 	die "$err"
 fi
