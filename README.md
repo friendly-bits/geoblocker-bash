@@ -34,14 +34,14 @@ The suite includes 7 scripts:
 
 **The install script**:
 - Checks prerequisites
-- Creates system folder to store data in /var/lib/geoblocker_bash. Data consists of fetched subnet lists from RIPE, a file storing pre-install iptables policies for the INPUT and FORWARD chains (for backup), and a file storing last known-good ipset and iptables config (for backup and fault recovery).
+- Creates system folder to store data in /var/lib/geoblocker_bash.
 - Copies all scripts included in this suite to /usr/local/bin
 - Creates backup of pre-install policies for INPUT and FORWARD chains
 - Calls geoblocker_bash-run to immediately fetch and apply new firewall config.
 - Verifies that crond service is enabled. Enables it if not.
-- Validates optionally user-specified cron schedule expression (if not specified then uses default schedule "0 4 * * *" (at 4:00 [am] every day).
-- Creates periodic cron task based on that schedule and a reboot task. Both cron tasks call the geoblocker_bash-run script with the necessary arguments.
-- If an error occurs at any point during installation, calls the uninstall script to revert any changes made to the system.
+- Validates optionally user-specified cron schedule expression (default schedule is "0 4 * * *" - at 4:00 [am] every day).
+- Creates periodic cron job based on that schedule and a reboot job. Cron jobs implement persistence and automatic list updates.
+- If an error occurs during installation, calls the uninstall script to revert any changes made to the system.
 
 **The uninstall script**:
 - Deletes associated cron jobs
@@ -52,15 +52,13 @@ The suite includes 7 scripts:
 
 **The run script** simply calls the fetch script, then calls the apply script, passing required arguments. Used for easier triggering from cron jobs.
 
-**The fetch script** is based on a prior script by @mivk, called get-ripe-ips, located here:
-https://github.com/mivk/ip-country/blob/master/get-ripe-ips
-
+**The fetch script**
 - Fetches ipv4 subnets for a given country from RIPE
 - Parses, validates and compiles the downloaded (JSON formatted) list into a plain list, and saves that to a file
 - Attempts to determine the local ipv4 subnet for the main network interface and appends it to the file
 
 **The apply script**:
-- Creates or updates an ipset from a user-specified whitelist file (which should contain a plain ipv4 subnets list)
+- Creates or updates an ipset from a whitelist file
 - Creates iptables rule that allows connection from subnets included in the ipset
 - Sets default policy on INPUT and FORWARD iptables chains to DROP
 - Saves a backup of the current (known-good) iptables state and the current ipset
@@ -83,15 +81,15 @@ https://github.com/mivk/ip-country/blob/master/get-ripe-ips
 
 **NOTES**:
 
-- Since these scripts are intended to be used on servers (including on my own server), much effort has gone into ensuring reliability and error handling. Yet, I can not guarantee that they will work as intended (or at all...) in your environment. You should test by yourself.
+- While writing these scripts, much effort has gone into ensuring reliability and error handling. Yet, I can not guarantee that they will work as intended (or at all...) in your environment. You should test by yourself.
 
-- If accessing your server remotely, make sure that you do not lock yourself out by using these scripts! Meaning, before running the install script verify that your ipv4 subnet is indeed included in the list that the fetch script receives from RIPE. You can do that with help of check_ip_in_ripe.sh script (included in this suite).
+- If accessing your server remotely, make sure that you do not lock yourself out by using these scripts. Before running the install script verify that your ipv4 subnet is indeed included in the list that the fetch script receives from RIPE. You can do that with help of check_ip_in_ripe.sh script (included in this suite).
 
 - Changes applied to iptables are made persistent via cron jobs: a periodic job running at a daily schedule (which you can optionally change when running the install script), and a job that runs at system reboot (after 30 seconds delay).
 
-- To test before deployment, you can run the install script with the "-n" switch to skip creating cron jobs. This way, a simple server restart will undo all changes made to the firewall. To enable persistence later, simply install again without the "-n" switch.
+- To test before deployment, you can run the install script with the "-n" switch to skip creating cron jobs. This way, a simple server restart will undo all changes made to the firewall. To enable persistence later, install again without the "-n" switch.
 
-- Most scripts accept the -d switch for debug (in case troubleshooting is needed).
+- All scripts accept the "-h" switch to print out the "usage" text and exit.
 
 - The "apply" script also accepts the -t switch to simulate a fault and to test recovery. To use it, you will need to install the suite first and then run the "apply" script manually with the correct arguments.
 
@@ -99,4 +97,4 @@ https://github.com/mivk/ip-country/blob/master/get-ripe-ips
 
 - **Note** that the install script creates cron jobs that **will be run as root**.
 
-- I will be interested to hear your feedback, for example whether it works or doesn't work on your system (please specify which), or if you find a bug, or would like to suggest code improvements. You can use the "Discussions" or "Issues" tab for that.
+- I will be interested to hear your feedback, for example whether it works or doesn't work on your system (please specify which), or if you find a bug, or would like to suggest code improvements. You can use the "Discussions" or "Issues" tabs for that.
