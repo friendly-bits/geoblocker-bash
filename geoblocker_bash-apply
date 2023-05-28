@@ -49,7 +49,7 @@ EOF
 
 #### PARSE ARGUMENTS
 
-while getopts "p:f:k:dht" opt; do
+while getopts "p:k:dht" opt; do
 	case $opt in
 		p) whitelist_path=$OPTARG;;
 		k) knowngood_file=$OPTARG;;
