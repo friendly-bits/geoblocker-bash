@@ -182,7 +182,7 @@ errorcount=0
 subnetcount=0
 
 echo -n "Parsing and validating downloaded subnets... "
-for testsubnet in `jq -r ".data.resources.$family | .[]" "$ripe_list"`; do
+for testsubnet in $(jq -r ".data.resources.$family | .[]" "$ripe_list"); do
 	validate_ipv4 "$testsubnet" "subnet" >> "$parsed_file"; rv=$?
 	errorcount=$(($errorcount + $rv))
 	subnetcount=$(($subnetcount + 1))
