@@ -1,4 +1,4 @@
-#/bin/bash
+#!/bin/bash
 
 # check_ip_in_ripe.sh
 #
