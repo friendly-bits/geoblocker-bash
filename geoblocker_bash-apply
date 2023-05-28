@@ -14,7 +14,9 @@
 # Requires the 'ipset' utility. To install it on Debian or derivatives, use the command:
 ## apt install ipset
 #
-# For input, requires a plaintext file with ip subnet list in the format xxx.xxx.xxx.xxx/xxx
+# Must be run as root
+#
+# For input, requires a plaintext file with ip subnet list in the format x[xx].x[xx].x[xx].x[xx]/x[xx]
 
 
 me=$(basename "$0")
@@ -207,6 +209,13 @@ fi
 if [ -z "$knowngood_file" ]; then
 	usage
 	err="Error: known-good file path can not be empty. Exiting."
+	echo ""
+	die "$err" "norestore"
+fi
+
+# check for root
+if [ "$EUID" -ne 0 ]; then
+	err="This needs to be run as root."
 	echo ""
 	die "$err" "norestore"
 fi
