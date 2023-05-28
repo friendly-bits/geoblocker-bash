@@ -148,7 +148,7 @@ restore_from_file() {
 }
 
 restoreknowngood() {
-	restorefile="$@"
+	restorefile="$1"
 
 	echo ""; echo ""
 	msg1="NOTE: Resetting iptables rules for Geoblocker... "
