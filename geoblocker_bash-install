@@ -261,6 +261,7 @@ fi
 if [ "$scriptdir" != "$install_dir" ]; then
 	echo ""
 	echo -n "Copying scripts to $install_dir... "
+	[ $debug ] && echo ""
 	copyscript "geoblocker_bash-fetch" "$install_dir/geoblocker_bash-fetch"
 	copyscript "geoblocker_bash-apply" "$install_dir/geoblocker_bash-apply"
 	copyscript "geoblocker_bash-install" "$install_dir/geoblocker_bash-install"
