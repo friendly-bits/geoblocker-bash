@@ -317,7 +317,7 @@ echo "Ok."
 
 # import whitelist into ipset from file
 echo -n "Importing the whitelist file into ipset... "
-for ip in `cat $whitelist_path`; do
+for ip in $(cat $whitelist_path); do
 	ipset add "$ipset_name" "$ip"; rv=$?
 	if [ $rv -ne 0 ]; then
 		err="Error trying to run the command: \"ipset add $ipset_name $ip\". Exiting."
