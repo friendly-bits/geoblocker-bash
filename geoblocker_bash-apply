@@ -350,7 +350,7 @@ echo "Ok."
 echo -n "Appending the whitelist rule to the INPUT chain... "
 iptables -A INPUT -m set --match-set "$ipset_name" src -j ACCEPT -m comment --comment "$iptables_comment"; rv=$?
 if [ $rv -ne 0 ]; then
-	err="Error $rv trying to append ipset rules with command \"iptables -I INPUT -m set --match-set "$ipset_name" src -j ACCEPT\". Exiting."
+	err="Error $rv trying to append ipset rules with command: iptables -I INPUT -m set --match-set \"$ipset_name\" src -j ACCEPT. Exiting."
 	echo ""
 	die "$err"
 fi
