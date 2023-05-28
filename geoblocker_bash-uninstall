@@ -69,8 +69,8 @@ crontab -u root -l 2>/dev/null |  grep -v 'geoblocker_bash-run' | sudo crontab -
 while read -r preinstall_policy; do
 	chain_name=$(echo "$preinstall_policy" | cut -f 1 -d " ")
 	oldpolicy=$(echo "$preinstall_policy" | cut -f 2 -d " ")
-	echo "Restoring pre-install iptables policy with command: \"iptables -P $chain_name $oldpolicy\""
 	if [ ! -z "$chain_name" ] && [ ! -z "oldpolicy" ]; then
+		echo "Restoring pre-install iptables policy \"$oldpolicy\" for chain \"$chain_name\""
 		iptables -P $chain_name $oldpolicy; rv=$?
 		if [ $rv -ne 0 ]; then
 			echo "Error $rv trying to change iptables policy with command \"iptables -P $chain_name $oldpolicy\". Exiting."
@@ -110,6 +110,7 @@ if [ ! $partial_uninstall ]; then
 	rm "$install_dir/geoblocker_bash-run"
 	rm "$install_dir/geoblocker_bash-install"
 	rm "$install_dir/validate_cron_schedule.sh"
+	rm "$install_dir/check_ip_in_ripe.sh"
 
 	echo "Uninstall complete."
 fi
