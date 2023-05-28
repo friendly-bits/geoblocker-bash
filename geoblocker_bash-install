@@ -237,7 +237,7 @@ fi
 mkdir -p "$whitelist_path"
 
 
-## Create a backup file for known-good iptables state and save current state to the file
+## Create a backup file for known-good iptables state
 
 echo ""
 echo -n "Creating file for backup of iptables state..."
