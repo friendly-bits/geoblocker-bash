@@ -69,7 +69,7 @@ crontab -u root -l 2>/dev/null |  grep -v 'geoblocker_bash-run' | sudo crontab -
 while read -r preinstall_policy; do
 	chain_name=$(echo "$preinstall_policy" | cut -f 1 -d " ")
 	oldpolicy=$(echo "$preinstall_policy" | cut -f 2 -d " ")
-	if [ ! -z "$chain_name" ] && [ ! -z "oldpolicy" ]; then
+	if [ ! -z "$chain_name" ] && [ ! -z "$oldpolicy" ]; then
 		echo "Restoring pre-install iptables policy \"$oldpolicy\" for chain \"$chain_name\""
 		iptables -P $chain_name $oldpolicy; rv=$?
 		if [ $rv -ne 0 ]; then
