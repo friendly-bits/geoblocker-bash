@@ -81,7 +81,7 @@ if [ $# -ne 1 ] ; then
 	exit 1
 fi
 
-read min hour dom mon dow extra <<< "$sourceline"
+read -r min hour dom mon dow extra <<< "$sourceline"
 
 if [ ! -z "$extra" ]; then
 	echo ""
