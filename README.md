@@ -70,11 +70,11 @@ The suite includes 7 scripts:
 - Attempts to determine the local ipv4 subnet for the main network interface and appends it to the file
 
 **The apply script**
-- Creates or updates an ipset from a whitelist file
+- Creates or updates an ipset (essentially an efficiency-optimized ip list) from a whitelist file
 - Creates iptables rule that allows connection from subnets included in the ipset
-- Sets default policy on INPUT and FORWARD iptables chains to DROP
-- Saves a backup of the current (known-good) iptables state and the current ipset
-- In case of an error, attempts to restore last known-good state from the backup
+- Sets default policy on INPUT and FORWARD iptables chains to DROP (effectively blocking all connections except what's explicitly allowed by the rules)
+- Once all above completed successfully, saves a backup of the current (known-good) iptables state and the current ipset
+- In case of an error, attempts to restore last known-good state from backup
 - If that fails, the script assumes that something is broken and calls the uninstall script which will attempt to remove any rules we have set, delete the associated cron jobs and restore policies for INPUT and FORWARD chains to the pre-install state
 
 **The validate_cron_schedule.sh script** is used by the install script. It accepts cron schedule expression and attempts to make sure that it complies with the format that cron expects. Used to validate optionally user-specified cron schedule expressions.
