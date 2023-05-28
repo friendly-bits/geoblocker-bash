@@ -212,16 +212,16 @@ if [ ! "$size" -ge "$min_size" ]; then
 	die "$err"
 fi
 
-echo "Checking if $userip belongs to a subnet in the list..."
+echo "Checking $userip..."
 
 echo "$userip" | grepcidr -f "$parsed_file" &>/dev/null; rv=$?
 
 echo ""
 echo "Result:"
 if [ $rv -eq 0 ]; then
-	echo "NOTE: $userip *belongs* to a subnet in RIPE's list for country \"$country\"."
+	echo "NOTE: $userip *BELONGS* to a subnet in RIPE's list for country \"$country\"."
 else
-	echo "NOTE: $userip *does not* belong to a subnet in RIPE's list for country \"$country\"."
+	echo "NOTE: $userip *DOES NOT BELONG* to a subnet in RIPE's list for country \"$country\"."
 fi
 echo ""
 
