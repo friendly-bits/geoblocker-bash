@@ -62,12 +62,12 @@ echo ""
 
 errors=0
 exitstatus=0
-sourceline="$@"
+sourceline="$*"
 
 
 #### Main
 
-echo "Validating cron schedule \"$@\" ..."
+echo "Validating cron schedule \"$sourceline\" ..."
 
 ## Parse and check arguments for sanity
 
