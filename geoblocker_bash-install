@@ -19,7 +19,7 @@
 # NOTE: ipv4 only, ipv6 not implemented
 #
 # Requires the following additional scripts (included in the distribution):
-# geoblocker_bash-fetch, geoblocker_bash-apply, geoblocker_bash-run, geoblocker_bash-uninstall, validate_cron_schedule.sh
+# geoblocker_bash-fetch, geoblocker_bash-apply, geoblocker_bash-run, geoblocker_bash-uninstall, validate_cron_schedule.sh, check_ip_in_ripe.sh
 
 
 me=$(basename "$0")
