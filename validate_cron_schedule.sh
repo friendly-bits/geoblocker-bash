@@ -20,7 +20,7 @@ validNum() {
 		return 0
 	elif [ ! -z $(echo $num | sed 's/[[:digit:]]//g') ] ; then
 		return 1
-	elif [ $num -lt 0 -o $num -gt $max ] ; then
+	elif [ $num -lt 0 ] || [ $num -gt $max ] ; then
 		return 1
 	else
 		return 0
