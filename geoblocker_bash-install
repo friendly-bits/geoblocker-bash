@@ -20,6 +20,9 @@
 #
 # Requires the following additional scripts (included in the distribution):
 # geoblocker_bash-fetch, geoblocker_bash-apply, geoblocker_bash-run, geoblocker_bash-uninstall, validate_cron_schedule.sh, check_ip_in_ripe.sh
+# Then runs geoblocker_bash-run to immediately fetch and apply the new firewall config
+#
+# Only applies ipv4 config, if you need ipv6 then you can add code for that
 
 
 me=$(basename "$0")
@@ -27,9 +30,6 @@ me=$(basename "$0")
 #### FUNCTIONS
 
 usage() {
-# Then runs geoblocker_bash-run to immediately fetch and apply the new firewall config
-#
-# Only applies ipv4 config, if you need ipv6 then you can add code for that
 
     cat <<EOF
 
