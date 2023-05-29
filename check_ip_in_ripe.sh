@@ -59,11 +59,11 @@ validate_ipv4() {
 	ip_regex='^((25[0-5]|(2[0-4]|1\d|[1-9]|)\d)\.?\b){4}'
 	mask_regex='(/([01]?\d\d?|2[0-4]\d|25[0-5]))$'
 	if [ "$2" = "subnet" ]; then
-		regex_pattern="${ipregex}${mask_regex}"
+		regex_pattern="${ip_regex}${mask_regex}"
 	else
-		regex_pattern="${ipregex}\$"
+		regex_pattern="${ip_regex}\$"
 	fi
-	echo "$1" | grep -P $regex_pattern; rv=$?
+	echo "$1" | grep -P "$regex_pattern"; rv=$?
 	# outputs grep result, effectively filtering out invalid subnets
 
 	return $rv
@@ -131,6 +131,7 @@ fi
 
 echo ""
 
+
 # validate the specified ip address
 validate_ipv4 "$userip" &>/dev/null; rv=$?
 if [ $rv -ne 0 ]; then
@@ -158,9 +159,9 @@ if [ $rv -ne 0 ]; then
 fi
 
 
-status=$(jq -r '.status' $ripe_list)
+status=$(jq -r '.status' "$ripe_list")
 if [ ! "$status" = "ok" ]; then
-	ripe_msg=$(jq -r -c '.messages' $ripe_list)
+	ripe_msg=$(jq -r -c '.messages' "$ripe_list")
 	echo "Failed."
 	echo "Error: RIPE replied with status = '$status'."
 	echo "The requested url was '$url'"
@@ -184,8 +185,8 @@ subnetcount=0
 echo -n "Parsing and validating downloaded subnets... "
 for testsubnet in $(jq -r ".data.resources.$family | .[]" "$ripe_list"); do
 	validate_ipv4 "$testsubnet" "subnet" >> "$parsed_file"; rv=$?
-	errorcount=$(($errorcount + $rv))
-	subnetcount=$(($subnetcount + 1))
+	errorcount=$((errorcount + rv))
+	subnetcount=$((subnetcount + 1))
 done
 
 if [ $errorcount -ne 0 ]; then
@@ -196,7 +197,7 @@ else
 	echo "Success."
 fi
 
-echo "Total validated ip's: $(($subnetcount - $errorcount))"
+echo "Total validated ip's: $((subnetcount - errorcount))"
 echo ""
 
 ### Check for minimum size
