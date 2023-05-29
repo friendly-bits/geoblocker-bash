@@ -208,7 +208,7 @@ check_file_exists "check_ip_in_ripe.sh"
 
 if [ ! "$no_persistence" ]; then
 	# validate cron schedule
-	bash validate_cron_schedule.sh "$cron_schedule"; rv=$?
+	bash validate_cron_schedule.sh -x "$cron_schedule"; rv=$?
 	if [ $rv -ne 0 ]; then
 		echo "Error validating cron schedule. Exiting." >&2
 		echo ""
