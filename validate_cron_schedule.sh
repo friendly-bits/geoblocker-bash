@@ -97,15 +97,12 @@ errors=0
 exitstatus=0
 
 
-#### Main
-
-echo "Validating cron schedule \"$sourceline\" ..."
-
 ## Parse and check arguments for sanity
 
 read -r min hour dom mon dow extra <<< "$sourceline"
 
 if [ -n "$extra" ]; then
+	usage
 	echo ""
 	echo "Error: Too many fields in schedule expression! I don't know what to do with \"$extra\"!" >&2
 	echo "Use double braces around your expression!" >&2
@@ -117,6 +114,7 @@ fi
 
 if [ -z "$min" ] || [ -z "$hour" ] || [ -z "$dom" ] || [ -z "$mon" ] || [ -z "$dow" ]; then
 # if some arguments are missing
+	usage
 	echo ""
 	echo "Not enough fields in schedule expression!"
 	echo "This script requires crontab schedule line as an argument!" >&2
@@ -129,6 +127,8 @@ fi
 
 
 #### Main
+
+echo "Validating cron schedule \"$sourceline\" ..."
 
 ## Breaks the input into fields, replaces all '*' with 'X', stores results in global variables
 fixvars
