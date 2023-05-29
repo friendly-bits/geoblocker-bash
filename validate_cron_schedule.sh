@@ -10,6 +10,39 @@
 #    Based on prior "verifycron" script circulating on the internets
 #    This is a simplified version, adapted to receive one cron schedule expression in an argument.
 
+me=$(basename "$0")
+
+#### USAGE
+
+usage() {
+    cat <<EOF
+
+    Checks a cron schedule expression to ensure that it's formatted properly.  Expects standard cron notation of
+       min hr dom mon dow
+    where min is 0-59, hr 0-23, dom is 1-31, mon is 1-12 (or names) and dow is 0-7 (or names).  Fields can have ranges (a-e), lists
+    separated by commas (a,c,z), or an asterisk. Note that the step value notation of Vixie cron is not supported (e.g., 2-6/2).
+
+    Usage: $me -x "expression" [-h]
+
+    Options:
+    -x "expression"    : crontab schedule expression ***in double quotes***, example: "0 4 * * 6"
+
+    -h                 : This help
+
+EOF
+}
+
+#### Parse arguments
+
+while getopts "x:h" opt; do
+	case $opt in
+	x) sourceline=$OPTARG;;
+	h) usage; exit 0;;
+	\?) usage; exit 1;;
+	esac
+done
+shift $((OPTIND -1))
+
 
 #### Functions
 
@@ -62,7 +95,6 @@ echo ""
 
 errors=0
 exitstatus=0
-sourceline="$*"
 
 
 #### Main
@@ -71,22 +103,12 @@ echo "Validating cron schedule \"$sourceline\" ..."
 
 ## Parse and check arguments for sanity
 
-# check that we received exactly 1 argument
-if [ $# -ne 1 ] ; then
-	echo ""
-	echo "Use double braces around your arguments!" >&2
-	echo "You entered: \"$sourceline\"" >&2
-	echo "Valid example: \"0 4 * * 6\"" >&2
-	echo ""
-	exit 1
-fi
-
 read -r min hour dom mon dow extra <<< "$sourceline"
 
 if [ -n "$extra" ]; then
 	echo ""
-	echo "Error: Too many arguments! I don't know what to do with \"$extra\"!" >&2
-	echo "Use double braces around your arguments!" >&2
+	echo "Error: Too many fields in schedule expression! I don't know what to do with \"$extra\"!" >&2
+	echo "Use double braces around your expression!" >&2
 	echo "You entered: \"$sourceline\"" >&2
 	echo "Valid example: \"0 4 * * 6\"" >&2
 	echo ""
@@ -96,9 +118,9 @@ fi
 if [ -z "$min" ] || [ -z "$hour" ] || [ -z "$dom" ] || [ -z "$mon" ] || [ -z "$dow" ]; then
 # if some arguments are missing
 	echo ""
-	echo "Not enough arguments!"
+	echo "Not enough fields in schedule expression!"
 	echo "This script requires crontab schedule line as an argument!" >&2
-	echo "Use double braces around your arguments!" >&2
+	echo "Use double braces around your expression!" >&2
 	echo "You entered: \"$sourceline\"" >&2
 	echo "Valid example: \"0 4 * * 6\"" >&2
 	echo ""
