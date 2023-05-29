@@ -8,7 +8,7 @@
 # Deletes scripts' data folder /var/lib/geoblocker_bash
 # Deletes the scripts from /usr/local/bin
 
-#### FUNCTIONS
+#### USAGE
 
 usage() {
     cat <<EOF
@@ -58,7 +58,6 @@ preinstall_policies_file="$datapath/preinstall_policies.bak"
 whitelist_path="$datapath/ip_lists"
 ipset_name="geoblocker_whitelist"
 iptables_comment="geoblocker_bash"
-
 
 ### Delete associated cron jobs
 echo "Deleting cron jobs for geoblocker_bash..."
@@ -111,6 +110,7 @@ if [ ! $partial_uninstall ]; then
 	rm "$install_dir/geoblocker_bash-install"
 	rm "$install_dir/validate_cron_schedule.sh"
 	rm "$install_dir/check_ip_in_ripe.sh"
+	rm "$install_dir/geoblocker_bash-uninstall"
 
 	echo "Uninstall complete."
 fi
