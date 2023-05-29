@@ -144,7 +144,7 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 # check for systemd
-if [ $(! ps -p 1 -o comm=) != "systemd" ]; then
+if [ "$(! ps -p 1 -o comm=)" != "systemd" ]; then
 	echo "Error: systemd is required but this sytem does not appear to be running systemd. Exiting."
 	echo ""
 	exit 1
@@ -195,7 +195,9 @@ fi
 
 # cd into script directory
 scriptdir="$(get_script_dir)"
-cd "$scriptdir"
+
+# exit in case "cd" fails
+cd "$scriptdir" || exit 1
 
 check_file_exists "geoblocker_bash-fetch"
 check_file_exists "geoblocker_bash-apply"
@@ -204,7 +206,7 @@ check_file_exists "validate_cron_schedule.sh"
 check_file_exists "geoblocker_bash-uninstall"
 check_file_exists "check_ip_in_ripe.sh"
 
-if [ ! $no_persistence ]; then
+if [ ! "$no_persistence" ]; then
 	# validate cron schedule
 	bash validate_cron_schedule.sh "$cron_schedule"; rv=$?
 	if [ $rv -ne 0 ]; then
@@ -284,7 +286,7 @@ if [ -f "$preinstall_policies_file" ]; then
 else
 	preinstall_input_policy=$(iptables -nL | grep "Chain INPUT" | awk -F'policy |)' '{print $2}')
 	preinstall_forward_policy=$(iptables -nL | grep "Chain FORWARD" | awk -F'policy |)' '{print $2}')
-	if [ -z $preinstall_input_policy ] || [ -z $preinstall_forward_policy ]; then
+	if [ -z "$preinstall_input_policy" ] || [ -z "$preinstall_forward_policy" ]; then
 		echo "Error: failed to determine current policies."
 		install_failed
 	fi
@@ -302,7 +304,7 @@ else
 fi
 
 ### Fetch and apply the whitelist
-geoblocker_bash-run $debug -c $country -p "$whitelist_path" -k "$knowngood_file"; rv=$?
+geoblocker_bash-run $debug -c "$country" -p "$whitelist_path" -k "$knowngood_file"; rv=$?
 
 if [ $rv -ne 0 ]; then
 	install_failed
@@ -310,7 +312,7 @@ fi
 
 
 # if no persistence was requested, skip adding cron jobs
-if [ ! $no_persistence ]; then
+if [ ! "$no_persistence" ]; then
 	### Create cron jobs
 
 	[ $debug ] && echo ""
