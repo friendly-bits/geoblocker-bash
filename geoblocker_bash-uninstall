@@ -8,9 +8,9 @@
 # Deletes scripts' data folder /var/lib/geoblocker_bash
 # Deletes the scripts from /usr/local/bin
 
-#### USAGE
-
 me=$(basename "$0")
+
+#### USAGE
 
 usage() {
     cat <<EOF
