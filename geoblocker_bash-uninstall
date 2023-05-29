@@ -10,6 +10,8 @@
 
 #### USAGE
 
+me=$(basename "$0")
+
 usage() {
     cat <<EOF
 
@@ -24,7 +26,7 @@ This script:
     Usage: $me [-p]
 
     Options:
-    -p     : partial uninstall: restores iptables to pre-install state and removes cron jobs but leaves files in place
+	-p     : partial uninstall: restores iptables to pre-install state and removes cron jobs but leaves files in place
 	-h     : This help
 
 EOF
@@ -55,7 +57,6 @@ fi
 install_dir="/usr/local/bin"
 datapath="/var/lib/geoblocker_bash"
 preinstall_policies_file="$datapath/preinstall_policies.bak"
-whitelist_path="$datapath/ip_lists"
 ipset_name="geoblocker_whitelist"
 iptables_comment="geoblocker_bash"
 
@@ -68,9 +69,9 @@ crontab -u root -l 2>/dev/null |  grep -v 'geoblocker_bash-run' | sudo crontab -
 while read -r preinstall_policy; do
 	chain_name=$(echo "$preinstall_policy" | cut -f 1 -d " ")
 	oldpolicy=$(echo "$preinstall_policy" | cut -f 2 -d " ")
-	if [ ! -z "$chain_name" ] && [ ! -z "$oldpolicy" ]; then
+	if [ -n "$chain_name" ] && [ -n "$oldpolicy" ]; then
 		echo "Restoring pre-install iptables policy \"$oldpolicy\" for chain \"$chain_name\""
-		iptables -P $chain_name $oldpolicy; rv=$?
+		iptables -P "$chain_name" "$oldpolicy"; rv=$?
 		if [ $rv -ne 0 ]; then
 			echo "Error $rv trying to change iptables policy with command \"iptables -P $chain_name $oldpolicy\". Exiting."
 			exit 1
@@ -97,7 +98,7 @@ echo "Destroying ipset $ipset_name..."
 ipset destroy "$ipset_name"
 
 
-if [ ! $partial_uninstall ]; then
+if [ ! "$partial_uninstall" ]; then
 	echo "Deleting script's data folder $datapath..."
 	### Delete app data and directory
 	rm -rf "$datapath"
