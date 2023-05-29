@@ -137,7 +137,7 @@ fixvars
 for minslice in $(echo "$min" | sed 's/[,-]/ /g') ; do
 	if ! validNum "$minslice" 60 ; then
 		echo "Invalid minute value \"$minslice\"" >&2
-		errors="$(( $errors + 1 ))"
+		errors="$((errors + 1))"
 	fi
 done
 
