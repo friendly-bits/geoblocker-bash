@@ -97,11 +97,11 @@ restore_from_file() {
 	restoretarget="$1"
 	restorefile="$2"
 	echo "Checking the $restoretarget portion of the backup file..."
-	
+
 	# count lines in the corresponding portion of the backup file
 	case $restoretarget in
-		iptables) line_cnt=$(sed -e '/\[IPSET\]/Q' $restorefile | wc -l) ;;
-		ipset) line_cnt=$(sed -n "/create ${ipset_name}/,\$p" "$restorefile" | wc -l) ;;
+		iptables) line_cnt=$(sed -e '/\[IPSET\]/Q' "$restorefile" | wc -l) ;;
+		ipset) line_cnt=$(sed -n "/create ${ipset_name}/,\$p" "$restorefile" | grep "add $ipset_name" | wc -l) ;;
 	esac
 	[ $debug ] && echo "Debug: $restoretarget lines number in backup: $line_cnt"
 
@@ -115,10 +115,10 @@ restore_from_file() {
 			# reads <$restorefile> from "create <$ipset_name>" to the end and pipes the result into "ipset restore"
 			ipset) sed -n "/create ${ipset_name}/,\$p" "$restorefile" 2>&1 | ipset restore; rv="${PIPESTATUS[1]}" ;;
 		esac
-		
+
 		if [ $rv -eq 0 ]; then
 			echo "Success."
-			if [ $restoretarget = "iptables" ]; then restart_fail2ban; fi
+			if [ "$restoretarget" = "iptables" ]; then restart_fail2ban; fi
 			return 0
 		else
 			echo "Failure."
@@ -131,7 +131,7 @@ restore_from_file() {
 	# if we are here then something is seriously broken (unless the script ran in test mode with the -t switch)
 	# run the uninstall script with -p switch to restore iptables to pre-install state but leave files in place
 	err2="*** Rolling back all changes made to $restoretarget to pre-install state and removing cron jobs ***"
-	
+
 	# if -t switch wasn't specified at launch then it's not a test. proceed to 2nd stage of fault recovery.
 	if [ ! $test ]; then
 		knowngood_failed "$err1" "$err2"
@@ -139,9 +139,9 @@ restore_from_file() {
 		echo "$err1"
 		echo "-t switch was specified, which means we are in test mode. Skipping uninstall."
 		echo "WARNING: RECOVERY TEST FAILED AND GEOBLOCKER IS CURRENTLY INACTIVE"
-		
+
 		# still need to restart fail2ban if it's installed
-		if [ $restoretarget = "iptables" ]; then
+		if [ "$restoretarget" = "iptables" ]; then
 			restart_fail2ban
 			exit 1
 		fi
@@ -169,7 +169,7 @@ restoreknowngood() {
 	echo "$msg1" >&2
 	echo "Backup file: $restorefile"
 	echo ""
-	
+
 	restore_from_file "ipset" "$restorefile"
 	restore_from_file "iptables" "$restorefile"
 	msg1="Successfully restored known-good ipset and iptables state from backup."
@@ -295,7 +295,7 @@ echo "Ok."
 
 ipset_length=$(ipset -L $ipset_name 2>/dev/null |  wc -l)
 
-if [ $ipset_length -ge "7" ]; then
+if [ "$ipset_length" -ge "7" ]; then
 	echo -n "Found existing ipset \"$ipset_name\". Destroying... "
 	ipset destroy "$ipset_name"; rv=$?
 	if [ $rv -ne 0 ]; then
@@ -306,7 +306,7 @@ if [ $ipset_length -ge "7" ]; then
 	echo "Ok."
 fi
 
-if [ $ipset_length -eq 0 ]; then
+if [ "$ipset_length" -eq 0 ]; then
 	[ $debug ] && echo "Debug: Ipset \"$ipset_name\" doesn't exist yet."
 	# to avoid being dependent on ipset output staying constant down the road,
 	# still trying to delete the ipset, just in case, but not checking the return value
@@ -326,15 +326,21 @@ echo "Ok."
 
 # import whitelist into ipset from file
 echo -n "Importing the whitelist file into ipset... "
-for ip in $(cat $whitelist_path); do
+
+while IFS= read -r ip
+do
 	ipset add "$ipset_name" "$ip"; rv=$?
 	if [ $rv -ne 0 ]; then
-		err="Error trying to run the command: \"ipset add $ipset_name $ip\". Exiting."
+		err="Error when running the command: \"ipset add $ipset_name $ip\". Exiting."
 		echo ""
 		die "$err"
 	fi
-done
+done < "$whitelist_path"
+
 echo "Ok."
+
+[ $debug ] && ipset_lines=$(ipset save "$ipset_name" | grep "add $ipset_name" | wc -l)
+[ $debug ] && echo "ip's in the ipset: $ipset_lines"
 
 echo -n "Inserting rule to allow all traffic from the loopback interface... "
 iptables -I INPUT -i lo -j ACCEPT -m comment --comment "$iptables_comment"; rv=$?
