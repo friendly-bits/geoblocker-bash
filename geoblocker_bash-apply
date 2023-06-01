@@ -130,9 +130,9 @@ restore_from_file() {
 
 	# if we are here then something is seriously broken (unless the script ran in test mode with the -t switch)
 	# run the uninstall script with -p switch to restore iptables to pre-install state but leave files in place
-	err2="*** Rolling back all changes made to $restoretarget to pre-install state and removing cron jobs ***"
+	err2="*** Reverting iptables to pre-install state and removing cron jobs ***"
 
-	# if -t switch wasn't specified at launch then it's not a test. proceed to 2nd stage of fault recovery.
+	# if -t switch wasn't specified at launch then it's not a test
 	if [ ! $test ]; then
 		knowngood_failed "$err1" "$err2"
 	else
@@ -178,7 +178,7 @@ restoreknowngood() {
 }
 
 die() {
-	# echo out the error passed in 1st argument and write it to syslog
+# echo out the error passed in 1st argument and write it to syslog
 	echo ""
 	echo "$1" 1>&2
 	echo ""
