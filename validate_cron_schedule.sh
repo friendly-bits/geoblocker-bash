@@ -46,47 +46,110 @@ shift $((OPTIND -1))
 
 #### Functions
 
-validNum() {
+validateNum() {
 # return 0 if valid, 1 if not. Specify number and maxvalue as args
-	num=$1; max=$2
-	if [ "$num" = "X" ] ; then
+	num="$1"; min="$2"; max="$3"
+	if [ -z "$num" ]; then
+		return 1
+	elif [ "$num" = '*' ] ; then
 		return 0
 	elif [ -n "$(echo $num | sed 's/[[:digit:]]//g')" ] ; then
 		return 1
-	elif [ "$num" -lt 0 ] || [ "$num" -gt "$max" ] ; then
+	elif [ "$num" -lt "$min" ] || [ "$num" -gt "$max" ] ; then
 		return 1
 	else
 		return 0
 	fi
 }
 
-validDay() {
+validateDay() {
 # return 0 if a valid dayname, 1 otherwise
 	case $(echo "$1" | tr '[:upper:]' '[:lower:]') in
 		sun|mon|tue|wed|thu|fri|sat) return 0 ;;
-		X) return 0    ;; # special case - it's an "*"
+		'*') return 0    ;; # special case - it's an "*"
 		*) return 1
 	esac
 }
 
-validMon() {
+validateMon() {
 # return 0 if a valid month name, 1 otherwise
 	case $(echo "$1" | tr '[:upper:]' '[:lower:]') in
 		jan|feb|mar|apr|may|jun|jul|aug) return 0;;
 		sep|oct|nov|dec) return 0;;
-		X) return 0;; # special case, it's an "*"
+		'*') return 0;; # special case, it's an "*"
 		*) return 1;;
 	esac
 }
 
-fixvars() {
-# translate all '*' into 'X' to bypass shell expansion hassles
+validateName() {
+# return 0 if 2nd argument is a valid value for corresponding category (month; day of week) provided in 1st argument
+# return 1 otherwise
+	fieldCategory="$1"
+	fieldvalue="$2"
+	case "$fieldCategory" in
+		"month") validateMon "$fieldvalue"; return $?;;
+		"day of week") validateDay "$fieldvalue"; return $?;;
+		*) return 1;;
+	esac
+}
 
-	min=$(echo "$min" | tr '*' 'X')
-	hour=$(echo "$hour" | tr '*' 'X')
-	dom=$(echo "$dom" | tr '*' 'X')
-	mon=$(echo "$mon" | tr '*' 'X')
-	dow=$(echo "$dow" | tr '*' 'X')
+
+
+validateField() {
+	# return 0 if fieldString passes validation, return 1 otherwise
+	fieldName="$1"
+	fieldString="$2"
+	minvalue="$3"
+	maxvalue="$4"
+
+	segmentsnum_total=0
+	asterisknum=0
+
+	if [ "${fieldString:0:1}" = "-" ] || [ "${fieldString: -1}" = "-" ]; then
+		echo "Error: $fieldName can not start or end in \"-\"" >&2
+		errors="$((errors + 1))"
+		return 1
+	fi
+
+	if [ "${fieldString:0:1}" = "," ] || [ "${fieldString: -1}" = "," ]; then
+		echo "Error: $fieldName can not start or end in \",\"" >&2
+		errors="$((errors + 1))"
+		return 1
+	fi
+
+	IFS="," read -ra slices <<< "$fieldString"
+	for slice in "${slices[@]}"; do
+
+		IFS="-", read -ra segments <<< "$slice"
+		segmentsnum=0
+		for segment in "${segments[@]}"; do
+			if ! validateNum "$segment" "$minvalue" "$maxvalue" ; then
+				if ! validateName "$fieldName" "$segment"; then
+					echo "Invalid value \"$segment\" in field: $fieldName." >&2
+					errors="$((errors + 1))"
+					return 1
+				fi
+			fi
+
+			segmentsnum="$((segmentsnum + 1))"
+			segmentsnum_total="$((segmentsnum_total + 1))"
+			if [ "$segment" = "*" ]; then
+				asterisknum="$((asterisknum + 1))"
+			fi
+		done
+
+		if [ "$segmentsnum" -gt 2 ]; then
+			echo "Invalid value \"$slice\" in $fieldName \"$fieldString\"." >&2
+			errors="$((errors + 1))"
+			return 1
+		fi
+	done
+
+	if [ "$asterisknum" -gt 0 ] && [ "$segmentsnum_total" -gt 1 ]; then
+		echo "Invalid $fieldName \"$fieldString\"" >&2
+		errors="$((errors + 1))"
+		return 1
+	fi
 }
 
 echo ""
@@ -130,58 +193,22 @@ fi
 
 echo "Validating cron schedule \"$sourceline\" ..."
 
-## Breaks the input into fields, replaces all '*' with 'X', stores results in global variables
-fixvars
-
 # minute check
-for minslice in $(echo "$min" | sed 's/[,-]/ /g') ; do
-	if ! validNum "$minslice" 60 ; then
-		echo "Invalid minute value \"$minslice\"" >&2
-		errors="$((errors + 1))"
-	fi
-done
+validateField "minute" "$min" "0" "60"
 
 # hour check
-
-for hrslice in $(echo "$hour" | sed 's/[,-]/ /g') ; do
-	if ! validNum "$hrslice" 24 ; then
-		echo "Invalid hour value \"$hrslice\"" >&2
-		errors="$((errors + 1))"
-	fi
-done
+validateField "hour" "$hour" "0" "24"
 
 # day of month check
-
-for domslice in $(echo "$dom" | sed 's/[,-]/ /g') ; do
-	if ! validNum "$domslice" 31 ; then
-		echo "Invalid day of month value \"$domslice\"" >&2
-		errors="$((errors + 1))"
-	fi
-done
+validateField "day of month" "$dom" "1" "31"
 
 # month check
-
-for monslice in $(echo "$mon" | sed 's/[,-]/ /g') ; do
-	if ! validNum "$monslice" 12 ; then
-		if ! validMon "$monslice" ; then
-			echo "Invalid month value \"$monslice\"" >&2
-			errors="$((errors + 1))"
-		fi
-	fi
-done
+validateField "month" "$mon" "1" "12"
 
 # day of week check
+validateField "day of week" "$dow" "1" "7"
 
-for dowslice in $(echo "$dow" | sed 's/[,-]/ /g') ; do
-	if ! validNum "$dowslice" 7 ; then
-		if ! validDay "$dowslice" ; then
-			echo "Invalid day of week value \"$dowslice\"" >&2
-			errors="$((errors + 1))"
-		fi
-	fi
-done
-
-if [ $errors -gt 0 ] ; then
+if [ "$errors" -gt 0 ] ; then
 	exitstatus=1
 	echo ""
 	echo "You entered: \"$sourceline\"" >&2
