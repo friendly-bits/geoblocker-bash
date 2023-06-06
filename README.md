@@ -17,9 +17,9 @@ https://github.com/blunderful-scripts/geoblocker_bash/releases
 2) Install prerequisites. On Debian and derivatives run: sudo apt install ipset jq wget grepcidr
 3) Download *all* scripts in this suite into the same folder
 4) Use the check_ip_in_ripe script to make sure that your public ip address is included in the list fetched from RIPE, so you do not get locked out of your server.
-example: 'bash check_ip_in_ripe.sh -c DE -i <your_public_ip_address>' (for Germany)
+- _example: 'bash check_ip_in_ripe.sh -c DE -i <your_public_ip_address>' (for Germany)_
 5) Once verified that your public ip address is included in the list, run 'sudo bash geoblocker_bash-install -c <country_code>'
-example: 'sudo bash geoblocker_bash-install -c DE' (for Germany)
+- _example: 'sudo bash geoblocker_bash-install -c DE' (for Germany)_
  
  To uninstall:
  run "sudo geoblocker_bash-uninstall"
