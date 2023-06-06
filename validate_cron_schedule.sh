@@ -25,8 +25,9 @@ usage() {
     Usage: $me -x "expression" [-h]
 
     Options:
-    -x "expression"    : crontab schedule expression ***in double quotes***, example: "0 4 * * 6"
-
+    -x "expression"    : crontab schedule expression ***in double quotes***
+    				example: "0 4 * * 6"
+				format: min hr dom mon dow
     -h                 : This help
 
 EOF
@@ -47,7 +48,7 @@ shift $((OPTIND -1))
 #### Functions
 
 validateNum() {
-# return 0 if valid, 1 if not. Specify number and maxvalue as args
+# returns 0 if valid, 1 if not. Specify number and maxvalue as args
 	num="$1"; min="$2"; max="$3"
 	if [ -z "$num" ]; then
 		return 1
@@ -63,7 +64,7 @@ validateNum() {
 }
 
 validateDay() {
-# return 0 if a valid dayname, 1 otherwise
+# returns 0 if a valid dayname, 1 otherwise
 	case $(echo "$1" | tr '[:upper:]' '[:lower:]') in
 		sun|mon|tue|wed|thu|fri|sat) return 0 ;;
 		'*') return 0    ;; # special case - it's an "*"
@@ -72,7 +73,7 @@ validateDay() {
 }
 
 validateMon() {
-# return 0 if a valid month name, 1 otherwise
+# returns 0 if a valid month name, 1 otherwise
 	case $(echo "$1" | tr '[:upper:]' '[:lower:]') in
 		jan|feb|mar|apr|may|jun|jul|aug) return 0;;
 		sep|oct|nov|dec) return 0;;
@@ -82,8 +83,8 @@ validateMon() {
 }
 
 validateName() {
-# return 0 if 2nd argument is a valid value for corresponding category (month; day of week) provided in 1st argument
-# return 1 otherwise
+# returns 0 if 2nd argument is a valid value for corresponding category (month; day of week) provided in 1st argument
+# returns 1 otherwise
 	fieldCategory="$1"
 	fieldvalue="$2"
 	case "$fieldCategory" in
@@ -96,7 +97,10 @@ validateName() {
 
 
 validateField() {
-	# return 0 if fieldString passes validation, return 1 otherwise
+# validates a field (part) of the cron schedule (either month, day of month, day of week, hour or minute)
+# supports month (Jan-Dec) and day-of-week (Sun-Sat) names
+# supports comma-separated values (example: 1,10,16 for hours) and dash-separated ranges of values (example: Wed-Sat)
+# returns 0 if the string passes validation, returns 1 otherwise
 	fieldName="$1"
 	fieldString="$2"
 	minvalue="$3"
@@ -117,27 +121,38 @@ validateField() {
 		return 1
 	fi
 
+	# split the input field by commas (if any) and store resulting slices in slices[] array 
 	IFS="," read -ra slices <<< "$fieldString"
+	
 	for slice in "${slices[@]}"; do
-
-		IFS="-", read -ra segments <<< "$slice"
 		segmentsnum=0
+		# split the slice by dashes (if any) and store resulting segments in segments[] array 
+		IFS="-", read -ra segments <<< "$slice"
 		for segment in "${segments[@]}"; do
+			# try validating the segment as a number
 			if ! validateNum "$segment" "$minvalue" "$maxvalue" ; then
+				# if that fails, try validating the segment as a name
 				if ! validateName "$fieldName" "$segment"; then
+					# if that fails, the segment is invalid - return 1 and exit the function
 					echo "Invalid value \"$segment\" in field: $fieldName." >&2
 					errors="$((errors + 1))"
 					return 1
 				fi
 			fi
 
+			# segment validation was successful
+			
+			# segmentsnum is used to count dash-separated segments in a slice
 			segmentsnum="$((segmentsnum + 1))"
+			# segmentsnum_total is used to count segments in a field
 			segmentsnum_total="$((segmentsnum_total + 1))"
 			if [ "$segment" = "*" ]; then
+				# count asterisks for later verification that no more than 1 asterisk in a slice was given
 				asterisknum="$((asterisknum + 1))"
 			fi
 		done
 
+		# more than two dash-separated segments in a slice doesn't make sense
 		if [ "$segmentsnum" -gt 2 ]; then
 			echo "Invalid value \"$slice\" in $fieldName \"$fieldString\"." >&2
 			errors="$((errors + 1))"
@@ -145,6 +160,7 @@ validateField() {
 		fi
 	done
 
+	# if a field contains an asterisk then there should be only one segment, otherwise the field is invalid
 	if [ "$asterisknum" -gt 0 ] && [ "$segmentsnum_total" -gt 1 ]; then
 		echo "Invalid $fieldName \"$fieldString\"" >&2
 		errors="$((errors + 1))"
@@ -154,16 +170,19 @@ validateField() {
 
 echo ""
 
+
 #### Initialize variables
 
 errors=0
 exitstatus=0
 
 
-## Parse and check arguments for sanity
+#### Basic sanity check for input arguments
 
+# separate the input by spaces and store results in variables
 read -r min hour dom mon dow extra <<< "$sourceline"
 
+# if $extra is not empty then too many arguments have been passed
 if [ -n "$extra" ]; then
 	usage
 	echo ""
@@ -175,8 +194,8 @@ if [ -n "$extra" ]; then
 	exit 1;
 fi
 
-if [ -z "$min" ] || [ -z "$hour" ] || [ -z "$dom" ] || [ -z "$mon" ] || [ -z "$dow" ]; then
 # if some arguments are missing
+if [ -z "$min" ] || [ -z "$hour" ] || [ -z "$dom" ] || [ -z "$mon" ] || [ -z "$dow" ]; then
 	usage
 	echo ""
 	echo "Not enough fields in schedule expression!"
