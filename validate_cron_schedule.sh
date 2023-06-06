@@ -110,28 +110,28 @@ validateField() {
 	asterisknum=0
 
 	if [ "${fieldString:0:1}" = "-" ] || [ "${fieldString: -1}" = "-" ]; then
-		echo "Error: $fieldName can not start or end in \"-\"" >&2
+		echo "Invalid input \"$fieldString\" for field $fieldName : it starts or ends with \"-\"." >&2
 		errors="$((errors + 1))"
 		return 1
 	fi
 
 	if [ "${fieldString:0:1}" = "," ] || [ "${fieldString: -1}" = "," ]; then
-		echo "Error: $fieldName can not start or end in \",\"" >&2
+		echo "Invalid input \"$fieldString\" for field $fieldName : it starts or ends with \",\"." >&2
 		errors="$((errors + 1))"
 		return 1
 	fi
 
-	# split the input field by commas (if any) and store resulting slices in slices[] array 
+	# split the input field by commas (if any) and store resulting slices in the slices[] array 
 	IFS="," read -ra slices <<< "$fieldString"
 	
 	for slice in "${slices[@]}"; do
 		segmentsnum=0
-		# split the slice by dashes (if any) and store resulting segments in segments[] array 
+		# split the slice by dashes (if any) and store resulting segments in the segments[] array 
 		IFS="-", read -ra segments <<< "$slice"
 		for segment in "${segments[@]}"; do
 			# try validating the segment as a number
 			if ! validateNum "$segment" "$minvalue" "$maxvalue" ; then
-				# if that fails, try validating the segment as a name
+				# if that fails, try validating the segment as a name (or as an asterisk)
 				if ! validateName "$fieldName" "$segment"; then
 					# if that fails, the segment is invalid - return 1 and exit the function
 					echo "Invalid value \"$segment\" in field: $fieldName." >&2
