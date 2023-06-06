@@ -85,6 +85,7 @@ shift $((OPTIND -1))
 
 #### Initialize variables
 ripe_url="https://stat.ripe.net/data/country-resource-list/data.json?v4_format=prefix&resource="
+url="$ripe_url$country"
 min_size_ipv4=5000  # default is 5000 bytes
 
 
@@ -104,8 +105,6 @@ if [ -z "$userip" ]; then
 	echo ""
 	die "$err"
 fi
-
-url="$ripe_url$country"
 
 # use curl or wget, depending on which one we find
 curl_or_wget=$(if hash curl 2>/dev/null; then echo "curl -s"; elif hash wget 2>/dev/null; then echo "wget -qO-"; fi);
@@ -141,15 +140,12 @@ if [ $rv -ne 0 ]; then
 	die "$err"
 fi
 
-
-# Change last ipv4 octet to 0
-
-ripe_list=$(mktemp "/tmp/ripe-$country-XXXX.json")
+ripe_list_file=$(mktemp "/tmp/ripe-$country-XXXX.json")
 
 echo -n "Fetching iplist from RIPE... "
 [ $debug ] && echo "Debug: Trying: $curl_or_wget '$url'" >&2
 
-$curl_or_wget "$url" > "$ripe_list"
+$curl_or_wget "$url" > "$ripe_list_file"
 rv=$?
 
 if [ $rv -ne 0 ]; then
@@ -159,9 +155,9 @@ if [ $rv -ne 0 ]; then
 fi
 
 
-status=$(jq -r '.status' "$ripe_list")
+status=$(jq -r '.status' "$ripe_list_file")
 if [ ! "$status" = "ok" ]; then
-	ripe_msg=$(jq -r -c '.messages' "$ripe_list")
+	ripe_msg=$(jq -r -c '.messages' "$ripe_list_file")
 	echo "Failed."
 	echo "Error: RIPE replied with status = '$status'."
 	echo "The requested url was '$url'"
@@ -183,7 +179,7 @@ errorcount=0
 subnetcount=0
 
 echo -n "Parsing and validating downloaded subnets... "
-for testsubnet in $(jq -r ".data.resources.$family | .[]" "$ripe_list"); do
+for testsubnet in $(jq -r ".data.resources.$family | .[]" "$ripe_list_file"); do
 	validate_ipv4 "$testsubnet" "subnet" >> "$parsed_file"; rv=$?
 	errorcount=$((errorcount + rv))
 	subnetcount=$((subnetcount + 1))
@@ -209,7 +205,7 @@ size=$(stat --printf %s "$parsed_file")
 if [ ! "$size" -ge "$min_size" ]; then
 	err="Error: fetched file $parsed_file size of $size bytes is smaller than minimum $min_size bytes. Probably a download error. Exiting."
 	rm "$parsed_file" &>/dev/null
-	rm "$ripe_list"
+	rm "$ripe_list_file"
 	die "$err"
 fi
 
@@ -227,7 +223,7 @@ fi
 echo ""
 
 # clean up temp files
-rm "$ripe_list"
+rm "$ripe_list_file"
 rm "$parsed_file"
 echo "Done."
 echo ""
