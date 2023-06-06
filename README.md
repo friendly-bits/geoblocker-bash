@@ -1,11 +1,11 @@
 # geoblocker_bash
 Automatic geoip blocker for Linux based on a whitelist for a specific country.
 
-Suite of bash scripts with easy install and uninstall, focusing on reliability and fault tolerance. Fetches, parses and validates an ipv4 subnets whitelist for a given country, then blocks incoming traffic from anywhere except whitelisted subnets. Implements automatic update of the whitelist. Uses iptables.
+Suite of bash scripts with easy install and uninstall, focusing on reliability. Fetches, parses and validates an ipv4 whitelist for a given country, then blocks incoming traffic from anywhere except whitelisted subnets. Implements automatic update of the whitelist. Uses iptables.
 
-The ip list is fetched from RIPE - regional Internet registry for Europe, the Middle East and parts of Central Asia. RIPE appears to store ip lists for countries in other regions as well, although I did not check every country in the world.
+The ip list is fetched from RIPE - regional Internet registry for Europe, the Middle East and parts of Central Asia. RIPE appears to store ip lists for countries in other regions as well, although I did not check every country.
 
-Intended use case is a server that needs to be publically accessible in your country but does not need to be internationally accessible. For example, a server you run your CRM application on.
+Intended use case is a server/computer that needs to be publically accessible in your country but does not need to be internationally accessible.
 
 **TL;DR**
 
@@ -16,18 +16,21 @@ To install:
 https://github.com/blunderful-scripts/geoblocker_bash/releases
 2) Install prerequisites. On Debian and derivatives run: sudo apt install ipset jq wget grepcidr
 3) Download *all* scripts in this suite into the same folder
-4) run "sudo bash geoblocker_bash-install -c <country_code>"
+4) Use the check_ip_in_ripe script to make sure that your public ip address is included in the list fetched from RIPE, so you do not get locked out of your server.
+example: 'bash check_ip_in_ripe.sh -c DE -i <your_public_ip_address>' (for Germany)
+5) Once verified that your public ip address is included in the list, run 'sudo bash geoblocker_bash-install -c <country_code>'
+example: 'sudo bash geoblocker_bash-install -c DE' (for Germany)
  
  To uninstall:
  run "sudo geoblocker_bash-uninstall"
 
 **Prerequisites**:
-- Linux running systemd (tested on Debian and Mint, should work on any Debian derivative, may or may not work on other distributions)
+- Linux running systemd (tested on Debian and Mint, should work on any Debian derivative, may require modifications to work on other distributions)
 - Root access
 - iptables (default firewall management utility on most linux distributions)
 - standard GNU utilities including awk, sed, grep
 
-additional utilities: to install, run 'sudo apt install ipset wget jq grepcidr'
+additional prerequisites: to install, run 'sudo apt install ipset wget jq grepcidr'
 - wget (or alternatively curl) is used by the "fetch" and "check_ip_in_ripe" scripts to download lists from RIPE
 - ipset utility is a companion tool to iptables (used by the "apply" script to create an efficient iptables whitelist rule)
 - jq - Json processor (used to parse lists downloaded from RIPE)
@@ -79,24 +82,20 @@ The suite includes 7 scripts:
 
 **The validate_cron_schedule.sh script** is used by the install script. It accepts cron schedule expression and attempts to make sure that it complies with the format that cron expects. Used to validate optionally user-specified cron schedule expressions.
 
-**The check_ip_in_ripe.sh script** can be used to verify that a certain ip address belongs to a subnet found in RIPE's records for a given country. For example, you can use it before running the install script to make sure that you won't get locked out of your (presumably remote) server.
+**The check_ip_in_ripe.sh script** can be used to verify that a certain ip address belongs to a subnet found in RIPE's records for a given country.
 
 **NOTES**
 
-- While writing these scripts, much effort has gone into ensuring reliability and error handling. Yet, I can not guarantee that they will work as intended (or at all...) in your environment. You should test by yourself.
+1) I have put much effort into ensuring reliable operation of the scripts and implementing fallback and recovery mechanisms in case of an error. Yet, I can not guarantee that they will work as intended (or at all) in your environment. You should evaluate and test by yourself.
 
-- If accessing your server remotely, make sure that you do not lock yourself out by using these scripts. Before running the install script verify that your ipv4 subnet is indeed included in the list that the fetch script receives from RIPE. You can do that with help of check_ip_in_ripe.sh script (included in this suite).
+2) Changes applied to iptables are made persistent via cron jobs: a periodic job running at a daily schedule (which you can optionally change when running the install script), and a job that runs at system reboot (after 30 seconds delay).
 
-- Changes applied to iptables are made persistent via cron jobs: a periodic job running at a daily schedule (which you can optionally change when running the install script), and a job that runs at system reboot (after 30 seconds delay).
+3) You can specify a custom schedule for the periodic cron job by passing an argument to the install script. Run it with the '-h' switch for more info.
 
-- To test before deployment, you can run the install script with the "-n" switch to skip creating cron jobs. This way, a simple server restart will undo all changes made to the firewall. To enable persistence later, install again without the "-n" switch.
+4) **Note** that cron jobs **will be run as root**.
 
-- All scripts accept the "-h" switch to print out the "usage" text and exit.
+5) To test before deployment, you can run the install script with the "-n" switch to skip creating cron jobs. This way, a simple server restart will undo all changes made to the firewall. To enable persistence later, install again without the "-n" switch.
 
-- The "apply" script also accepts the -t switch to simulate a fault and to test recovery. To use it, you will need to install the suite first and then run the "apply" script manually with the correct arguments.
+6) The run, fetch and apply scripts write to syslog in case an error occurs. The run script also writes to syslog upon success. To verify that cron jobs ran successfully, on Debian and derivatives run 'sudo cat /var/log/syslog | grep geoblocker_bash'
 
-- The run, fetch and apply scripts write to syslog in case an error occurs. The run script also writes a syslog line upon success.
-
-- **Note** that the install script creates cron jobs that **will be run as root**.
-
-- I will be interested to hear your feedback, for example whether it works or doesn't work on your system (please specify which), or if you find a bug, or would like to suggest code improvements. You can use the "Discussions" or "Issues" tabs for that.
+7) I would love to hear whether it works or doesn't work on your system (please specify which), or if you find a bug, or would like to suggest code improvements. You can use the "Discussions" or "Issues" tab for that.
