@@ -148,6 +148,7 @@ rv=$?
 if [ $rv -ne 0 ]; then
 	echo "Failed."
 	err="Error $rv trying to run $curl_or_wget $url. Exiting."
+	rm "$fetched_file" &>/dev/null
 	die "$err"
 fi
 
@@ -159,6 +160,7 @@ if [ ! "$status" = "ok" ]; then
 	echo "RIPE message: '$ripe_msg'."
 	echo "Requested url was: '$url'"
 	err="Error: could not fetch ip list from RIPE. Exiting"
+	rm "$fetched_file" &>/dev/null
 	die "$err"
 fi
 
