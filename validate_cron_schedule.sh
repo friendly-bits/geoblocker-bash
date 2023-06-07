@@ -68,7 +68,7 @@ validateDay() {
 	case $(echo "$1" | tr '[:upper:]' '[:lower:]') in
 		sun|mon|tue|wed|thu|fri|sat) return 0 ;;
 		'*') return 0    ;; # special case - it's an "*"
-		*) return 1
+		*) return 1 ;;
 	esac
 }
 
