@@ -135,28 +135,30 @@ if [ -z "$validated_ipv4" ]; then
 	die "$err"
 fi
 
-ripe_list_file=$(mktemp "/tmp/ripe-$country-XXXX.json")
+fetched_file=$(mktemp "/tmp/fetched-$country-XXXX.json")
 
 echo -n "Fetching iplist from RIPE... "
 [ $debug ] && echo "Debug: Trying: $curl_or_wget '$url'" >&2
 
-$curl_or_wget "$url" > "$ripe_list_file"
+$curl_or_wget "$url" > "$fetched_file"
 rv=$?
 
 if [ $rv -ne 0 ]; then
 	echo "Failed."
 	err="Error $rv trying to run $curl_or_wget $url. Exiting."
+	rm "$fetched_file" &>/dev/null
 	die "$err"
 fi
 
 
-status=$(jq -r '.status' "$ripe_list_file")
+status=$(jq -r '.status' "$fetched_file")
 if [ ! "$status" = "ok" ]; then
-	ripe_msg=$(jq -r -c '.messages' "$ripe_list_file")
+	ripe_msg=$(jq -r -c '.messages' "$fetched_file")
 	echo "Failed."
 	echo "RIPE message: '$ripe_msg'."
 	echo "Requested url was: '$url'"
 	err="Error: could not fetch ip list from RIPE. Exiting"
+	rm "$fetched_file" &>/dev/null
 	die "$err"
 fi
 
@@ -169,7 +171,7 @@ parsed_file=$(mktemp "/tmp/parsed-$country-XXXX.list")
 validated_file=$(mktemp "/tmp/validated-$country-XXXX.list")
 
 echo -n "Parsing downloaded subnets... "
-jq -r ".data.resources.$family | .[]" "$ripe_list_file" > "$parsed_file"
+jq -r ".data.resources.$family | .[]" "$fetched_file" > "$parsed_file"
 
 parsed_subnet_cnt=$(wc -l < "$parsed_file")
 if [ "$parsed_subnet_cnt" -ge "$min_subnets_num" ]; then
@@ -178,7 +180,7 @@ else
 	err="Error: parsed subnets count is less than $min_subnets_num. Probably a download error. Exiting."
 	rm "$parsed_file" &>/dev/null
 	rm "$validated_file" &>/dev/null
-	rm "$ripe_list_file"
+	rm "$fetched_file"
 	die "$err"
 fi
 
@@ -200,7 +202,7 @@ else
 		err="Error: validated subnets count is less than $min_subnets_num. Probably a download error. Exiting."
 		rm "$parsed_file" &>/dev/null
 		rm "$validated_file" &>/dev/null
-		rm "$ripe_list_file"
+		rm "$fetched_file"
 		die "$err"
 	fi
 fi
@@ -220,7 +222,7 @@ fi
 echo ""
 
 # clean up temp files
-rm "$ripe_list_file"
+rm "$fetched_file"
 rm "$parsed_file"
 rm "$validated_file"
 echo "Done."
