@@ -9,9 +9,8 @@
 #
 # Fetches ipv4 subnets for a given country from RIPE
 ## See https://stat.ripe.net/docs/data_api
-#
 # Parses and compiles them into a plain list, and saves to a temporary file
-# Goes through the fetched list from RIPE and checks whether the specified IP adress belongs to one of the subnets
+# Checks whether the user-specified IP adress belongs to one of the subnets in the list fetched from RIPE
 #
 # Requires jq - JSON processor, and grepcidr - utility that filters IPv4 and IPv6 addresses matching CIDR patterns.
 ## On Debian and derivatives, if you are missing jq then install both with this command:
@@ -27,7 +26,7 @@ usage() {
 This script:
 1) Fetches ipv4 subnets for a given country from RIPE
 2) Parses and compiles them into a plain list, and saves to a temporary file
-3) Goes through the fetched list from RIPE and checks whether the specified IP adress belongs to one of the subnets
+3) Checks whether the specified IP adress belongs to one of the subnets in the list fetched from RIPE
 Requires "jq" and "grepcidr" utility. If you are on Debian or derivatives, install both with "apt install jq grepcidr".
 
     Usage: $me -c country -i ip [-d] [-h]
