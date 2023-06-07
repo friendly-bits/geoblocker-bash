@@ -165,8 +165,8 @@ echo "Success."
 ## only parsing the ipv4 section at this time
 family="ipv4"
 
-parsed_file=$(mktemp "/tmp/parsed-$country-XXXX.plain")
-validated_file=$(mktemp "/tmp/validated-$country-XXXX.plain")
+parsed_file=$(mktemp "/tmp/parsed-$country-XXXX.list")
+validated_file=$(mktemp "/tmp/validated-$country-XXXX.list")
 
 echo -n "Parsing downloaded subnets... "
 jq -r ".data.resources.$family | .[]" "$ripe_list_file" > "$parsed_file"
