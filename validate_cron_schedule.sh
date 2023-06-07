@@ -48,7 +48,7 @@ shift $((OPTIND -1))
 #### Functions
 
 validateNum() {
-# returns 0 if valid, 1 if not. Specify number and maxvalue as args
+# returns 0 if valid, 1 if not. Specify number, minvalue and maxvalue as args
 	num="$1"; min="$2"; max="$3"
 	if [ -z "$num" ]; then
 		return 1
@@ -83,8 +83,9 @@ validateMon() {
 }
 
 validateName() {
-# returns 0 if 2nd argument is a valid value for corresponding category (month; day of week) provided in 1st argument
+# returns 0 if 2nd argument is a valid value of corresponding category (month or day of week)
 # returns 1 otherwise
+# the category is provided in the 1st argument
 	fieldCategory="$1"
 	fieldvalue="$2"
 	case "$fieldCategory" in
@@ -106,15 +107,17 @@ validateField() {
 	minvalue="$3"
 	maxvalue="$4"
 
-	segmentsnum_total=0
-	asterisknum=0
+	segmentsnum_field=0
+	asterisknum_field_field=0
 
+	# field strings should not start or end with a dash
 	if [ "${fieldString:0:1}" = "-" ] || [ "${fieldString: -1}" = "-" ]; then
 		echo "Invalid input \"$fieldString\" for field $fieldName : it starts or ends with \"-\"." >&2
 		errors="$((errors + 1))"
 		return 1
 	fi
 
+	# field strings should not start or end with a comma
 	if [ "${fieldString:0:1}" = "," ] || [ "${fieldString: -1}" = "," ]; then
 		echo "Invalid input \"$fieldString\" for field $fieldName : it starts or ends with \",\"." >&2
 		errors="$((errors + 1))"
@@ -129,7 +132,7 @@ validateField() {
 		# split the slice by dashes (if any) and store resulting segments in the segments[] array 
 		IFS="-", read -ra segments <<< "$slice"
 		for segment in "${segments[@]}"; do
-			# try validating the segment as a number
+			# try validating the segment as a number (or as an asterisk)
 			if ! validateNum "$segment" "$minvalue" "$maxvalue" ; then
 				# if that fails, try validating the segment as a name (or as an asterisk)
 				if ! validateName "$fieldName" "$segment"; then
@@ -144,15 +147,15 @@ validateField() {
 			
 			# segmentsnum is used to count dash-separated segments in a slice
 			segmentsnum="$((segmentsnum + 1))"
-			# segmentsnum_total is used to count segments in a field
-			segmentsnum_total="$((segmentsnum_total + 1))"
+			# segmentsnum_field is used to count all segments in a field
+			segmentsnum_field="$((segmentsnum_field + 1))"
 			if [ "$segment" = "*" ]; then
-				# count asterisks for later verification that no more than 1 asterisk in a slice was given
-				asterisknum="$((asterisknum + 1))"
+				# count asterisks for later verification that the field containing it doesn't contain any additional segments
+				asterisknum_field="$((asterisknum_field + 1))"
 			fi
 		done
 
-		# more than two dash-separated segments in a slice doesn't make sense
+		# it doesn't make sense to have more than two dash-separated segments in a slice
 		if [ "$segmentsnum" -gt 2 ]; then
 			echo "Invalid value \"$slice\" in $fieldName \"$fieldString\"." >&2
 			errors="$((errors + 1))"
@@ -161,7 +164,7 @@ validateField() {
 	done
 
 	# if a field contains an asterisk then there should be only one segment, otherwise the field is invalid
-	if [ "$asterisknum" -gt 0 ] && [ "$segmentsnum_total" -gt 1 ]; then
+	if [ "$asterisknum_field" -gt 0 ] && [ "$segmentsnum_field" -gt 1 ]; then
 		echo "Invalid $fieldName \"$fieldString\"" >&2
 		errors="$((errors + 1))"
 		return 1
