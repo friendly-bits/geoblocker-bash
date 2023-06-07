@@ -254,7 +254,6 @@ else
 		install_failed
 	fi
 	echo "Success."
-	echo "Backup file: \"$knowngood_file\""
 fi
 
 ## Copy scripts to $install_dir
