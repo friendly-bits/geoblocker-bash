@@ -47,22 +47,11 @@ die() {
 	exit 1
 }
 
-
-validate_ipv4_subnet() {
-## Verifies that the argument is a valid ipv4 subnet
-
-# regex compiled from 2 suggestions found here:
-# https://stackoverflow.com/questions/5284147/validating-ipv4-addresses-with-regexp
-	regex_pattern='^((25[0-5]|(2[0-4]|1\d|[1-9]|)\d)\.?\b){4}(/([01]?\d\d?|2[0-4]\d|25[0-5]))$'
-	echo "$1" | grep -P "$regex_pattern"; rv=$?
-	# outputs grep result, effectively filtering out invalid subnets
-
-	return $rv
-}
-
-
 findlocalsubnet() {
 # attempts to find local subnet for the main network interface
+
+	# we are relying on the global variable $subnet_regex, so verify that it's not empty
+	if [ -z "$subnet_regex" ]; then exit 1; fi
 
 	# returns local ip with subnet mask
 	localip="$(ip addr | grep 'state UP' -A2 | tail -n1 | awk '{print $2}')"
@@ -70,8 +59,8 @@ findlocalsubnet() {
 	# Change last ipv4 octet to 0
 	localsubnet=$(echo "$localip" | sed 's|\([0-9]*\.[0-9]*\.[0-9]*\.\)[0-9]*|\10|')
 
-	# Sanity check
-	(validate_ipv4_subnet "$localsubnet") &>/dev/null; rv=$?
+	# Verifies that the argument is a valid ipv4 subnet
+	echo "$localsubnet" | grep -P "$subnet_regex" &>/dev/null; rv=$?
 
 	if [ $rv -ne 0 ]; then
 		# if validation fails, output empty string
@@ -99,8 +88,19 @@ shift $((OPTIND -1))
 
 #### Initialize variables
 ripe_url="https://stat.ripe.net/data/country-resource-list/data.json?v4_format=prefix&resource="
-min_size_ipv4=5000  # default is 5000 bytes
-# min_size_ipv6=2000  # default is 2000 bytes
+url="$ripe_url$country"
+min_subnets_num="300"
+family="ipv4"    ## only parsing the ipv4 section at this time
+filename="${family}_$country"
+out_list="$iplist_path/$filename"
+
+# regex patterns used for ipv4 validation
+# using Perl regex syntax because grep is faster with it than with native grep syntax
+# regex compiled from 2 suggestions found here:
+# https://stackoverflow.com/questions/5284147/validating-ipv4-addresses-with-regexp
+ip_regex='^((25[0-5]|(2[0-4]|1\d|[1-9]|)\d)\.?\b){4}'
+mask_regex='(/([01]?\d\d?|2[0-4]\d|25[0-5]))$'
+subnet_regex="${ip_regex}${mask_regex}"
 
 
 #### Checks
@@ -120,13 +120,11 @@ if [ -z "$iplist_path" ]; then
 	die "$err"
 fi
 
-url="$ripe_url$country"
-
 # use curl or wget, depending on which one we find
-curl_or_wget=$(if hash curl 2>/dev/null; then echo "curl -s"; elif hash wget 2>/dev/null; then echo "wget -qO-"; fi);
-if [ -z "$curl_or_wget" ]; then
-	err="Error: Neither curl nor wget found. Cannot download data. Exiting."
-	die "$err"
+if hash curl 2>/dev/null; then
+	curl_or_wget="curl -s --retry 4 --fail-early --connect-timeout 7"
+elif hash wget 2>/dev/null; then
+	curl_or_wget="wget --tries=4 --timeout=7 -qO-"
 fi
 
 # check that we have jq
@@ -138,13 +136,13 @@ fi
 
 #### Main
 
-tmpfile=$(mktemp "/tmp/ripe-$country-XXXX.json")
+fetched_file=$(mktemp "/tmp/fetched-$country-XXXX.json")
 
 echo -n "Fetching iplist from RIPE... "
 [ $debug ] && echo ""
 [ $debug ] && echo "Debug: Trying: $curl_or_wget '$url'" >&2
 
-$curl_or_wget "$url" > "$tmpfile"
+$curl_or_wget "$url" > "$fetched_file"
 rv=$?
 
 if [ $rv -ne 0 ]; then
@@ -154,110 +152,109 @@ if [ $rv -ne 0 ]; then
 fi
 
 
-status=$(jq -r '.status' "$tmpfile")
+status=$(jq -r '.status' "$fetched_file")
 if [ ! "$status" = "ok" ]; then
-	ripe_msg=$(jq -r -c '.messages' "$tmpfile")
+	ripe_msg=$(jq -r -c '.messages' "$fetched_file")
 	echo "Failed."
-	echo "Error: RIPE replied with status = '$status'."
-	echo "The requested url was '$url'"
-	echo "and the messages in their reply were: '$ripe_msg'"
+	echo "RIPE message: '$ripe_msg'."
+	echo "Requested url was: '$url'"
 	err="Error: could not fetch ip list from RIPE. Exiting"
 	die "$err"
 fi
 
 echo "Success."
 
-ripe_db_time=$(jq -r '.data.query_time' "$tmpfile")
-[ $debug ] && echo "Debug: ripe_db_time=$ripe_db_time" >&2
-date_new=$(date -d "$ripe_db_time" +%s)
-
-family="ipv4"
-## only parsing the ipv4 section at this time
-
-filename="${family}_$country"
-out_list="$iplist_path/$filename"
-
-# if [ "$family" = "ipv6" ]; then min_size="$min_size_ipv6"; else min_size="$min_size_ipv4"; fi
-min_size="$min_size_ipv4"
-
+## 
 if [ -f "$out_list" ]; then
+# if $out_list exists then store its date in date_old
 	date_old=$(stat --printf "%Y" "$out_list")
 else
 	date_old=0
 fi
 
+# get date of the newly fetched file
+ripe_db_time=$(jq -r '.data.query_time' "$fetched_file")
+[ $debug ] && echo "Debug: ripe_db_time=$ripe_db_time" >&2
+date_new=$(date -d "$ripe_db_time" +%s)
+
 if [ ! "$date_new" -gt "$date_old" ] && [ ! "$debug" ]; then
-	echo "Note: Not updating $filename because data querytime did not change: $date_old ($(date --date=@$date_old))." >&2
+	echo "Note: Not updating $filename because data querytime did not change: $date_old ($(date --date=@$date_old))."
 else
 	errorcount=0
-	subnetcount=0
-	echo -n "Parsing and validating downloaded subnets... "
-	for testsubnet in $(jq -r ".data.resources.$family | .[]" "$tmpfile"); do
-		validate_ipv4_subnet "$testsubnet" >> "$out_list.new"; rv=$?
-		errorcount=$((errorcount + rv))
-		subnetcount=$((subnetcount + 1))
-	done
+	parsed_file=$(mktemp "/tmp/parsed-$country-XXXX.list")
+	validated_file=$(mktemp "/tmp/validated-$country-XXXX.list")
+
+	echo -n "Parsing downloaded subnets... "
+	jq -r ".data.resources.$family | .[]" "$fetched_file" > "$parsed_file"
+
+	parsed_subnet_cnt=$(wc -l < "$parsed_file")
+	if [ "$parsed_subnet_cnt" -ge "$min_subnets_num" ]; then
+		echo "Success."
+	else
+		err="Error: parsed subnets count is less than $min_subnets_num. Probably a download error. Exiting."
+		rm "$parsed_file" &>/dev/null
+		rm "$validated_file" &>/dev/null
+		rm "$fetched_file"
+		die "$err"
+	fi
+
+	echo -n "Validating downloaded subnets... "
+	grep -P "$subnet_regex" "$parsed_file" > "$validated_file"
+
+	validated_subnet_cnt=$(wc -l < "$validated_file")
+
+	errorcount=$((parsed_subnet_cnt - validated_subnet_cnt))
 
 	if [ $errorcount -ne 0 ]; then
 		echo "Issues found."
-		warn="Warning: encountered $errorcount errors while validating subnets in the fetched list."
-		echo "$warn" >&2
-		logger -t geoblocker_bash-fetch "$warn"
+		echo "Warning: $errorcount subnets failed validation." >&2
 		echo "Invalid subnets removed from the list." >&2
 	else
-		echo "Success."
-	fi
-
-	echo "Total validated subnets: $((subnetcount - errorcount))"
-	echo ""
-	touch -d "$ripe_db_time" "$out_list.new"
-
-	### Check for minimum size before updating our list
-
-	size=$(stat --printf %s "$out_list.new")
-
-	[ $debug ] && echo "Debug: $filename size: $size"
-
-	if [ "$size" -ge "$min_size" ]; then
-		echo -n "Updating $out_list... "
-		mv "$out_list.new" "$out_list"; rv=$?
-		if [ $rv -ne 0 ]; then
-			echo "Failed."
-			err="Error while attempting to overwrite the file $out_list"
-			rm "$out_list.new"
-			rm "$tmpfile"
+		if [ "$validated_subnet_cnt" -ge "$min_subnets_num" ]; then
+			echo "Success."
+		else
+			err="Error: validated subnets count is less than $min_subnets_num. Probably a download error. Exiting." >&2
+			rm "$parsed_file" &>/dev/null
+			rm "$validated_file" &>/dev/null
+			rm "$fetched_file"
 			die "$err"
 		fi
-		echo "Ok."
+	fi
 
-		# Add local subnet to the list, only for ipv4
-		if [ "$family" = "ipv4" ]; then
-			subnet="$(findlocalsubnet)";
-			if [ -z "$subnet" ]; then
-				err="Error: couldn't determine local subnet."
-				rm "$out_list"
-				rm "$tmpfile"
-				die "$err"
-			else
-				echo "Found local subnet: \"$subnet\". Adding it to the list."
-				echo "$subnet" >> "$out_list"
-			fi
+	echo "Total validated subnets: $validated_subnet_cnt"
+	echo ""
+
+
+	# Add local subnet to the list, only for ipv4
+	if [ "$family" = "ipv4" ]; then
+		subnet="$(findlocalsubnet)";
+		if [ -z "$subnet" ]; then
+			err="Error: couldn't determine local subnet."
+			rm "$parsed_file" &>/dev/null
+			rm "$validated_file" &>/dev/null
+			rm "$fetched_file" &>/dev/null
+			die "$err"
+		else
+			echo "Found local subnet: \"$subnet\". Adding it to the list."
+			echo "$subnet" >> "$validated_file"
 		fi
+	fi
 
-	else
-		echo "Error: fetched file $out_list.new size of $size bytes is smaller than minimum $min_size bytes. Probably a download error. Not updating $filename." >&2
-		err="Error: Fetched file $out_list.new is too small: $size bytes. Possibly a download error. Exiting."
-
-		[ $debug ] && echo "Removing previous bad lists for $filename" >&2
-		rm "$out_list"*.bad &>/dev/null
-
-		dt=$(date +%F_%H%M%S)
-		echo "Saving downloaded list for reference as $out_list-$dt.bad" >&2
-		mv "$out_list.new" "$out_list-$dt.bad"
-		rm "$tmpfile"
+	echo -n "Updating $out_list... "
+	mv "$validated_file" "$out_list"; rv=$?
+	if [ $rv -ne 0 ]; then
+		echo "Failed."
+		err="Error while attempting to overwrite the file $out_list"
+		rm "$parsed_file" &>/dev/null
+		rm "$validated_file" &>/dev/null
+		rm "$fetched_file" &>/dev/null
 		die "$err"
 	fi
+	echo "Ok."
+	touch -d "$ripe_db_time" "$out_list"
 fi
 
-rm "$tmpfile"
+rm "$parsed_file" &>/dev/null
+rm "$validated_file" &>/dev/null
+rm "$fetched_file" &>/dev/null
 echo ""
