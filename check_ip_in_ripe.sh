@@ -3,7 +3,7 @@
 # check_ip_in_ripe.sh
 #
 #
-# Checks whether a given IP address is belongs to a subnet found in RIPE's records for a given country
+# Checks whether a given IP address belongs to a subnet found in RIPE's records for a given country
 #
 # Based on a prior script by mivk, called get-ripe-ips.
 #
