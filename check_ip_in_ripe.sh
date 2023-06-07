@@ -47,27 +47,9 @@ EOF
 die() {
 	echo "$@" 1>&2
 	echo ""
-#	logger -t geoblocker_bash-fetch "$@"
 	exit 1
 }
 
-validate_ipv4() {
-## attempts to make sure that the argument is a valid ipv4 address
-
-# regex compiled from 2 suggestions found here:
-# https://stackoverflow.com/questions/5284147/validating-ipv4-addresses-with-regexp
-	ip_regex='^((25[0-5]|(2[0-4]|1\d|[1-9]|)\d)\.?\b){4}'
-	mask_regex='(/([01]?\d\d?|2[0-4]\d|25[0-5]))$'
-	if [ "$2" = "subnet" ]; then
-		regex_pattern="${ip_regex}${mask_regex}"
-	else
-		regex_pattern="${ip_regex}\$"
-	fi
-	echo "$1" | grep -P "$regex_pattern"; rv=$?
-	# outputs grep result, effectively filtering out invalid subnets
-
-	return $rv
-}
 
 #### Parse arguments
 
@@ -86,7 +68,14 @@ shift $((OPTIND -1))
 #### Initialize variables
 ripe_url="https://stat.ripe.net/data/country-resource-list/data.json?v4_format=prefix&resource="
 url="$ripe_url$country"
-min_size_ipv4=5000  # default is 5000 bytes
+min_subnets_num="300"
+
+# using Perl regex syntax because grep is faster with it than with native grep syntax
+# regex compiled from 2 suggestions found here:
+# https://stackoverflow.com/questions/5284147/validating-ipv4-addresses-with-regexp
+ip_regex='^((25[0-5]|(2[0-4]|1\d|[1-9]|)\d)\.?\b){4}'
+mask_regex='(/([01]?\d\d?|2[0-4]\d|25[0-5]))$'
+subnet_regex="${ip_regex}${mask_regex}"
 
 
 #### Checks
@@ -107,7 +96,12 @@ if [ -z "$userip" ]; then
 fi
 
 # use curl or wget, depending on which one we find
-curl_or_wget=$(if hash curl 2>/dev/null; then echo "curl -s"; elif hash wget 2>/dev/null; then echo "wget -qO-"; fi);
+if hash curl 2>/dev/null; then
+	curl_or_wget="curl -s --retry 4 --fail-early --connect-timeout 7"
+elif hash wget 2>/dev/null; then
+	curl_or_wget="wget --tries=4 --timeout=7 -qO-"
+fi
+
 if [ -z "$curl_or_wget" ]; then
 	err="Error: Neither curl nor wget found. Cannot download data. Exiting."
 	die "$err"
@@ -120,7 +114,7 @@ if ! command -v jq &> /dev/null; then
 fi
 
 # check that we have grepcidr
-if ! command -v jq &> /dev/null; then
+if ! command -v grepcidr &> /dev/null; then
 	err="Error: Cannot find grepcidr. Install it with 'apt install grepcidr' or similar. Exiting"
 	die "$err"
 fi
@@ -132,9 +126,10 @@ echo ""
 
 
 # validate the specified ip address
-validate_ipv4 "$userip" &>/dev/null; rv=$?
-if [ $rv -ne 0 ]; then
-# if validation fails
+validated_ipv4=$(echo "$userip" | grep -P "$ip_regex\$")
+
+# if $validated_ipv4 is empty then validation failed
+if [ -z "$validated_ipv4" ]; then
 	err="\"$userip\" does not appear to be a valid ipv4 address. Exiting."
 	echo ""
 	die "$err"
@@ -159,72 +154,75 @@ status=$(jq -r '.status' "$ripe_list_file")
 if [ ! "$status" = "ok" ]; then
 	ripe_msg=$(jq -r -c '.messages' "$ripe_list_file")
 	echo "Failed."
-	echo "Error: RIPE replied with status = '$status'."
-	echo "The requested url was '$url'"
-	echo "and the messages in their reply were: '$ripe_msg'"
+	echo "RIPE message: '$ripe_msg'."
+	echo "Requested url was: '$url'"
 	err="Error: could not fetch ip list from RIPE. Exiting"
 	die "$err"
 fi
 
 echo "Success."
 
-family="ipv4"
 ## only parsing the ipv4 section at this time
+family="ipv4"
 
 parsed_file=$(mktemp "/tmp/parsed-$country-XXXX.plain")
+validated_file=$(mktemp "/tmp/validated-$country-XXXX.plain")
 
-min_size="$min_size_ipv4"
+echo -n "Parsing downloaded subnets... "
+jq -r ".data.resources.$family | .[]" "$ripe_list_file" > "$parsed_file"
 
-errorcount=0
-subnetcount=0
-
-echo -n "Parsing and validating downloaded subnets... "
-for testsubnet in $(jq -r ".data.resources.$family | .[]" "$ripe_list_file"); do
-	validate_ipv4 "$testsubnet" "subnet" >> "$parsed_file"; rv=$?
-	errorcount=$((errorcount + rv))
-	subnetcount=$((subnetcount + 1))
-done
-
-if [ $errorcount -ne 0 ]; then
-	echo "Issues found."
-	echo "Warning: encountered $errorcount errors while validating subnets in the fetched list." >&2
-	echo "Invalid subnets removed from the list." >&2
-else
+parsed_subnet_cnt=$(wc -l < "$parsed_file")
+if [ "$parsed_subnet_cnt" -ge "$min_subnets_num" ]; then
 	echo "Success."
-fi
-
-echo "Total validated ip's: $((subnetcount - errorcount))"
-echo ""
-
-### Check for minimum size
-
-size=$(stat --printf %s "$parsed_file")
-
-[ $debug ] && echo "Debug: Parsed list size: $size"
-
-if [ ! "$size" -ge "$min_size" ]; then
-	err="Error: fetched file $parsed_file size of $size bytes is smaller than minimum $min_size bytes. Probably a download error. Exiting."
+else
+	err="Error: parsed subnets count is less than $min_subnets_num. Probably a download error. Exiting."
 	rm "$parsed_file" &>/dev/null
+	rm "$validated_file" &>/dev/null
 	rm "$ripe_list_file"
 	die "$err"
 fi
 
+echo -n "Validating downloaded subnets... "
+grep -P "$subnet_regex" "$parsed_file" > "$validated_file"
+
+validated_subnet_cnt=$(wc -l < "$validated_file")
+
+errorcount=$((parsed_subnet_cnt - validated_subnet_cnt))
+
+if [ $errorcount -ne 0 ]; then
+	echo "Issues found."
+	echo "Warning: $errorcount subnets failed validation." >&2
+	echo "Invalid subnets removed from the list." >&2
+else
+	if [ "$validated_subnet_cnt" -ge "$min_subnets_num" ]; then
+		echo "Success."
+	else
+		err="Error: validated subnets count is less than $min_subnets_num. Probably a download error. Exiting."
+		rm "$parsed_file" &>/dev/null
+		rm "$validated_file" &>/dev/null
+		rm "$ripe_list_file"
+		die "$err"
+	fi
+fi
+
+echo "Total validated subnets: $validated_subnet_cnt"
+echo ""
+
 echo "Checking $userip..."
 
-echo "$userip" | grepcidr -f "$parsed_file" &>/dev/null; rv=$?
+echo "$userip" | grepcidr -f "$validated_file" &>/dev/null; rv=$?
 
-echo ""
-echo "Result:"
 if [ $rv -eq 0 ]; then
-	echo "NOTE: $userip *BELONGS* to a subnet in RIPE's list for country \"$country\"."
+	echo "Result: $userip *BELONGS* to a subnet in RIPE's list for country \"$country\"."
 else
-	echo "NOTE: $userip *DOES NOT BELONG* to a subnet in RIPE's list for country \"$country\"."
+	echo "Result: $userip *DOES NOT BELONG* to a subnet in RIPE's list for country \"$country\"."
 fi
 echo ""
 
 # clean up temp files
 rm "$ripe_list_file"
 rm "$parsed_file"
+rm "$validated_file"
 echo "Done."
 echo ""
 exit $rv
