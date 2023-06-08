@@ -176,7 +176,7 @@ parsed_subnet_cnt=$(wc -l < "$parsed_file")
 if [ "$parsed_subnet_cnt" -ge "$min_subnets_num" ]; then
 	echo "Success."
 else
-	err="Error: parsed subnets count is less than $min_subnets_num. Probably a download error. Exiting."
+	err="Error: parsed subnets count $parsed_subnet_cnt is less than $min_subnets_num. Probably a download error. Exiting."
 	rm "$parsed_file" &>/dev/null
 	rm "$validated_file" &>/dev/null
 	rm "$fetched_file"
