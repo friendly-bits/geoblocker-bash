@@ -115,7 +115,7 @@ restore_from_file() {
 			# reads <$restorefile> from beginning to [IPSET] and pipes the result into iptables-restore
 			iptables) sed -e '/\[IPSET\]/Q' "$restorefile" 2>&1 | iptables-restore; rv="${PIPESTATUS[1]}" ;;
 
-			# reads <$restorefile> from "create <$perm_ipset>" to the end and pipes the result into "ipset restore"
+			# reads <$restorefile> from "create <$perm_ipset>" to EOF and pipes the result into "ipset restore"
 			ipset) sed -n "/create ${perm_ipset}/,\$p" "$restorefile" 2>&1 | ipset restore; rv="${PIPESTATUS[1]}" ;;
 		esac
 
@@ -153,7 +153,7 @@ restore_from_file() {
 }
 
 restoreknowngood() {
-# resets iptables policies and rules, destroys the whitelist ipset and then initiates restore from file
+# resets iptables policies and rules, destroys the temporary and permanent ipsets and then initiates restore from file
 	restorefile="$1"
 
 	echo ""; echo ""
@@ -167,6 +167,8 @@ restoreknowngood() {
 	iptables -F INPUT
 	echo "Destroying ipset $perm_ipset..."
 	ipset destroy "$perm_ipset"
+	echo "Destroying ipset $temp_ipset..."
+	ipset destroy "$temp_ipset"
 
 	echo ""
 	msg1="NOTE: Restoring last known-good ipset and iptables from backup... "
@@ -306,7 +308,7 @@ ipset create "$temp_ipset" hash:net family "$family" hashsize "$ipset_hashsize" 
 if [ $rv -ne 0 ]; then
 	err="Error creating ipset \"$temp_ipset\" with hashsize $ipset_hashsize and maxelem $ipset_maxelem. Exiting."
 	echo ""
-	die "$err"
+	die "$err" "norestore"
 fi
 [ $debug ] && echo "Ok."
 
@@ -319,7 +321,7 @@ do
 	if [ $rv -ne 0 ]; then
 		err="Error when running the command: \"ipset add $perm_ipset $ip\". Exiting."
 		echo ""
-		die "$err"
+		die "$err" "norestore"
 	fi
 done < "$whitelist_file"
 
@@ -337,7 +339,7 @@ iptables -P INPUT ACCEPT; rv=$?
 if [ $rv -ne 0 ]; then
 	err="Error trying to change iptables policy with command \"iptables -P INPUT ACCEPT\". Exiting."
 	echo ""
-	die "$err"
+	die "$err" "norestore"
 fi
 echo "Ok."
 
