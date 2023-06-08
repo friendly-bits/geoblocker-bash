@@ -67,7 +67,7 @@ shift $((OPTIND -1))
 #### Initialize variables
 ripe_url="https://stat.ripe.net/data/country-resource-list/data.json?v4_format=prefix&resource="
 url="$ripe_url$country"
-min_subnets_num="300"
+min_subnets_num="100"
 
 # using Perl regex syntax because grep is faster with it than with native grep syntax
 # regex compiled from 2 suggestions found here:
