@@ -1,9 +1,9 @@
 # geoblocker_bash
 Automatic geoip blocker for Linux based on a whitelist for a specific country.
 
-Suite of bash scripts with easy install and uninstall, focusing on reliability. Fetches, parses and validates an ipv4 whitelist for a given country, then blocks incoming traffic from anywhere except whitelisted subnets. Implements automatic update of the whitelist. Uses iptables.
+Suite of bash scripts with easy install and uninstall, focusing on reliability and efficiency. Fetches, parses and validates an ipv4 whitelist for a given country, then blocks incoming traffic from anywhere except whitelisted subnets. Implements automatic update of the whitelist. Uses iptables.
 
-The ip list is fetched from RIPE - regional Internet registry for Europe, the Middle East and parts of Central Asia. RIPE appears to store ip lists for countries in other regions as well, although I did not check every country.
+The ip list is fetched from RIPE - regional Internet registry for Europe, the Middle East and parts of Central Asia. RIPE appears to store ip lists for countries in other regions as well, so currently this can be used for any country in the world.
 
 Intended use case is a server/computer that needs to be publically accessible in your country but does not need to be internationally accessible.
 
@@ -36,6 +36,20 @@ additional prerequisites: to install, run 'sudo apt install ipset wget jq grepci
 - jq - Json processor (used to parse lists downloaded from RIPE)
 - grepcidr - filters ip addresses matching CIDR patterns (used by check_ip_in_ripe.sh to check if an ip address belongs to a subnet from a list of subnets)
 
+**NOTES**
+
+1) Changes applied to iptables are made persistent via cron jobs: a periodic job running at a daily schedule (which you can optionally change when running the install script), and a job that runs at system reboot (after 30 seconds delay).
+
+2) You can specify a custom schedule for the periodic cron job by passing an argument to the install script. Run it with the '-h' switch for more info.
+
+3) **Note** that cron jobs **will be run as root**.
+
+4) To test before deployment, you can run the install script with the "-n" switch to skip creating cron jobs. This way, a simple server restart will undo all changes made to the firewall. To enable persistence later, install again without the "-n" switch.
+
+5) The run, fetch and apply scripts write to syslog in case an error occurs. The run script also writes to syslog upon success. To verify that cron jobs ran successfully, on Debian and derivatives run 'sudo cat /var/log/syslog | grep geoblocker_bash'
+
+6) I would love to hear whether it works or doesn't work on your system (please specify which), or if you find a bug, or would like to suggest code improvements. You can use the "Discussions" or "Issues" tab for that.
+
 **Detailed description**
 
 The suite includes 7 scripts:
@@ -48,14 +62,12 @@ The suite includes 7 scripts:
 7. check_ip_in_ripe.sh
 
 **The install script**
-- Checks prerequisites
-- Creates system folder to store data in /var/lib/geoblocker_bash.
+- Creates system folder structure for scripts and data.
 - Copies all scripts included in this suite to /usr/local/bin
 - Creates backup of pre-install policies for INPUT and FORWARD chains
-- Calls geoblocker_bash-run to immediately fetch and apply new firewall config.
-- Verifies that crond service is enabled. Enables it if not.
-- Validates optionally user-specified cron schedule expression (default schedule is "0 4 * * *" - at 4:00 [am] every day).
-- Creates periodic cron job based on that schedule and a reboot job. Cron jobs implement persistence and automatic list updates.
+- Calls geoblocker_bash-run to fetch the whitelist and apply new firewall config.
+- Creates periodic cron job and a reboot job. Cron jobs implement persistence and automatic list updates.
+- Accepts a custom cron schedule expression as an argument. Default cron schedule is "0 4 * * *" - at 4:00 [am] every day.
 - If an error occurs during installation, calls the uninstall script to revert any changes made to the system.
 
 **The uninstall script**
@@ -68,34 +80,23 @@ The suite includes 7 scripts:
 **The run script** simply calls the fetch script, then calls the apply script, passing required arguments. Used for easier triggering from cron jobs.
 
 **The fetch script**
-- Fetches ipv4 subnets for a given country from RIPE
-- Parses, validates and compiles the downloaded (JSON formatted) list into a plain list, and saves that to a file
+- Fetches ipv4 subnets list for a given country from RIPE
+- Parses, validates and compiles the downloaded list into a plain list, and saves to a file
 - Attempts to determine the local ipv4 subnet for the main network interface and appends it to the file
 
 **The apply script**
-- Creates or updates an ipset (essentially an efficiency-optimized ip list) from a whitelist file
-- Creates iptables rule that allows connection from subnets included in the ipset
-- Sets default policy on INPUT and FORWARD iptables chains to DROP (effectively blocking all connections except what's explicitly allowed by the rules)
-- Once all above completed successfully, saves a backup of the current (known-good) iptables state and the current ipset
+- Loads a user-specified whitelist file into an ipset and sets iptables rules to only
+        allow connections from subnets included in the ipset
+- If successful, creates backup of the current (known-good) iptables state and current ipset
 - In case of an error, attempts to restore last known-good state from backup
-- If that fails, the script assumes that something is broken and calls the uninstall script which will attempt to remove any rules we have set, delete the associated cron jobs and restore policies for INPUT and FORWARD chains to the pre-install state
+- If that fails, the script assumes that something is broken and runs the uninstall script
 
-**The validate_cron_schedule.sh script** is used by the install script. It accepts cron schedule expression and attempts to make sure that it complies with the format that cron expects. Used to validate optionally user-specified cron schedule expressions.
+**The validate_cron_schedule.sh script** is used by the install script. It accepts cron schedule expression and attempts to make sure that it complies with the format that cron expects. Used to validate optionally user-specified cron schedule expression.
 
-**The check_ip_in_ripe.sh script** can be used to verify that a certain ip address belongs to a subnet found in RIPE's records for a given country.
+**The check_ip_in_ripe.sh script** can be used to verify that a certain ip address belongs to a subnet found in RIPE's records for a given country. It is not called from other scripts.
 
-**NOTES**
-
-1) I have put much effort into ensuring reliable operation of the scripts and implementing fallback and recovery mechanisms in case of an error. Yet, I can not guarantee that they will work as intended (or at all) in your environment. You should evaluate and test by yourself.
-
-2) Changes applied to iptables are made persistent via cron jobs: a periodic job running at a daily schedule (which you can optionally change when running the install script), and a job that runs at system reboot (after 30 seconds delay).
-
-3) You can specify a custom schedule for the periodic cron job by passing an argument to the install script. Run it with the '-h' switch for more info.
-
-4) **Note** that cron jobs **will be run as root**.
-
-5) To test before deployment, you can run the install script with the "-n" switch to skip creating cron jobs. This way, a simple server restart will undo all changes made to the firewall. To enable persistence later, install again without the "-n" switch.
-
-6) The run, fetch and apply scripts write to syslog in case an error occurs. The run script also writes to syslog upon success. To verify that cron jobs ran successfully, on Debian and derivatives run 'sudo cat /var/log/syslog | grep geoblocker_bash'
-
-7) I would love to hear whether it works or doesn't work on your system (please specify which), or if you find a bug, or would like to suggest code improvements. You can use the "Discussions" or "Issues" tab for that.
+**Additional comments**
+- All scripts display "usage" when called with the "-h" switch
+- Most scripts accept the "-d" switch for debug
+- The fetch script can be easily modified to get the lists from another source instead of from RIPE, for example from ipdeny.com
+- If you live in a small or undeveloped country, the fetched list may be shorter than 100 subnets. If that's the case, the fetch and check_ip_in_ripe scripts will assume that the download failed and refuse to work. You can change the value of the "min_subnets_num" variable in both scripts to work around that.
