@@ -3,15 +3,13 @@
 # geoblocker_bash-apply
 #
 # Loads a user-specified whitelist file into an ipset and sets iptables rules to only
-#         allow connection from subnets included in the ipset
+#         allow connections from subnets included in the ipset
 #
 # If successful, creates backup of the current (known-good) iptables state and current ipset
 #
 # In case of an error, restores last known-good state from backup
 #
 # If that fails, the script assumes that something is broken and runs the uninstall script
-#        which will remove any rules we have set, delete associated cron jobs
-#        and restore policies for INPUT and FORWARD chains to the pre-install state
 #
 # Requires the 'ipset' utility. To install it on Debian or derivatives, use the command:
 ## apt install ipset
@@ -29,14 +27,11 @@ usage() {
     cat <<EOF
 
 This script:
-1) Creates or updates an ipset from a user-specified whitelist file (which should contain a plain ipv4 subnets list).
-2) Creates iptables rules that allow connection from subnets included in the ipset
-3) Sets default policy on INPUT and FORWARD iptables chains to DROP
-4) Creates backup of the current (known-good) iptables state and current ipset
-5) In case of an error, attempts to restore last known-good state from backup
-6) If that fails, the script assumes that something is broken and runs the uninstall script
-        which will attempt to remove any rules we have set, delete the associated cron jobs
-        and restore policies for INPUT and FORWARD chains to the pre-install state
+1) Loads a user-specified whitelist file into an ipset and sets iptables rules to only
+        allow connections from subnets included in the ipset
+2) If successful, creates backup of the current (known-good) iptables state and current ipset
+3) In case of an error, attempts to restore last known-good state from backup
+4) If that fails, the script assumes that something is broken and runs the uninstall script
 
     Usage: $me -f <file> -b <file> [-d] [-t] [-h]
 
