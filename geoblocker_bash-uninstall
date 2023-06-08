@@ -57,7 +57,8 @@ fi
 install_dir="/usr/local/bin"
 datapath="/var/lib/geoblocker_bash"
 preinstall_policies_file="$datapath/preinstall_policies.bak"
-ipset_name="geoblocker_whitelist"
+perm_ipset="geoblocker_whitelist"
+temp_ipset="${perm_ipset}_temp"
 iptables_comment="geoblocker_bash"
 
 ### Delete associated cron jobs
@@ -93,9 +94,11 @@ iptables-save | sed -r "/INPUT.*comment.*$iptables_comment/s/-A/iptables -D/e" &
 
 
 
-### Destroy associated ipset
-echo "Destroying ipset $ipset_name..."
-ipset destroy "$ipset_name"
+### Destroy associated ipsets
+echo "Destroying ipset $perm_ipset..."
+ipset destroy "$perm_ipset"
+echo "Destroying ipset $temp_ipset..."
+ipset destroy "$temp_ipset"
 
 
 if [ ! "$partial_uninstall" ]; then
