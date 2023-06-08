@@ -108,7 +108,7 @@ validateField() {
 	maxvalue="$4"
 
 	segmentsnum_field=0
-	asterisknum_field_field=0
+	asterisknum_field=0
 
 	# field strings should not start or end with a dash
 	if [ "${fieldString:0:1}" = "-" ] || [ "${fieldString: -1}" = "-" ]; then
@@ -126,7 +126,7 @@ validateField() {
 
 	# split the input field by commas (if any) and store resulting slices in the slices[] array 
 	IFS="," read -ra slices <<< "$fieldString"
-	
+
 	for slice in "${slices[@]}"; do
 		segmentsnum=0
 		# split the slice by dashes (if any) and store resulting segments in the segments[] array 
@@ -144,7 +144,7 @@ validateField() {
 			fi
 
 			# segment validation was successful
-			
+
 			# segmentsnum is used to count dash-separated segments in a slice
 			segmentsnum="$((segmentsnum + 1))"
 			# segmentsnum_field is used to count all segments in a field
