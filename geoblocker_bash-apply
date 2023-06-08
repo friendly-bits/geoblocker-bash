@@ -2,13 +2,15 @@
 
 # geoblocker_bash-apply
 #
-# Creates or updates an ipset from a user-specified whitelist file (which should contain a plain ipv4 subnets list).
-# Creates iptables rules that allow connection from subnets included in the ipset
-# Sets default policy on INPUT and FORWARD iptables chains to DROP
-# Creates backup of the current (known-good) iptables state and current ipset
-# In case of an error, attempts to restore last known-good state from backup
+# Loads a user-specified whitelist file into an ipset and sets iptables rules to only
+#         allow connection from subnets included in the ipset
+#
+# If successful, creates backup of the current (known-good) iptables state and current ipset
+#
+# In case of an error, restores last known-good state from backup
+#
 # If that fails, the script assumes that something is broken and runs the uninstall script
-#        which will attempt to remove any rules we have set, delete associated cron jobs
+#        which will remove any rules we have set, delete associated cron jobs
 #        and restore policies for INPUT and FORWARD chains to the pre-install state
 #
 # Requires the 'ipset' utility. To install it on Debian or derivatives, use the command:
@@ -36,11 +38,11 @@ This script:
         which will attempt to remove any rules we have set, delete the associated cron jobs
         and restore policies for INPUT and FORWARD chains to the pre-install state
 
-    Usage: $me -p path -k path [-d] [-t] [-h]
+    Usage: $me -f <file> -b <file> [-d] [-t] [-h]
 
     Options:
-    -p path    : path to whitelist file containing raw subnets list in the format of xxx.xxx.xxx.xxx/xxx
-    -k path    : path to file where last known-good iptables state will be saved
+    -f <file>  : path to whitelist file containing raw subnets list in the format of xxx.xxx.xxx.xxx/xxx
+    -b <file>  : path to file where a backup of last known-good iptables state will be saved
 
     -d         : Debug
     -t         : Simulate fault and test recovery
@@ -51,10 +53,10 @@ EOF
 
 #### PARSE ARGUMENTS
 
-while getopts "p:k:dht" opt; do
+while getopts "f:b:dht" opt; do
 	case $opt in
-		p) whitelist_path=$OPTARG;;
-		k) knowngood_file=$OPTARG;;
+		f) whitelist_file=$OPTARG;;
+		b) knowngood_file=$OPTARG;;
 		d) debug=true;;
 		h) usage; exit 0;;
 		t) test=true;;
@@ -94,6 +96,7 @@ restart_fail2ban() {
 }
 
 restore_from_file() {
+# restores iptables and ipset state from a backup file
 	restoretarget="$1"
 	restorefile="$2"
 	echo "Checking the $restoretarget portion of the backup file..."
@@ -101,7 +104,7 @@ restore_from_file() {
 	# count lines in the corresponding portion of the backup file
 	case $restoretarget in
 		iptables) line_cnt=$(sed -e '/\[IPSET\]/Q' "$restorefile" | wc -l) ;;
-		ipset) line_cnt=$(sed -n "/create ${ipset_name}/,\$p" "$restorefile" | grep "add $ipset_name" | wc -l) ;;
+		ipset) line_cnt=$(sed -n "/create ${perm_ipset}/,\$p" "$restorefile" | grep "add $perm_ipset" | wc -l) ;;
 	esac
 	[ $debug ] && echo "Debug: $restoretarget lines number in backup: $line_cnt"
 
@@ -112,8 +115,8 @@ restore_from_file() {
 			# reads <$restorefile> from beginning to [IPSET] and pipes the result into iptables-restore
 			iptables) sed -e '/\[IPSET\]/Q' "$restorefile" 2>&1 | iptables-restore; rv="${PIPESTATUS[1]}" ;;
 
-			# reads <$restorefile> from "create <$ipset_name>" to the end and pipes the result into "ipset restore"
-			ipset) sed -n "/create ${ipset_name}/,\$p" "$restorefile" 2>&1 | ipset restore; rv="${PIPESTATUS[1]}" ;;
+			# reads <$restorefile> from "create <$perm_ipset>" to the end and pipes the result into "ipset restore"
+			ipset) sed -n "/create ${perm_ipset}/,\$p" "$restorefile" 2>&1 | ipset restore; rv="${PIPESTATUS[1]}" ;;
 		esac
 
 		if [ $rv -eq 0 ]; then
@@ -150,6 +153,7 @@ restore_from_file() {
 }
 
 restoreknowngood() {
+# resets iptables policies and rules, destroys the whitelist ipset and then initiates restore from file
 	restorefile="$1"
 
 	echo ""; echo ""
@@ -161,8 +165,8 @@ restoreknowngood() {
 	iptables -P INPUT ACCEPT
 	echo "Flushing the INPUT chain... "
 	iptables -F INPUT
-	echo "Destroying ipset $ipset_name..."
-	ipset destroy "$ipset_name"
+	echo "Destroying ipset $perm_ipset..."
+	ipset destroy "$perm_ipset"
 
 	echo ""
 	msg1="NOTE: Restoring last known-good ipset and iptables from backup... "
@@ -189,16 +193,31 @@ die() {
 	exit 1
 }
 
+round_up_to_power2() {
+# rounds the input number up to the next high power of 2
+	echo "\
+		if($1==0) x=0 else \
+			x=l($1)/l(2); \
+		scale=0; \
+		y=2^((x+1)/1); \
+		if($1==y/2 && $1!=1) \
+			print $1 \
+		else \
+			print y"\
+	 | bc -l
+}
+
 #### Initialize variables
-ipset_name="geoblocker_whitelist"
+perm_ipset="geoblocker_whitelist"
+temp_ipset="${perm_ipset}_temp"
 iptables_comment="geoblocker_bash"
 family="inet"
 
 
 #### Checks
 
-# check that we have whitelist file path
-if [ -z "$whitelist_path" ]; then
+# check that we have a path to the whitelist file
+if [ -z "$whitelist_file" ]; then
 	usage
 	err="Error: whitelist file path can not be empty. Exiting."
 	echo ""
@@ -241,16 +260,16 @@ if ! command -v "iptables-restore" &> /dev/null; then
 	die "$err" "norestore"
 fi
 
-## check that we have ipset_name
-if [ -z "$ipset_name" ]; then
+## check that we have the name for permanent ipset
+if [ -z "$perm_ipset" ]; then
 	err="Error: ipset name can not be empty. Exiting."
 	echo ""
 	die "$err" "norestore"
 fi
 
 # check that the whitelist file exists
-if [ ! -f "$whitelist_path" ]; then
-	err="Error: Cannot find the whitelist file at path: \"$whitelist_path\". Exiting."
+if [ ! -f "$whitelist_file" ]; then
+	err="Error: Cannot find the whitelist file at path: \"$whitelist_file\". Exiting."
 	echo ""
 	die "$err" "norestore"
 fi
@@ -258,8 +277,62 @@ fi
 
 #### Main
 
+### Create a temporary ipset and load subnets from file into it
+
+# destroy temporary ipset in case it exists
+ipset destroy "$temp_ipset" &>/dev/null
+
+# count lines in the whitelist file
+ip_cnt=$(wc -l < "$whitelist_file")
+[ $debug ] && echo "Debug: ip count in the whitelist file: $ip_cnt"
+
+# calculate necessary ipset size = (next high power of 2 > $ip_cnt)
+ipset_maxelem=$(round_up_to_power2 "$ip_cnt")
+[ $debug ] && echo "Debug: calculated maxelem for ipset: $ipset_maxelem"
+
+# calculate hashsize = (512) or (ipset_maxelem / 32), whichever is larger
+testhashsize=$(echo "scale=0 ; $ipset_maxelem / 32" | bc)
+[ $debug ] && echo "Debug: calculated hashsize: $testhashsize"
+if [ "$testhashsize" -lt 512 ]; then
+	ipset_hashsize=512
+else
+	ipset_hashsize="$testhashsize"
+fi
+[ $debug ] && echo "Debug: final hashsize for the new ipset: $ipset_hashsize"
+
+# create new temporary ipset
+[ $debug ] && echo -n "Creating new ipset \"$temp_ipset\"... "
+ipset create "$temp_ipset" hash:net family "$family" hashsize "$ipset_hashsize" maxelem "$ipset_maxelem"; rv=$?
+if [ $rv -ne 0 ]; then
+	err="Error creating ipset \"$temp_ipset\" with hashsize $ipset_hashsize and maxelem $ipset_maxelem. Exiting."
+	echo ""
+	die "$err"
+fi
+[ $debug ] && echo "Ok."
+
+# import the whitelist into temporary ipset from file
+echo -n "Importing the whitelist file into temporary ipset... "
+
+while IFS= read -r ip
+do
+	ipset add "$temp_ipset" "$ip"; rv=$?
+	if [ $rv -ne 0 ]; then
+		err="Error when running the command: \"ipset add $perm_ipset $ip\". Exiting."
+		echo ""
+		die "$err"
+	fi
+done < "$whitelist_file"
+
+echo "Ok."
+
+[ $debug ] && ipset_lines=$(ipset save "$temp_ipset" | grep "add $temp_ipset" | wc -l)
+[ $debug ] && echo "Debug: ip's in the temporary ipset: $ipset_lines"
+
+
+### Remove existing geoblocker rules for iptables before creating new rules
+
 ## Temporarily set the policy for the INPUT chain to ACCEPT, in order to prevent user lock out in case of an error
-echo -n "Temporarily setting INPUT chain policy to ACCEPT... "
+echo -n "Setting INPUT chain policy to ACCEPT... "
 iptables -P INPUT ACCEPT; rv=$?
 if [ $rv -ne 0 ]; then
 	err="Error trying to change iptables policy with command \"iptables -P INPUT ACCEPT\". Exiting."
@@ -272,75 +345,20 @@ echo "Ok."
 
 echo -n "Removing existing iptables rules for geoblocker_bash... "
 
-# iptables-save command dumps the table to stdout, then we pipe the contents into sed
-# sed looks for rules with the comment $iptables_comment which we use to stamp our rules
+# sed looks for rules with the comment which we use to stamp our rules
 # sed executes iptables -D (delete) command on matching rules. execution is promtped by the switch /e (only available in GNU sed)
 iptables-save | sed -r "/INPUT.*comment.*$iptables_comment/s/-A/iptables -D/e" &>/dev/null; rv=$?
 
-# sed will return return 0 regardless of whether it matched any rule
-# sed will return other values if it fails for other reasons
 if [ $rv -ne 0 ]; then
 	echo "Failure."
-	err="Error trying to remove existing rules with command: iptables-save | sed -r \"/INPUT.*comment.*$iptables_comment/s/-A/iptables -D/e\". Exiting."
+	err="Error removing existing rules with command: iptables-save | sed -r \"/INPUT.*comment.*$iptables_comment/s/-A/iptables -D/e\". Exiting."
 	echo ""
 	die "$err"
 fi
 echo "Ok."
 
-## check if ipset with given name already exists and is non-empty
-# we query ipset and check how many lines it gives for given ipset name.
-# for non-existing sets that should be 0
-# for existing empty sets that should be 7
-# for existing non-empty sets that should be >7
 
-ipset_length=$(ipset -L $ipset_name 2>/dev/null |  wc -l)
-
-if [ "$ipset_length" -ge "7" ]; then
-	echo -n "Found existing ipset \"$ipset_name\". Destroying... "
-	ipset destroy "$ipset_name"; rv=$?
-	if [ $rv -ne 0 ]; then
-		err="Error $rv destroying ipset \"$ipset_name\". Exiting."
-		echo ""
-		die "$err"
-	fi
-	echo "Ok."
-fi
-
-if [ "$ipset_length" -eq 0 ]; then
-	[ $debug ] && echo "Debug: Ipset \"$ipset_name\" doesn't exist yet."
-	# to avoid being dependent on ipset output staying constant down the road,
-	# still trying to delete the ipset, just in case, but not checking the return value
-	ipset destroy "$ipset_name" &>/dev/null
-fi
-
-
-#create new ipset
-echo -n "Creating new ipset \"$ipset_name\"... "
-ipset create "$ipset_name" hash:net family "$family"; rv=$?
-if [ $rv -ne 0 ]; then
-	err="Error trying to create ipset \"$ipset_name\". Exiting."
-	echo ""
-	die "$err"
-fi
-echo "Ok."
-
-# import whitelist into ipset from file
-echo -n "Importing the whitelist file into ipset... "
-
-while IFS= read -r ip
-do
-	ipset add "$ipset_name" "$ip"; rv=$?
-	if [ $rv -ne 0 ]; then
-		err="Error when running the command: \"ipset add $ipset_name $ip\". Exiting."
-		echo ""
-		die "$err"
-	fi
-done < "$whitelist_path"
-
-echo "Ok."
-
-[ $debug ] && ipset_lines=$(ipset save "$ipset_name" | grep "add $ipset_name" | wc -l)
-[ $debug ] && echo "ip's in the ipset: $ipset_lines"
+### Create new iptables rules
 
 echo -n "Inserting rule to allow all traffic from the loopback interface... "
 iptables -I INPUT -i lo -j ACCEPT -m comment --comment "$iptables_comment"; rv=$?
@@ -361,15 +379,72 @@ if [ $rv -ne 0 ]; then
 fi
 echo "Ok."
 
-# append the whitelist to the INPUT chain
+
+## check if permanent ipset already exists and is non-empty
+
+ipset_length=$(ipset -L "$perm_ipset" 2>/dev/null |  wc -l)
+
+if [ "$ipset_length" -ge "7" ]; then
+	perm_ipset_exists="true"
+	[ $debug ] && echo "Debug: found existing permanent ipset \"$perm_ipset\"."
+else
+	perm_ipset_exists="false"
+fi
+
+if [ "$ipset_length" -eq 0 ]; then
+	[ $debug ] && echo "Debug: Ipset \"$perm_ipset\" doesn't exist yet."
+	# to avoid being dependent on ipset output staying constant down the road,
+	# still trying to destroy the ipset, just in case, but not checking the return value
+	ipset destroy "$perm_ipset" &>/dev/null
+fi
+
+## if permanent ipset doesn't exist yet, create it
+if [ ! "$perm_ipset_exists" = "true" ]; then
+	# create new permanent ipset
+	[ $debug ] && echo -n "Creating permanent ipset \"$perm_ipset\"... "
+	ipset create "$perm_ipset" hash:net family "$family" hashsize "$ipset_hashsize" maxelem "$ipset_maxelem"; rv=$?
+	if [ $rv -ne 0 ]; then
+		err="Error creating ipset \"$perm_ipset\" with hashsize $ipset_hashsize and maxelem $ipset_maxelem. Exiting."
+		echo ""
+		die "$err"
+	else
+		[ $debug ] && echo "Ok."
+	fi
+else
+	[ $debug ] && echo "Debug: $perm_ipset already exists."
+fi
+
+## append the whitelist rule to the INPUT chain
+
 echo -n "Appending the whitelist rule to the INPUT chain... "
-iptables -A INPUT -m set --match-set "$ipset_name" src -j ACCEPT -m comment --comment "$iptables_comment"; rv=$?
+iptables -A INPUT -m set --match-set "$perm_ipset" src -j ACCEPT -m comment --comment "$iptables_comment"; rv=$?
 if [ $rv -ne 0 ]; then
-	err="Error $rv trying to append ipset rules with command: iptables -I INPUT -m set --match-set \"$ipset_name\" src -j ACCEPT. Exiting."
+	err="Error appending ipset rules with command: iptables -I INPUT -m set --match-set \"$perm_ipset\" src -j ACCEPT. Exiting."
 	echo ""
 	die "$err"
 fi
 echo "Ok."
+
+## swap new (temporary) ipset with old (permanent) ipset
+echo -n "Making the new ipset permanent... "
+ipset swap "$temp_ipset" "$perm_ipset"; rv=$?
+if [ $rv -ne 0 ]; then
+	err="Error swapping temporary and permanent ipsets. Exiting."
+	echo ""
+	die "$err"
+fi
+echo "Ok."
+
+## destroy the old ipset (now it's called temporary)
+[ $debug ] && echo -n "Destroying temporary ipset... "
+ipset destroy "$temp_ipset"; rv=$?
+if [ $rv -ne 0 ]; then
+	err="Error $rv destroying ipset \"$temp_ipset\". Strange......... Exiting."
+	echo ""
+	die "$err"
+fi
+[ $debug ] && echo "Ok."
+
 
 ## configure iptables policies
 
@@ -377,14 +452,14 @@ echo "Ok."
 echo -n "Setting default iptables policies for INPUT and FORWARD to DROP... "
 iptables -P INPUT DROP; rv=$?
 if [ $rv -ne 0 ]; then
-	err="Error $rv trying to change iptables policy with command \"iptables -P INPUT DROP\". Exiting."
+	err="Error $rv changing iptables policy with command \"iptables -P INPUT DROP\". Exiting."
 	echo ""
 	die "$err"
 fi
 
 iptables -P FORWARD DROP; rv=$?
 if [ $rv -ne 0 ]; then
-	err="Error $rv trying to change iptables policy with command \"iptables -P FORWARD DROP\". Exiting."
+	err="Error $rv changing iptables policy with command \"iptables -P FORWARD DROP\". Exiting."
 	echo ""
 	die "$err"
 fi
@@ -394,7 +469,8 @@ echo "Ok."
 # Activates when running the script with the -t switch
 [ $test ] && die "Test test test"
 
-## Create backup file for known-good iptables state and save current state to the file
+
+### Create backup file for known-good iptables state and save current state to the file
 
 echo -n "Creating backup of current iptables state... "
 touch "$knowngood_file.new"
@@ -402,7 +478,7 @@ touch "$knowngood_file.new"
 iptables-save > "$knowngood_file.new"; rv=$?
 if [ $rv -ne 0 ]; then
 	echo ""
-	err="Error trying to create backup of iptables state with command: iptables-save > \"$knowngood_file.new\". Exiting." >&2
+	err="Error creating backup of iptables state with command: iptables-save > \"$knowngood_file.new\". Exiting." >&2
 	die "$err"
 fi
 echo "Ok."
@@ -413,10 +489,10 @@ echo -n "Creating backup of current ipset... "
 # the "[IPSET]" line separates the two portions of the file
 echo "[IPSET]" >> "$knowngood_file.new"
 
-ipset save "$ipset_name" >> "$knowngood_file.new"; rv=$?
+ipset save "$perm_ipset" >> "$knowngood_file.new"; rv=$?
 if [ $rv -ne 0 ]; then
 	echo ""
-	err="Error creating backup of ipset \"$ipset_name\". Exiting."
+	err="Error creating backup of ipset \"$perm_ipset\". Exiting."
 	die "$err"
 fi
 echo "Ok."
