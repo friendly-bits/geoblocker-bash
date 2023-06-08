@@ -109,7 +109,7 @@ else
 	echo "Note: Skipped fetching because -s switch was used"
 fi
 
-geoblocker_bash-apply $debug -p "$whitelist_path/ipv4_$country" -k "$knowngood_file"; rv=$?
+geoblocker_bash-apply $debug -f "$whitelist_path/ipv4_$country" -b "$knowngood_file"; rv=$?
 if [ $rv -ne 0 ]; then
 	echo ""
 	exit 1
