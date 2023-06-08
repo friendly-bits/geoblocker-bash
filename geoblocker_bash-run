@@ -59,13 +59,13 @@ echo ""
 
 #### Checks
 
-# check that we have geoblocker_bash-fetch
+# check for geoblocker_bash-fetch
 [ ! $skipfetch ] && if ! command -v geoblocker_bash-fetch &> /dev/null; then
 	err="Error: Cannot find \"geoblocker_bash-fetch\". Did you run setup? Exiting."
 	die "$err"
 fi
 
-# check that we have geoblocker_bash-apply
+# check for geoblocker_bash-apply
 if ! command -v geoblocker_bash-apply &> /dev/null; then
 	err="Error: Cannot find \"geoblocker_bash-apply\". Did you run setup? Exiting."
 	die "$err"
@@ -93,6 +93,12 @@ if [ -z "$whitelist_path" ]; then
 	die "$err"
 fi
 
+# check for root
+if [ "$EUID" -ne 0 ]; then
+	err="This needs to be run as root."
+	echo ""
+	die "$err" "norestore"
+fi
 
 #### Main
 
