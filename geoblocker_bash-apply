@@ -213,7 +213,7 @@ family="inet"
 
 #### Checks
 
-# check that we have a path to the whitelist file
+# check for whitelist file path
 if [ -z "$whitelist_file" ]; then
 	usage
 	err="Error: whitelist file path can not be empty. Exiting."
@@ -221,7 +221,7 @@ if [ -z "$whitelist_file" ]; then
 	die "$err" "norestore"
 fi
 
-# check that we have knowngood file path
+# check for knowngood file path
 if [ -z "$knowngood_file" ]; then
 	usage
 	err="Error: known-good file path can not be empty. Exiting."
@@ -236,23 +236,30 @@ if [ "$EUID" -ne 0 ]; then
 	die "$err" "norestore"
 fi
 
-# Check that we have the ipset utility
+# Check for ipset utility
 if ! command -v "ipset" &> /dev/null; then
 	err="Error: Cannot find 'ipset'. Install it with 'apt install ipset' or similar. Exiting."
 	echo ""
 	die "$err" "norestore"
 fi
 
-# Check that we have the iptables-save utility
+# Check for iptables-save utility
 if ! command -v "iptables-save" &> /dev/null; then
 	err="Error: Cannot find 'iptables-save'. Exiting."
 	echo ""
 	die "$err" "norestore"
 fi
 
-# Check that we have the iptables-restore utility
+# Check for iptables-restore utility
 if ! command -v "iptables-restore" &> /dev/null; then
 	err="Error: Cannot find 'iptables-restore'. Exiting."
+	echo ""
+	die "$err" "norestore"
+fi
+
+# Check for bc utility
+if ! command -v "bc" &> /dev/null; then
+	err="Error: Cannot find 'bc'. Exiting."
 	echo ""
 	die "$err" "norestore"
 fi
