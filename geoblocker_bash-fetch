@@ -89,7 +89,7 @@ shift $((OPTIND -1))
 #### Initialize variables
 ripe_url="https://stat.ripe.net/data/country-resource-list/data.json?v4_format=prefix&resource="
 url="$ripe_url$country"
-min_subnets_num="300"
+min_subnets_num="100"
 family="ipv4"    ## only parsing the ipv4 section at this time
 filename="${family}_$country"
 out_list="$iplist_path/$filename"
