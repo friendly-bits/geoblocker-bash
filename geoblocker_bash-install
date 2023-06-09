@@ -5,25 +5,16 @@
 # Installer for geoip blocking suite of bash scripts
 # Must be run as root
 #
-# Checks prerequisites
-# Creates system folder to store the whitelist and other data in /var/lib/geoblocker_bash
-# Copies all scripts included in the suite to /usr/local/bin
-# Creates backup of pre-install policies for INPUT and FORWARD chains
-# Runs geoblocker_bash-run to immediately fetch and apply new firewall config
-# Verifies that crond service is enabled. Enables it if not.
-# Validates optionally user-specified cron schedule expression (if not specified then uses default schedule "0 4 * * *" (at 4:00 [am] every day).
-# Creates periodic cron task based on that and a reboot task. Both cron tasks call the geoblocker_bash-run script with the necessary arguments.
-# If an error occurs at any step during installation, calls the uninstall script to revert any changes made to the system.
-
-#
-# NOTE: ipv4 only, ipv6 not implemented
+# Creates system folder structure for scripts and data.
+# Copies all scripts included in the suite to /usr/local/bin.
+# Creates backup of pre-install policies for INPUT and FORWARD chains.
+# Calls geoblocker_bash-run to fetch the whitelist and apply new firewall config.
+# Creates a periodic cron job and a reboot job. Cron jobs implement persistence and automatic list updates.
+# Accepts a custom cron schedule expression as an argument. Default cron schedule is "0 4 * * *" - at 4:00 [am] every day.
+# If an error occurs during installation, calls the uninstall script to revert any changes made to the system.
 #
 # Requires the following additional scripts (included in the distribution):
 # geoblocker_bash-fetch, geoblocker_bash-apply, geoblocker_bash-run, geoblocker_bash-uninstall, validate_cron_schedule.sh, check_ip_in_ripe.sh
-# Then runs geoblocker_bash-run to immediately fetch and apply the new firewall config
-#
-# Only applies ipv4 config, if you need ipv6 then you can add code for that
-
 
 me=$(basename "$0")
 
@@ -37,16 +28,13 @@ Installer for geoip blocking suite of bash scripts.
 Must be run as root.
 
 This script:
-1) Checks prerequisites
-2) Creates system folder to store the whitelist and other data in /var/lib/geoblocker_bash
-3) Copies all scripts included in the suite to /usr/local/bin
-4) Creates backup of pre-install policies for INPUT and FORWARD chains
-5) Runs geoblocker_bash-run to immediately fetch and apply new firewall config
-6) Verifies that crond service is enabled. Enables it if not.
-7) Validates optionally user-specified cron schedule expression (if not specified then uses default schedule "0 4 * * *" (at 4:00 [am] every day).
-8) Creates periodic cron task based on that and a reboot task. Both cron tasks call the geoblocker_bash-run script with the necessary arguments.
-If an error occurs at any step during installation, calls the uninstall script to revert any changes made to the system.
-
+1) Creates system folder structure for scripts and data.
+2) Copies all scripts included in the suite to /usr/local/bin.
+3) Creates backup of pre-install policies for INPUT and FORWARD chains.
+4) Calls geoblocker_bash-run to fetch the whitelist and apply new firewall config.
+5) Creates a periodic cron job and a reboot job. Cron jobs implement persistence and automatic list updates.
+6) Accepts a custom cron schedule expression as an argument. Default cron schedule is "0 4 * * *" - at 4:00 [am] every day.
+7) If an error occurs during installation, calls the uninstall script to revert any changes made to the system.
 
     Usage: $me -c country [-s "schedule"] [-n] [-d] [-h]
 
@@ -124,6 +112,11 @@ preinstall_policies_file="$datadir/preinstall_policies.bak"
 knowngood_file="$datadir/iptables_knowngood.bak"
 whitelist_path="$datadir/ip_lists"
 cron_schedule="${cron_schedule:-0 4 * * *}"
+sleeptime="30"
+
+run_command="${install_dir}/geoblocker_bash-run"
+run_args="-c \"$country\" -w \"$whitelist_path\" -b \"$knowngood_file\""
+run_args_reboot="${run_args} -s"
 
 echo ""
 
@@ -165,30 +158,37 @@ if ! command -v "ipset" &> /dev/null; then
 	exit 1
 fi
 
-# Check that we have the iptables-save utility
+# Check for iptables-save utility
 if ! command -v "iptables-save" &> /dev/null; then
 	echo "Error: Cannot find 'iptables-save'. Exiting."
 	echo ""
 	exit 1
 fi
 
-# Check that we have the iptables-restore utility
+# Check for iptables-restore utility
 if ! command -v "iptables-restore" &> /dev/null; then
 	echo "Error: Cannot find 'iptables-restore'. Exiting."
 	echo ""
 	exit 1
 fi
 
-# check that we have jq
+# check for jq
 if ! command -v jq &> /dev/null; then
 	echo "Error: Cannot find the jq Json processor. Install it with 'apt install jq' or similar. Exiting"
 	echo ""
 	exit 1
 fi
 
-# check that we have grepcidr
+# check for grepcidr
 if ! command -v grepcidr &> /dev/null; then
 	echo "Error: Cannot find grepcidr. Install it with 'apt install grepcidr' or similar. Exiting"
+	echo ""
+	exit 1
+fi
+
+# check for bc
+if ! command -v bc &> /dev/null; then
+	echo "Error: Cannot find bc. Exiting"
 	echo ""
 	exit 1
 fi
@@ -197,7 +197,7 @@ fi
 scriptdir="$(get_script_dir)"
 
 # exit in case "cd" fails
-cd "$scriptdir" || exit 1
+cd "$scriptdir" || echo "Error: could not change directory to \"$scriptdir\". Exiting."; exit 1
 
 check_file_exists "geoblocker_bash-fetch"
 check_file_exists "geoblocker_bash-apply"
@@ -303,7 +303,7 @@ else
 fi
 
 ### Fetch and apply the whitelist
-geoblocker_bash-run $debug -c "$country" -p "$whitelist_path" -k "$knowngood_file"; rv=$?
+echo "$run_command $debug $run_args" | bash; rv=$?
 
 if [ $rv -ne 0 ]; then
 	install_failed
@@ -315,12 +315,13 @@ if [ ! "$no_persistence" ]; then
 	### Create cron jobs
 
 	[ $debug ] && echo ""
-	[ $debug ] && echo "Debug: deleting previous cron jobs for geoblocker_bash..."
-	crontab -u root -l 2>/dev/null |  grep -v 'geoblocker_bash-run' | sudo crontab -u root -
+	[ $debug ] && echo "Debug: deleting previous cron jobs for geoblocker_bash and country $country..."
+	crontab -u root -l 2>/dev/null | grep -v "reboot sleep .* && \"$run_command\" $run_args_reboot" | sudo crontab -u root -
+	crontab -u root -l 2>/dev/null | grep -v "\"$run_command\" $run_args" | sudo crontab -u root -
 
 	[ $debug ] && echo ""
 	echo -n "Creating periodic cron job... "
-	echo -e "$(sudo crontab -u root -l 2>/dev/null)\n$cron_schedule \"$install_dir/geoblocker_bash-run\" -c \"$country\" -p \"$whitelist_path\" -k \"$knowngood_file\" &>/dev/null" | sudo crontab -u root -
+	echo -e "$(sudo crontab -u root -l 2>/dev/null)\n$cron_schedule \"$run_command\" $run_args &>/dev/null" | sudo crontab -u root -
 	rv=$?
 
 	if [ $rv -ne 0 ]; then
@@ -328,8 +329,8 @@ if [ ! "$no_persistence" ]; then
 		install_failed
 	else
 		echo "Success."
-		cron_line_result=$(crontab -u root -l 2>/dev/null |  grep "\"$install_dir/geoblocker_bash-run\" -c \"$country\" -p \"$whitelist_path\" -k \"$knowngood_file\"")
-		echo "Cron line: $cron_line_result"
+		cron_line_result=$(crontab -u root -l 2>/dev/null |  grep  "\"$run_command\" $run_args")
+		echo "Cron line: \"$cron_line_result\""
 	fi
 
 
@@ -340,7 +341,7 @@ if [ ! "$no_persistence" ]; then
 	## otherwise if there was no internet connection at reboot time, *fetch would fail which would cause *run to fail,
 	## so *apply wouldn't run, which would leave the system without geoblocking rules
 
-	echo -e "$(sudo crontab -u root -l 2>/dev/null)\n@reboot sleep 30 && \"$install_dir/geoblocker_bash-run\" -s -c \"$country\" -p \"$whitelist_path\" -k \"$knowngood_file\" &>/dev/null" | sudo crontab -u root -
+	echo -e "$(sudo crontab -u root -l 2>/dev/null)\n@reboot sleep $sleeptime && \"$run_command\" $run_args_reboot &>/dev/null" | sudo crontab -u root -
 	rv=$?
 
 	if [ $rv -ne 0 ]; then
@@ -349,8 +350,8 @@ if [ ! "$no_persistence" ]; then
 		install_failed
 	else
 		echo "Success."
-		cron_line_result=$(crontab -u root -l 2>/dev/null |  grep "\"$install_dir/geoblocker_bash-run\" -s -c \"$country\" -p \"$whitelist_path\" -k \"$knowngood_file\"")
-		echo "Cron line: $cron_line_result"
+		cron_line_result=$(crontab -u root -l 2>/dev/null |  grep "reboot sleep .* && \"$run_command\" $run_args_reboot")
+		echo "Reboot cron line: \"$cron_line_result\""
 		echo ""
 		echo "View cron jobs with \"sudo crontab -l\""
 	fi
