@@ -111,7 +111,12 @@ datadir="/var/lib/geoblocker_bash"
 preinstall_policies_file="$datadir/preinstall_policies.bak"
 knowngood_file="$datadir/iptables_knowngood.bak"
 whitelist_dir="$datadir/ip_lists"
-cron_schedule="${cron_schedule:-0 4 * * *}"
+
+conf_dir="/etc/geoblocker_bash"
+conf_file="${conf_dir}/geoblocker_bash.conf"
+
+default_schedule="0 4 * * *"
+cron_schedule="${cron_schedule:-"$default_schedule"}"
 sleeptime="30"
 
 run_command="${install_dir}/geoblocker_bash-run"
@@ -193,15 +198,15 @@ if ! command -v bc &> /dev/null; then
 	exit 1
 fi
 
-# cd into script directory
 scriptdir="$(get_script_dir)"
-
+# cd into script directory
 # exit in case "cd" fails
 cd "$scriptdir" || echo "Error: could not change directory to \"$scriptdir\". Exiting."; exit 1
 
 check_file_exists "geoblocker_bash-fetch"
 check_file_exists "geoblocker_bash-apply"
 check_file_exists "geoblocker_bash-run"
+check_file_exists "geoblocker_bash-manage"
 check_file_exists "validate_cron_schedule.sh"
 check_file_exists "geoblocker_bash-uninstall"
 check_file_exists "check_ip_in_ripe.sh"
@@ -230,6 +235,21 @@ fi
 
 
 #### Main
+
+# Create the directory for config and, if required, parent directories
+mkdir -p "$conf_dir"
+
+# delete config file if it exists
+rm "$conf_file" > /dev/null
+
+# write datadir path to the config file
+echo "Datadir=$datadir" > "$conf_file"
+
+# write default schedule to the config file
+echo "Default_schedule=$default_schedule" >> "$conf_file"
+
+# write reboot sleeptime to the config file
+echo "RebootSleep=$sleeptime" >> "$conf_file"
 
 # Create the directory for downloaded lists and, if required, parent directories
 mkdir -p "$whitelist_dir"
@@ -261,6 +281,7 @@ if [ "$scriptdir" != "$install_dir" ]; then
 	[ $debug ] && echo ""
 	copyscript "geoblocker_bash-fetch" "$install_dir/geoblocker_bash-fetch"
 	copyscript "geoblocker_bash-apply" "$install_dir/geoblocker_bash-apply"
+	copyscript "geoblocker_bash-manage" "$install_dir/geoblocker_bash-manage"
 	copyscript "geoblocker_bash-install" "$install_dir/geoblocker_bash-install"
 	copyscript "geoblocker_bash-run" "$install_dir/geoblocker_bash-run"
 	copyscript "geoblocker_bash-uninstall" "$install_dir/geoblocker_bash-uninstall"
@@ -306,7 +327,7 @@ cd "$installdir" || echo "Error: could not change directory to \"$scriptdir\". E
 geoblocker_bash-manage "$debug" "$no_persistence" -c "$country" -a "add" -s "$cron_schedule"; rv=$?
 
 if [ $rv -ne 0 ]; then
-	echo "Failed to add whitelist for country \"$country\""
+	echo "Failed to add and apply whitelist."
 	install_failed
 fi
 
