@@ -19,9 +19,9 @@ Then runs geoblocker_bash-apply to apply the ip list to iptables.
     Usage: $me -c country -p path -k path [-d] [-h]
 
     Options:
-    -c tld     : tld / country code
-    -p path    : Path to store the compiled whitelist
-    -k path    : Path to file where last known-good iptables state will be saved
+    -c <tld>   : tld / country code
+    -w <path>  : Path to folder where the whitelist file will be stored
+    -b <file>  : path to file where a backup of last known-good iptables state will be saved
     -s         : Skip fetching (only run the apply script)
 
     -d         : Debug
@@ -39,11 +39,11 @@ die() {
 
 #### PARSE ARGUMENTS
 
-while getopts "c:p:k:sdh" opt; do
+while getopts "c:w:b:sdh" opt; do
 	case $opt in
 	c) country=$OPTARG;;
-	p) whitelist_path=$OPTARG;;
-	k) knowngood_file=$OPTARG;;
+	w) whitelist_path=$OPTARG;;
+	b) knowngood_file=$OPTARG;;
 	s) skipfetch="true";;
 	d) debug="-d";;
 	h) usage; exit 0;;
