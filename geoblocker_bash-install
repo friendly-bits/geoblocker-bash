@@ -98,7 +98,7 @@ while getopts "c:s:ndh" opt; do
 	case $opt in
 		c) country=$OPTARG;;
 		s) cron_schedule=$OPTARG;;
-		n) no_persistence=true;;
+		n) no_persistence="-n";;
 		d) debug="-d";;
 		h) usage; exit 0;;
 		\?) usage; exit 1;;
@@ -220,13 +220,9 @@ if [ ! "$no_persistence" ]; then
 	(systemctl is-enabled cron.service) > /dev/null; rv=$?
 
 	if [ $rv -ne 0 ]; then
-		echo "Enabling cron service..."
-		systemctl enable cron.service; rv=$?
-		if [ $rv -ne 0 ]; then
-			echo "Error enabling cron.service. Exiting." >&2
-			echo ""
-			exit 1
-		fi
+		echo "Error: cron service seems to be disabled."
+		echo "On Debian and derivatives, enable it with \"systemctl enable cron.service\". Exiting." >&2
+		echo ""
 	fi
 else
 	[ $debug ] && echo "Debug: No persistence was requested, skipping cron checks."
@@ -302,61 +298,16 @@ else
 	[ $debug ] && echo "INPUT: $preinstall_input_policy, FORWARD: $preinstall_forward_policy"
 fi
 
-### Fetch and apply the whitelist
-echo "$run_command $debug $run_args" | bash; rv=$?
+# cd into script directory
+# exit in case "cd" fails
+cd "$installdir" || echo "Error: could not change directory to \"$scriptdir\". Exiting."; install_failed
+
+### Add whitelist for $country to managed whitelists, then fetch and apply the whitelist
+geoblocker_bash-manage "$debug" "$no_persistence" -c "$country" -a "add" -s "$cron_schedule"; rv=$?
 
 if [ $rv -ne 0 ]; then
+	echo "Failed to add whitelist for country \"$country\""
 	install_failed
-fi
-
-
-# if no persistence was requested, skip adding cron jobs
-if [ ! "$no_persistence" ]; then
-	### Create cron jobs
-
-	[ $debug ] && echo ""
-	[ $debug ] && echo "Debug: deleting previous cron jobs for geoblocker_bash and country $country..."
-	crontab -u root -l 2>/dev/null | grep -v "reboot sleep .* && \"$run_command\" $run_args_reboot" | sudo crontab -u root -
-	crontab -u root -l 2>/dev/null | grep -v "\"$run_command\" $run_args" | sudo crontab -u root -
-
-	[ $debug ] && echo ""
-	echo -n "Creating periodic cron job... "
-	echo -e "$(sudo crontab -u root -l 2>/dev/null)\n$cron_schedule \"$run_command\" $run_args &>/dev/null" | sudo crontab -u root -
-	rv=$?
-
-	if [ $rv -ne 0 ]; then
-		echo "Error running crontab command." >&2
-		install_failed
-	else
-		echo "Success."
-		cron_line_result=$(crontab -u root -l 2>/dev/null |  grep  "\"$run_command\" $run_args")
-		echo "Cron line: \"$cron_line_result\""
-	fi
-
-
-	[ $debug ] && echo ""
-	echo -n "Creating reboot cron job... "
-
-	# using the -s switch for the *run script to skip fetching at reboot
-	## otherwise if there was no internet connection at reboot time, *fetch would fail which would cause *run to fail,
-	## so *apply wouldn't run, which would leave the system without geoblocking rules
-
-	echo -e "$(sudo crontab -u root -l 2>/dev/null)\n@reboot sleep $sleeptime && \"$run_command\" $run_args_reboot &>/dev/null" | sudo crontab -u root -
-	rv=$?
-
-	if [ $rv -ne 0 ]; then
-		echo "Error running crontab command." >&2
-		echo ""
-		install_failed
-	else
-		echo "Success."
-		cron_line_result=$(crontab -u root -l 2>/dev/null |  grep "reboot sleep .* && \"$run_command\" $run_args_reboot")
-		echo "Reboot cron line: \"$cron_line_result\""
-		echo ""
-		echo "View cron jobs with \"sudo crontab -l\""
-	fi
-else
-	echo "NOTE: No persistence was requested, skipping cron jobs creation."
 fi
 
 echo ""
