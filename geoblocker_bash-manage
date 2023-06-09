@@ -20,13 +20,12 @@ WARNING if removing a whitelist: Geoblocking will remain active after removal.
 		If you remove your country's whitelist, you may lose remote access to the system.
         
 
-    Usage: $me -c <tld> -a add|remove [-s "schedule"] [-n] [-d] [-h]
+    Usage: $me -c <tld> -a <add|remove> [-s "<schedule>"] [-n] [-d] [-h]
 
     Options:
         -c <tld>        : tld / country code for the country to add/remove the whitelist for
-        -a              : action to perform: "add" or "remove" associated rules and cron jobs
-        -s "schedule"   : schedule expression for the cron job, must be inside double quotes
-                              default: "0 4 * * *" (at 4:00 [am] every day)
+        -a <action>     : action to perform: "add" or "remove" associated rules and cron jobs
+        -s "<schedule>" : schedule expression for the cron job, must be inside double quotes
 
         -n              : No persistence (will not create cron jobs)
         -d              : Debug
@@ -37,7 +36,7 @@ EOF
 
 #### PARSE ARGUMENTS
 
-while getopts "c:ph" opt; do
+while getopts "c:a:s:ndh" opt; do
 	case $opt in
 		c) country=$OPTARG;;
 		a) action=$OPTARG;;
@@ -63,8 +62,6 @@ get_script_dir () {
 	DIR=$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )
 	echo "$DIR"
 }
-
-
 
 #### Checks
 
@@ -101,6 +98,8 @@ fi
 #convert country code to lower case
 country=echo "${country,,}"
 
+# TODO: implement config saving in the *install script
+
 conf_dir="/etc/geoblocker_bash"
 conf_file="${conf_dir}/geoblocker_bash.conf"
 
@@ -113,8 +112,8 @@ whitelist_dir="$datadir/ip_lists"
 whitelist_file="$whitelist_dir/$country.list"
 sleeptime="30"
 
+# get the script path
 read -r scriptdir < <(get_script_dir)
-
 
 run_command="${scriptdir}/geoblocker_bash-run"
 run_args="-c \"$country\" -w \"$whitelist_dir\" -b \"$knowngood_file\""
@@ -127,7 +126,6 @@ scriptdir="$(get_script_dir)"
 
 # exit in case "cd" fails
 cd "$scriptdir" || echo "Error: could not change directory to \"$scriptdir\". Exiting."; exit 1
-
 
 if [ ! "$no_persistence" ] && [ "$action" = "add" ]; then
 
@@ -186,6 +184,7 @@ if [ "$action" = "remove" ]; then
 else
 
 ### Fetch and apply the whitelist
+
 	echo "$run_command $debug $run_args" | bash; rv=$?
 
 	if [ $rv -ne 0 ]; then
@@ -197,6 +196,7 @@ else
 
 	# if no persistence was requested, skip adding cron jobs
 	if [ ! "$no_persistence" ]; then
+
 ### Create cron jobs
 
 		[ $debug ] && echo ""
