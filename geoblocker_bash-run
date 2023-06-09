@@ -97,7 +97,7 @@ fi
 if [ "$EUID" -ne 0 ]; then
 	err="This needs to be run as root."
 	echo ""
-	die "$err" "norestore"
+	die "$err"
 fi
 
 #### Main
