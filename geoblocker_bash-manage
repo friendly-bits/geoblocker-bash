@@ -106,11 +106,13 @@ conf_file="${conf_dir}/geoblocker_bash.conf"
 # read datadir from the config file
 read -r datadir < <(grep -Po 'Datadir=\K.*' "$conf_file")
 
+# read sleeptime (for reboot) from the config file
+read -r sleeptime < <(grep -Po 'RebootSleep=\K.*' "$conf_file")
+
 preinstall_policies_file="$datadir/preinstall_policies.bak"
 knowngood_file="$datadir/iptables_knowngood.bak"
 whitelist_dir="$datadir/ip_lists"
 whitelist_file="$whitelist_dir/$country.list"
-sleeptime="30"
 
 # get the script path
 read -r scriptdir < <(get_script_dir)
