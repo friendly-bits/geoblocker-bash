@@ -110,12 +110,12 @@ install_dir="/usr/local/bin"
 datadir="/var/lib/geoblocker_bash"
 preinstall_policies_file="$datadir/preinstall_policies.bak"
 knowngood_file="$datadir/iptables_knowngood.bak"
-whitelist_path="$datadir/ip_lists"
+whitelist_dir="$datadir/ip_lists"
 cron_schedule="${cron_schedule:-0 4 * * *}"
 sleeptime="30"
 
 run_command="${install_dir}/geoblocker_bash-run"
-run_args="-c \"$country\" -w \"$whitelist_path\" -b \"$knowngood_file\""
+run_args="-c \"$country\" -w \"$whitelist_dir\" -b \"$knowngood_file\""
 run_args_reboot="${run_args} -s"
 
 echo ""
@@ -232,7 +232,7 @@ fi
 #### Main
 
 # Create the directory for downloaded lists and, if required, parent directories
-mkdir -p "$whitelist_path"
+mkdir -p "$whitelist_dir"
 
 
 ## Create a backup file for known-good iptables state
