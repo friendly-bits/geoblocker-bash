@@ -119,6 +119,7 @@ read -r datadir < <(getconfig "Datadir" "$conf_file")
 preinstall_policies_file="$datadir/preinstall_policies.bak"
 knowngood_file="$datadir/iptables_knowngood.bak"
 whitelist_dir="$datadir/ip_lists"
+failed_tlds_file="$datadir/FailedTLDs"
 
 # get sleeptime (for reboot) from the config file
 read -r sleeptime < <(getconfig "RebootSleepTime" "$conf_file")
