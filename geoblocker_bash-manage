@@ -99,9 +99,37 @@ setconfig() {
 }
 
 debugpr() {
-# print debug message
-[ "$debug" ] && echo "Debug: $@"
+# prints a debug message
+	[ "$debug" ] && echo "Debug: $@"
 }
+
+#### Initialize variables
+
+#convert country codes to lower case
+countries=echo "${countries,,}"
+
+# TODO: implement config saving in the *install script
+
+conf_dir="/etc/geoblocker_bash"
+conf_file="${conf_dir}/geoblocker_bash.conf"
+
+# get datadir from the config file
+read -r datadir < <(getconfig "Datadir" "$conf_file")
+preinstall_policies_file="$datadir/preinstall_policies.bak"
+knowngood_file="$datadir/iptables_knowngood.bak"
+whitelist_dir="$datadir/ip_lists"
+
+# get sleeptime (for reboot) from the config file
+read -r sleeptime < <(getconfig "RebootSleepTime" "$conf_file")
+
+# TODO: implement setting sleeptime config in *install and in *manage
+# TODO: implement setting datadir config in *install and in *manage
+
+# get the script path
+read -r scriptdir < <(get_script_dir)
+
+run_command="${scriptdir}/geoblocker_bash-run"
+
 
 #### Checks
 
@@ -145,34 +173,12 @@ if [[ "$crondisabled" ]] && [ "$action" = "add" ]; then
 fi
 
 
-### Initialize variables
-
-#convert country codes	 to lower case
-countries=echo "${countries,,}"
-
-# TODO: implement config saving in the *install script
-
-conf_dir="/etc/geoblocker_bash"
-conf_file="${conf_dir}/geoblocker_bash.conf"
-
-# read datadir from the config file
-datadir="$(getconfig "Datadir" "$conf_file")
-preinstall_policies_file="$datadir/preinstall_policies.bak"
-knowngood_file="$datadir/iptables_knowngood.bak"
-whitelist_dir="$datadir/ip_lists"
-
-# read sleeptime (for reboot) from the config file
-sleeptime="$(getconfig "RebootSleepTime" "$conf_file")
-
-# TODO: implement setting sleeptime config in *install and in *manage
-# TODO: implement setting datadir config in *install and in *manage
-
-# get the script path
-read -r scriptdir < <(get_script_dir)
-
-run_command="${scriptdir}/geoblocker_bash-run"
 
 echo ""
+
+
+#### MAIN
+
 
 # cd into script directory
 # exit in case "cd" fails
