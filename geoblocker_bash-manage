@@ -2,8 +2,8 @@
 
 # geoblocker_bash-manage
 
-# Allows to add or remove a whitelist for specified country to/from geoblocking rules
-#       and creates/deletes associated cron jobs
+# Allows to add or remove a whitelist for specified countries to/from geoblocking rules
+#       and creates or updates associated cron jobs
 
 me=$(basename "$0")
 
@@ -13,11 +13,11 @@ usage() {
     cat <<EOF
 
 This script:
-    Allows to add or delete whitelists for the specified countries to/from geoblocking rules
-        and creates/deletes associated cron jobs.
+    Allows to add or delete whitelists for specified countries to/from geoblocking rules
+        and creates or updates associated cron jobs.
 
 WARNING if removing a whitelist: Geoblocking will remain active after removal.
-		If you remove your country's whitelist, you may lose remote access to the system.
+        If you remove your country's whitelist, you may lose remote access to your system.
         
 
     Usage: $me -c <"tld [tld] ... [tld]"> -a <add|remove> [-s "<schedule>"] [-n] [-d] [-h]
