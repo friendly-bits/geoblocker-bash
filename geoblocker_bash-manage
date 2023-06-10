@@ -63,14 +63,34 @@ get_script_dir () {
 	echo "$DIR"
 }
 
-get_config() {
+getconfig() {
 # reads a field named $1 from the config file $2
+# outputs the resulting field
 # returns 0 if successful, 1 if not
 	fieldname="$1"
 	configfile="$2"
 	read -r field < <(grep "$fieldname=" "$conf_file" | sed 's/.*$fieldname=//'); rv=$?
-	echo "$field"
-	return rv
+	if [ -z "$field" ]; then
+		echo ""
+		rv=$((rv + 1))
+	else
+		echo "$field"
+	fi
+	return $rv
+}
+
+setconfig() {
+# changes a field named $1 in the config file $2 to value $3
+# returns 0 if successful, 1 if not
+	fieldname="$1"
+	configfile="$2"
+	field="$3"
+	# remove corresponding config line
+	grep -v "$fieldname=" "$conf_file" > "$conf_file"
+	# add updated config line
+	echo -e "$(cat "$conf_file")\n$fieldname=$field" > "$conf_file"; rv=$?
+	debugpr "New config line: $(getconfig $fieldname $configfile)"
+	return $rv
 }
 
 debugpr() {
@@ -142,7 +162,7 @@ if [ ! "$no_persistence" ] && [ "$action" = "add" ]; then
 
 	# if cron_schedule wasn't provided in args, use the default schedule from the config file
 	if [ -z "$cron_schedule" ]; then
-		cron_schedule=$(get_config "Default_schedule" "$conf_file")
+		cron_schedule=$(getconfig "Default_schedule" "$conf_file")
 	fi
 
 	# validate cron schedule
@@ -217,7 +237,7 @@ debugpr "Countries to change: ${countries_to_change[@]}"
 
 echo ""
 echo "Removing cron jobs for geoblocker_bash..."
-crontab -u root -l 2>/dev/null | grep -v "\"$run_command\"" | sudo crontab -u root -	
+crontab -u root -l 2>/dev/null | grep -v "\"$run_command\"" | sudo crontab -u root -
 
 
 ### Apply the action
@@ -230,7 +250,12 @@ if [ $rv -ne 0 ]; then
 	echo "Error performing action \"$action\" for countries \"${countries_to_change[@]}\"."
 	exit 1
 else
-	setconfig "Countries" "$(echo ${new_countries[@})"
+	setconfig "Countries" "$conf_file" "${new_countries[@]}"; rv=$?
+	if [ $rv -ne 0 ]; then
+		echo ""
+		echo "Error writing new config for Countries \"${new_countries[@]}\" to file \"$conf_file\"."
+		exit 1
+	fi
 	debugpr "New countries in config: $(getconfig Countries $conf_file)"
 	debugpr "Successfully performed action \"$action\" for countries \"${countries_to_change[@]}\"."
 fi
