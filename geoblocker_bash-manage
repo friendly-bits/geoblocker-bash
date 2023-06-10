@@ -20,14 +20,16 @@ WARNING if removing a whitelist: Geoblocking will remain active after removal.
         If you remove your country's whitelist, you may lose remote access to your system.
         
 
-    Usage: $me -c <"tld [tld] ... [tld]"> -a <add|remove> [-s "<schedule>"] [-n] [-d] [-h]
+    Usage: $me -c <"tld [tld] ... [tld]"> -a <add|remove> [-s "<schedule>"] [-n] [-p] [-d] [-h]
 
     Options:
         -c <tld>        : tld / country codes. if passing multiple country codes, use double quotes
         -a <action>     : action to perform: "add" or "remove" associated rules and cron jobs
         -s "<schedule>" : schedule expression for the cron job, must be inside double quotes
 
-        -n              : No persistence (will not create cron jobs)
+        -n              : No persistence (skip creating cron jobs)
+        -p              : No Drop: applies the config but skips setting INPUT chain default policy to DROP.
+                                   (continue to accept all connections)
         -d              : Debug
         -h              : This help
 
@@ -36,18 +38,21 @@ EOF
 
 #### PARSE ARGUMENTS
 
-while getopts "c:a:s:ndh" opt; do
+while getopts "c:a:s:npdh" opt; do
 	case $opt in
 		c) countries=$OPTARG;;
 		a) action=$OPTARG;;
 		s) cron_schedule=$OPTARG;;
-		n) no_persistence=true;;
+		n) skip_cron=true;;
+		p) nodrop="-p";;
 		d) debug="-d";;
 		h) usage; exit 0;;
 		\?) usage; exit 1;;
 	esac
 done
 shift $((OPTIND -1))
+
+# TODO: implement nodrop in *run and *apply, and possibly in *install
 
 #### Functions
 
@@ -128,6 +133,18 @@ if [ "$EUID" -ne 0 ]
   exit
 fi
 
+# check if cron service is enabled
+(systemctl is-enabled cron.service) > /dev/null; rv=$?
+if [ $rv -ne 0 ]; then crondisabled="true"; fi
+
+if [[ "$crondisabled" ]] && [ "$action" = "add" ]; then
+	echo "Error: cron service seems to be disabled. Can not perform action \"$action\""
+	echo "On Debian and derivatives, enable the cron service with \"systemctl enable cron.service\". Exiting." >&2
+	echo ""
+	exit 1
+fi
+
+
 ### Initialize variables
 
 #convert country codes	 to lower case
@@ -147,6 +164,9 @@ whitelist_dir="$datadir/ip_lists"
 # read sleeptime (for reboot) from the config file
 sleeptime="$(getconfig "RebootSleepTime" "$conf_file")
 
+# TODO: implement setting sleeptime config in *install and in *manage
+# TODO: implement setting datadir config in *install and in *manage
+
 # get the script path
 read -r scriptdir < <(get_script_dir)
 
@@ -158,7 +178,7 @@ echo ""
 # exit in case "cd" fails
 cd "$scriptdir" || echo "Error: could not change directory to \"$scriptdir\". Exiting."; exit 1
 
-if [ ! "$no_persistence" ] && [ "$action" = "add" ]; then
+if [ ! "$skip_cron" ] && [ "$action" = "add" ]; then
 
 	# if cron_schedule wasn't provided in args, use the default schedule from the config file
 	if [ -z "$cron_schedule" ]; then
@@ -172,19 +192,8 @@ if [ ! "$no_persistence" ] && [ "$action" = "add" ]; then
 		echo ""
 		exit 1
 	fi
-
-
-	# Make sure that cron is enabled
-	(systemctl is-enabled cron.service) > /dev/null; rv=$?
-
-	if [ $rv -ne 0 ]; then
-		echo "Error: cron service seems to be disabled."
-		echo "On Debian and derivatives, enable it with \"systemctl enable cron.service\". Exiting." >&2
-		echo ""
-		exit 1
-	fi
 else
-	debugpr "Skipping cron checks."
+	debugpr "Skipping cron schedule validation."
 fi
 
 
@@ -202,7 +211,7 @@ debugpr "Countries in arguments: \"$arg_countries\"."
 case "$action" in
 # some fairly ugly array-to-string-and-back conversions but appears to be the most straightforward way to do this
 
-add) 
+	add) 
 		# merge curr_countries and arg_countries arrays into new_countries array while removing duplicates
 		new_countries=( $(printf '%s\n'  "${curr_countries[@]}" "${new_countries[@]}" | sort -ibu) )
 
@@ -214,6 +223,11 @@ add)
 		done
 		# convert to array while removing duplicates
 		countries_to_change=( $(echo "$countries_to_change_str" | sort -ibu) )
+		if [ -z "${countries_to_change[@]}"]; then
+			echo "Error: can not add countries \"$arg_countries\" because they have already been added."
+			echo ""
+			exit 1
+		fi
 	;;
 	remove)
 		# convert to string
@@ -228,12 +242,26 @@ add)
 		# find duplicate-free intersection between {curr_countries[@]} and {arg_countries[@]} so later we know what countries to remove
 		read -r -d '' -a countries_to_change < <(join <(printf %s\\n "${curr_countries[@]}" | sort -u) \
                           <(printf %s\\n "${arg_countries[@]}" | sort -u))
+		if [ -z "${countries_to_change[@]}"]; then
+			echo "Error: can not remove countries \"$arg_countries\" because they have not been added."
+			echo ""
+			exit 1
+		fi
 	;;
 esac
 
 debugpr "Countries to change: ${countries_to_change[@]}"
 
-### Remove cron jobs
+
+
+### Write current cron jobs into variable
+	read -r curr_cron_jobs < <(crontab -u root -l 2>/dev/null | grep "\"$run_command\"")
+	debugpr "Current cron jobs:"
+	debugpr "$curr_cron_jobs"
+	debugpr "Current cron jobs exist? $([[ "$curr_cron_jobs" ]] && echo \"yes\" || echo \"no\")."
+	debugpr ""
+
+### Remove current cron jobs
 
 echo ""
 echo "Removing cron jobs for geoblocker_bash..."
@@ -260,10 +288,23 @@ else
 	debugpr "Successfully performed action \"$action\" for countries \"${countries_to_change[@]}\"."
 fi
 
-# if no persistence was requested, skip adding cron jobs
-if [ ! "$no_persistence" ]; then
 
-### Create cron jobs
+# If action is "remove", don't assume that persistence is required
+# Only create new cron jobs if prior cron jobs exist
+if [ "$action" = "remove" ] && [ -z "$curr_cron_jobs" ]; then
+	skip_cron=true
+fi
+
+# If new countries list is empty, skip creating cron jobs
+if [ -z "${new_countries[@]}" ]; then
+	skip_cron=true
+	debugtr "New countries list is empty."
+fi
+
+
+if [ ! "$skip_cron" ]; then			
+
+	### Create cron jobs
 
 	debugpr ""
 	echo -n "Creating periodic cron job... "
@@ -301,5 +342,5 @@ if [ ! "$no_persistence" ]; then
 		echo "View cron jobs with \"sudo crontab -l\""
 	fi
 else
-	echo "NOTE: No persistence was requested, skipping cron jobs creation."
+	echo "NOTE: Skipping cron jobs creation."
 fi
