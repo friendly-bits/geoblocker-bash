@@ -16,10 +16,11 @@ usage() {
 Runs the geoblocker_bash-fetch script to fetch ip list from RIPE.
 Then runs geoblocker_bash-apply to apply the ip list to iptables.
 
-    Usage: $me -a <add|remove|apply> [-s] [-d] [-h]
+    Usage: $me -a <update|add|remove> [-c <"tld [tld] ... [tld]">] [-s] [-p] [-d] [-h]
 
     Options:
-        -a <action>     : action to perform: "add" or "remove" associated rules and cron jobs
+        -a <action>     : action to perform: "update", "add" or "remove" associated iptables rules
+        -c <"tld/s">    : tld / country codes. if passing multiple country codes, use double quotes
         -s              : Skip fetching (only run the apply script)
         -p              : No Drop: applies the config but skips setting INPUT chain default policy to DROP
                                    (continue to accept all connections)
@@ -32,9 +33,10 @@ EOF
 
 #### PARSE ARGUMENTS
 
-while getopts "a:spdh" opt; do
+while getopts "a:c:spdh" opt; do
 	case $opt in
 		a) action=$OPTARG;;
+		c) arg_tlds=$OPTARG;;
 		s) skipfetch="true";;
 		p) nodrop="-p";;
 		d) debug="-d";;
@@ -94,15 +96,17 @@ debugpr() {
 conf_dir="/etc/geoblocker_bash"
 conf_file="${conf_dir}/geoblocker_bash.conf"
 
-# get datadir from the config file
+# read datadir from the config file
 read -r datadir < <(getconfig "Datadir" "$conf_file")
 preinstall_policies_file="$datadir/preinstall_policies.bak"
 knowngood_file="$datadir/iptables_knowngood.bak"
 whitelist_dir="$datadir/ip_lists"
+failed_tlds_file="$datadir/FailedTLDs"
 
-# get countries from the config file
-read -r countries < <(getconfig "Countries" "$conf_file")
-
+if [ -z "$arg_tlds" ]; then
+	# read tlds from the config file
+	read -r tlds < <(getconfig "Countries" "$conf_file")
+fi
 
 # get the script path
 read -r scriptdir < <(get_script_dir)
@@ -124,9 +128,15 @@ if ! command -v geoblocker_bash-apply &> /dev/null; then
 	die "$err"
 fi
 
+case "$action" in
+	add) ;;
+	remove) ;;
+	update) ;;
+	*) echo "Error: unsupported action \"$action\"" ;;
+esac
 
-if [ -z "$countries" ]; then
-	err="Countries variable can not be empty! Exiting."
+if [ -z "$tlds" ]; then
+	err="tlds variable can not be empty! Exiting."
 	usage
 	die "$err"
 fi
@@ -158,35 +168,38 @@ cd "$scriptdir" || err="Error: could not change directory to \"$scriptdir\". Exi
 
 ### Fetch ip lists
 errcnt="0"
-success_cnt="0"
+ok_cnt="0"
 failed_tlds=""
-success_tlds=""
+ok_tlds=""
 if [ ! "$skipfetch" ] && [ "$action" != "remove" ]; then
-	for country in $(echo "${countries}"); do
-		geoblocker_bash-fetch $debug -c "$country"; rv=$?
+	for tld in $(echo "${tlds}"); do
+		geoblocker_bash-fetch $debug -c "$tld"; rv=$?
 		if [ $rv -ne 0 ]; then
 			errcnt=$((errcnt + 1)
-			failed_tlds="$(echo $failed_tlds) $country"
-			debugpr "Failed to retrieve ip list for country \"$country\"."
+			failed_tlds="$(echo $failed_tlds) $tld"
+			debugpr "Failed to retrieve ip list for country \"$tld\"."
 		else
-			success_cnt=$((success_cnt + 1)
-			success_tlds="$(echo $success_tlds) $country"
-			debugpr "Successfully retrieved ip list for country \"$country\"."
+			ok_cnt=$((ok_cnt + 1)
+			ok_tlds="$(echo $ok_tlds) $tld"
+			debugpr "Successfully retrieved ip list for country \"$tld\"."
 		fi
 	done
+
 	if [ "$errcnt" -gt 0 ]; then
 		logger -t geoblocker_bash-run "Failed to fetch the whitelist for countries\"$failed_tlds\"."
+		echo "FailedTLDs=$failed_tlds" > "$failed_tlds_file"
 	fi
-	if [ "$success_cnt" -gt 0 ]; then
-		logger -t geoblocker_bash-run "Successfully fetched the whitelist for countries\"$success_tlds\"."
+
+	if [ "$ok_cnt" -gt 0 ]; then
+		logger -t geoblocker_bash-run "Successfully fetched the whitelist for countries\"$ok_tlds\"."
 	else
 		err="All fetch attempts failed."
 		die "$err"
 	fi
-	# remove countries for which fetch failed from the "countries" string
-	countries="$success_tlds"
+
+	tlds="$ok_tlds"
 else
-	echo "Note: Skipped fetching because -s switch was used"
+	echo "NOTE: Skipped fetching because -s switch was used"
 fi
 
 
@@ -195,18 +208,18 @@ fi
 # TODO: implement nodrop in *apply
 # TODO: implement actions in *apply
 
-for country in $(echo "${countries}"); do
+for tld in $(echo "${tlds}"); do
 	geoblocker_bash-apply $debug $nodrop -a "$action"; rv=$?
 	if [ $rv -ne 0 ]; then
-		# if any errors occur in *apply, we exit
 		echo ""
-		exit 1
+		# if any errors occur in *apply, exit with a negative return code
+		exit -1
 	else
-		debugpr "Successfully applied the whitelist for country \"$country\"."
+		debugpr "Successfully applied the whitelist for country \"$tld\"."
 	fi
 done
 
-logger -t geoblocker_bash-run "Successfully applied action \"$action\" for countries \"$countries\"."
+logger -t geoblocker_bash-run "Successfully applied action \"$action\" for countries \"$tlds\"."
 
 echo ""
 
