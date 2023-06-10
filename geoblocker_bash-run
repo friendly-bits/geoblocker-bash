@@ -103,9 +103,11 @@ knowngood_file="$datadir/iptables_knowngood.bak"
 whitelist_dir="$datadir/ip_lists"
 failed_tlds_file="$datadir/FailedTLDs"
 
-if [ -z "$arg_tlds" ]; then
+if [ -z "$arg_tlds" ] || [ "$action" = "update" ]; then
 	# read tlds from the config file
 	read -r tlds < <(getconfig "Countries" "$conf_file")
+else
+	tlds="$arg_tlds"
 fi
 
 # get the script path
@@ -129,12 +131,13 @@ if ! command -v geoblocker_bash-apply &> /dev/null; then
 fi
 
 case "$action" in
-	add) ;;
-	remove) ;;
-	update) ;;
-	*) echo "Error: unsupported action \"$action\"" ;;
+	add) apply_action="add" ;;
+	remove) apply_action="remove" ;;
+	update) apply_action="add" ;;
+	*) usage; echo "Error: unsupported action \"$action\""; exit 1 ;;
 esac
 
+# check for country tlds
 if [ -z "$tlds" ]; then
 	err="tlds variable can not be empty! Exiting."
 	usage
@@ -205,11 +208,8 @@ fi
 
 ### Apply ip lists
 
-# TODO: implement nodrop in *apply
-# TODO: implement actions in *apply
-
 for tld in $(echo "${tlds}"); do
-	geoblocker_bash-apply $debug $nodrop -a "$action"; rv=$?
+	geoblocker_bash-apply $debug $nodrop -a "$apply_action" -c "$tld"; rv=$?
 	if [ $rv -ne 0 ]; then
 		echo ""
 		# if any errors occur in *apply, exit with a negative return code
