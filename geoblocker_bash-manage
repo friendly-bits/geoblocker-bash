@@ -115,13 +115,12 @@ conf_file="${conf_dir}/geoblocker_bash.conf"
 
 # read datadir from the config file
 datadir="$(getconfig "Datadir" "$conf_file")
-
-# read sleeptime (for reboot) from the config file
-sleeptime="$(getconfig "RebootSleepTime" "$conf_file")
-
 preinstall_policies_file="$datadir/preinstall_policies.bak"
 knowngood_file="$datadir/iptables_knowngood.bak"
 whitelist_dir="$datadir/ip_lists"
+
+# read sleeptime (for reboot) from the config file
+sleeptime="$(getconfig "RebootSleepTime" "$conf_file")
 
 # get the script path
 read -r scriptdir < <(get_script_dir)
@@ -132,7 +131,6 @@ echo ""
 
 # cd into script directory
 # exit in case "cd" fails
-scriptdir="$(get_script_dir)"
 cd "$scriptdir" || echo "Error: could not change directory to \"$scriptdir\". Exiting."; exit 1
 
 if [ ! "$no_persistence" ] && [ "$action" = "add" ]; then
