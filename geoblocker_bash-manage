@@ -253,6 +253,13 @@ esac
 
 debugpr "Countries to change: ${countries_to_change[@]}"
 
+setconfig "Countries" "$conf_file" "${new_countries[@]}"; rv=$?
+if [ $rv -ne 0 ]; then
+	echo ""
+	echo "Error writing new config for countries \"${new_countries[@]}\" to file \"$conf_file\"."
+	exit 1
+fi
+debugpr "New countries in config: $(getconfig Countries $conf_file)"
 
 
 ### Write current cron jobs into variable
@@ -282,13 +289,6 @@ if [ $rv -ne 0 ]; then
 	echo "Error performing action \"$action\" for countries \"${countries_to_change[@]}\"."
 	exit 1
 else
-	setconfig "Countries" "$conf_file" "${new_countries[@]}"; rv=$?
-	if [ $rv -ne 0 ]; then
-		echo ""
-		echo "Error writing new config for Countries \"${new_countries[@]}\" to file \"$conf_file\"."
-		exit 1
-	fi
-	debugpr "New countries in config: $(getconfig Countries $conf_file)"
 	debugpr "Successfully performed action \"$action\" for countries \"${countries_to_change[@]}\"."
 fi
 
