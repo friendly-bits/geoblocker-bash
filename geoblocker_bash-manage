@@ -232,7 +232,7 @@ if [ $rv -ne 0 ]; then
 else
 	setconfig "Countries" "$(echo ${new_countries[@})"
 	debugpr "New countries in config: $(getconfig Countries $conf_file)"
-	debugpr "Successfully performed action "\$action\" for countries \"${countries_to_change[@]}\"."
+	debugpr "Successfully performed action \"$action\" for countries \"${countries_to_change[@]}\"."
 fi
 
 # if no persistence was requested, skip adding cron jobs
