@@ -45,6 +45,25 @@ shift $((OPTIND -1))
 
 echo ""
 
+####Functions
+
+getconfig() {
+# reads a field named $1 from the config file $2
+# outputs the resulting field
+# returns 0 if successful, 1 if not
+	fieldname="$1"
+	configfile="$2"
+	read -r field < <(grep "$fieldname=" "$conf_file" | sed 's/.*$fieldname=//'); rv=$?
+	if [ -z "$field" ]; then
+		echo ""
+		rv=$((rv + 1))
+	else
+		echo "$field"
+	fi
+	return $rv
+}
+
+
 #### Checks
 
 # check for root
@@ -55,17 +74,19 @@ fi
 
 ### Initialize variables
 install_dir="/usr/local/bin"
-datapath="/var/lib/geoblocker_bash"
-preinstall_policies_file="$datapath/preinstall_policies.bak"
-perm_ipset="geoblocker_whitelist"
-temp_ipset="${perm_ipset}_temp"
+conf_dir="/etc/geoblocker_bash"
+conf_file="${conf_dir}/geoblocker_bash.conf"
+
+read -r datadir < <(getconfig "Datadir" "$conf_file"); rv=$?
+if [ "$rv" -ne 0 ] || [ -z "$datadir" ]; then datadir="/var/lib/geoblocker_bash"; fi
+preinstall_policies_file="$datadir/preinstall_policies.bak"
 iptables_comment="geoblocker_bash"
 
 ### Delete associated cron jobs
 echo "Deleting cron jobs for geoblocker_bash..."
 crontab -u root -l 2>/dev/null |  grep -v 'geoblocker_bash-run' | sudo crontab -u root -
 
-### Restore pre-install state of default policies for INPUT and FORWARD
+### Restore pre-install state of default policies for INPUT and FORWARD chains
 
 while read -r preinstall_policy; do
 	chain_name=$(echo "$preinstall_policy" | cut -f 1 -d " ")
@@ -89,32 +110,46 @@ done < "$preinstall_policies_file"
 # sed executes iptables -D (delete) command on matching rules. execution is promtped by the switch /e
 
 echo "Deleting associated iptables rules..."
-iptables-save | sed -r "/OUTPUT.*comment.*$iptables_comment/s/-A/iptables -D/e" &>/dev/null
 iptables-save | sed -r "/INPUT.*comment.*$iptables_comment/s/-A/iptables -D/e" &>/dev/null
 
 
 
 ### Destroy associated ipsets
-echo "Destroying ipset $perm_ipset..."
-ipset destroy "$perm_ipset"
-echo "Destroying ipset $temp_ipset..."
-ipset destroy "$temp_ipset"
+echo "Phase 1 destroying ipsets"
+for tld in $(getconfig "Countries" "$conf_file"); do
+	perm_ipset="geoblocker_bash_${tld}"
+	temp_ipset="$perm_ipset_temp"
+	echo "Destroying ipset $perm_ipset..."
+	ipset destroy "$perm_ipset"
+	echo "Destroying ipset $temp_ipset..."
+	ipset destroy "$temp_ipset"
+done
 
+echo "Phase 2 destroying ipsets"
+for ipset_name in $(ipset list -n | grep "geoblocker"); do
+	echo "Found ipset \"$ipset_name\", destroying..."
+	ipset destroy "$ipset_name"
+done
 
 if [ ! "$partial_uninstall" ]; then
-	echo "Deleting script's data folder $datapath..."
+	echo "Deleting script's data folder $datadir..."
 	### Delete app data and directory
-	rm -rf "$datapath"
+	rm -rf "$datadir"
 
 	### Delete scripts
 	echo "Deleting scripts from $install_dir..."
 	rm "$install_dir/geoblocker_bash-fetch"
 	rm "$install_dir/geoblocker_bash-apply"
+	rm "$install_dir/geoblocker_bash-manage"
 	rm "$install_dir/geoblocker_bash-run"
 	rm "$install_dir/geoblocker_bash-install"
 	rm "$install_dir/validate_cron_schedule.sh"
 	rm "$install_dir/check_ip_in_ripe.sh"
 	rm "$install_dir/geoblocker_bash-uninstall"
+	
+	### Delete the config file
+	echo "Deleting config..."
+	rm -rf "$conf_dir"
 
 	echo "Uninstall complete."
 fi
