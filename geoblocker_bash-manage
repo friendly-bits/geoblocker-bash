@@ -40,7 +40,7 @@ EOF
 
 while getopts "c:a:s:npdh" opt; do
 	case $opt in
-		c) countries=$OPTARG;;
+		c) tlds=$OPTARG;;
 		a) action=$OPTARG;;
 		s) cron_schedule=$OPTARG;;
 		n) skip_cron=true;;
@@ -107,7 +107,7 @@ debugpr() {
 #### VARIABLES
 
 #convert country codes to lower case
-countries=echo "${countries,,}"
+tlds=echo "${tlds,,}"
 
 # TODO: implement config saving in the *install script
 
@@ -134,9 +134,9 @@ run_command="${scriptdir}/geoblocker_bash-run"
 
 #### CHECKS
 
-if [ -z "$countries" ]; then
+if [ -z "$tlds" ]; then
 	usage
-	echo "Specify countries with \"-c <countries>\"!"
+	echo "Specify countries with \"-c <tlds>\"!"
 	echo ""
 	exit 1
 fi
@@ -200,100 +200,143 @@ fi
 
 #### MAIN
 
-### Get current set of countries from the the config file into array curr_countries
-curr_countries=( $(getconfig "$Countries" "$conf_file") )
-debugpr "Current countries in config: \"$curr_countries\"."
+### Read current set of countries from the the config file into array config_tlds
+config_tlds=( $(getconfig "Countries" "$conf_file") )
+debugpr "Current countries in config: \"$config_tlds\"."
 
 
-# Get new set of countries from the argument into array arg_countries
-arg_countries=( $(echo "$countries") )
-debugpr "Countries in arguments: \"$arg_countries\"."
+# Get new set of countries from the argument into array arg_tlds
+arg_tlds=( $(echo "$tlds") )
+debugpr "Countries in arguments: \"$arg_tlds\"."
 
 case "$action" in
 # some fairly ugly array-to-string-and-back conversions but appears to be the most straightforward way to do this
 
 	add) 
-		# merge curr_countries and arg_countries arrays into new_countries array while removing duplicates
-		new_countries=( $(printf '%s\n'  "${curr_countries[@]}" "${new_countries[@]}" | sort -ibu) )
+		# merge config_tlds and arg_tlds arrays into new_tlds array while removing duplicates
+		new_tlds=( $(printf '%s\n'  "${config_tlds[@]}" "${new_tlds[@]}" | sort -ibu) )
 
-		# countries_to_change should contain countries that are not in curr_countries
-		countries_to_change_str="$(arg_countries[@])"
-		for item in "${curr_countries[@]}"; do
-			# compare $item with every element of countries_to_change and remove exact matches in countries_to_change
-			countries_to_change_str=${countries_to_change_str//$item/}
+		# convert to string
+		tlds_to_change_str="$(arg_tlds[@])"
+		
+		# tlds_to_change should contain countries that are not already in config_tlds
+		# compare $item with every element of tlds_to_change and remove exact matches in tlds_to_change
+		for item in "${config_tlds[@]}"; do
+			tlds_to_change_str=${tlds_to_change_str//$item/}
 		done
 		# convert to array while removing duplicates
-		countries_to_change=( $(echo "$countries_to_change_str" | sort -ibu) )
-		if [ -z "${countries_to_change[@]}"]; then
-			echo "Error: can not add countries \"$arg_countries\" because they have already been added."
+		tlds_to_change=( $(echo "$tlds_to_change_str" | sort -ibu) )
+		if [ -z "${tlds_to_change[@]}"]; then
+			echo "Error: can not add countries \"$arg_tlds\" because they have already been added."
 			echo ""
 			exit 1
 		fi
 	;;
 	remove)
 		# convert to string
-		new_countries_str="${curr_countries[@]}"
-		for item in "${arg_countries[@]}"; do
-			# compare $item with every element of new_countries_str and remove exact matches in new_countries_str
-			new_countries_str=${new_countries_str//$item/}
+		new_tlds_str="${config_tlds[@]}"
+		
+		# compare $item with every element of new_tlds_str and remove exact matches in new_tlds_str
+		for item in "${arg_tlds[@]}"; do
+			new_tlds_str=${new_tlds_str//$item/}
 		done
 		# convert to array while removing duplicates
-		new_countries=( $(echo "$new_countries_str" | sort -ibu) )
+		new_tlds=( $(echo "$new_tlds_str" | sort -ibu) )
 
-		# find duplicate-free intersection between {curr_countries[@]} and {arg_countries[@]} so later we know what countries to remove
-		read -r -d '' -a countries_to_change < <(join <(printf %s\\n "${curr_countries[@]}" | sort -u) \
-                          <(printf %s\\n "${arg_countries[@]}" | sort -u))
-		if [ -z "${countries_to_change[@]}"]; then
-			echo "Error: can not remove countries \"$arg_countries\" because they have not been added."
+		# find duplicate-free intersection between {config_tlds[@]} and {arg_tlds[@]} so later we know what countries to remove
+		read -r -d '' -a tlds_to_change < <(join <(printf %s\\n "${config_tlds[@]}" | sort -u) \
+                          <(printf %s\\n "${arg_tlds[@]}" | sort -u))
+		if [ -z "${tlds_to_change[@]}"]; then
+			echo "Error: can not remove countries \"$arg_tlds\" because they have not been added."
 			echo ""
 			exit 1
 		fi
 	;;
 esac
 
-debugpr "Countries to change: ${countries_to_change[@]}"
+debugpr "Countries to change: ${tlds_to_change[@]}"
 
-setconfig "Countries" "$conf_file" "${new_countries[@]}"; rv=$?
+setconfig "Countries" "$conf_file" "${new_tlds[@]}"; rv=$?
 if [ $rv -ne 0 ]; then
 	echo ""
-	echo "Error writing new config for countries \"${new_countries[@]}\" to file \"$conf_file\"."
+	echo "Error writing new config for countries \"${new_tlds[@]}\" to file \"$conf_file\"."
 	exit 1
 fi
 debugpr "New countries in config: $(getconfig Countries $conf_file)"
-
-
-### Write current cron jobs into variable
-	read -r curr_cron_jobs < <(crontab -u root -l 2>/dev/null | grep "\"$run_command\"")
-	debugpr "Current cron jobs:"
-	debugpr "$curr_cron_jobs"
-	debugpr "Current cron jobs exist? $([[ "$curr_cron_jobs" ]] && echo \"yes\" || echo \"no\")."
-	debugpr ""
-
-### Remove current cron jobs
-# This has to be done before calling the *run script, so in case of a failure there will be no persistence
-
-echo ""
-echo "Removing cron jobs for geoblocker_bash..."
-crontab -u root -l 2>/dev/null | grep -v "\"$run_command\"" | sudo crontab -u root -
 
 
 ### Call the *run script
 
 # TODO: add -r option to *apply for rules removal
 
-# Call the *run script
-echo $run_command $debug $nodrop -a "$action" -c "${countries_to_change[@]}" | bash; rv=$?
+echo $run_command $debug $nodrop -a "$action" -c "${tlds_to_change[@]}" | bash; rv=$?
 
-if [ $rv -ne 0 ]; then
+# positive return code means fetch failure
+if [ $rv -gt 0 ]; then
 	echo ""
-	echo "Error performing action \"$action\" for countries \"${countries_to_change[@]}\"."
+	echo "Error performing action \"$action\" for countries \"${tlds_to_change[@]}\"."
+	echo "Removing failed tld's from config..."
+	
+	# read failed tlds from file into array failed_tlds
+	failed_tlds=( $(getconfig "FailedTLDs" "$failed_tlds_file") )
+
+	# get duplicate-free intersection between ${tlds_to_change[@]} and ${failed_tlds[@]}
+	read -r -d '' -a tlds_to_remove < <(join <(printf %s\\n "${tlds_to_change[@]}" | sort -u) \
+                   <(printf %s\\n "${failed_tlds[@]}" | sort -u))
+
+	# only remove newly-added tlds that failed to fetch
+	if [ -n "${tlds_to_remove[@]}"]; then
+		# remove only the intersection tlds from config
+
+		#convert array to string
+		new_tlds_str="${new_tlds[@]}"
+
+		# compare $item with every element of new_tlds_str and remove exact matches in new_tlds_str
+		for item in "${tlds_to_remove[@]}"; do
+			new_tlds_str=${new_tlds_str//$item/}
+		done
+
+		# convert to array while removing duplicates
+		new_tlds=( $(echo "$new_tlds_str" | sort -ibu) )
+		
+		# write new tlds list to config file
+		setconfig "Countries" "$conf_file" "${new_tlds[@]}"; rv=$?
+	fi
+
+# negative return code means apply failure
+elif [ $rv -lt 0 ]; then
+	echo ""
+	echo "Error performing action \"$action\" for countries \"${tlds_to_change[@]}\"."
+	# restore old countries set in the config file
+	echo -n "Restoring previous countries set: \"${config_tlds[@]}\"..."
+	setconfig "Countries" "$conf_file" "${config_tlds[@]}"
+	echo $run_command $debug $nodrop -a "update"; rv=$?
+	if [ $rv -eq 0 ]; then
+		echo "Ok."
+	else
+		echo "Failed."
+	fi
 	exit 1
-else
-	debugpr "Successfully performed action \"$action\" for countries \"${countries_to_change[@]}\"."
+
+elif [ $rv -eq 0 ]; then
+	debugpr "Successfully performed action \"$action\" for countries \"${tlds_to_change[@]}\"."
 fi
 
 
 ### Cron jobs management
+
+## Read current cron jobs into variable
+	read -r curr_cron_jobs < <(crontab -u root -l 2>/dev/null | grep "\"$run_command\"")
+	debugpr "Current cron jobs:"
+	debugpr "$curr_cron_jobs"
+	debugpr "Current cron jobs exist? $([[ "$curr_cron_jobs" ]] && echo \"yes\" || echo \"no\")."
+	debugpr ""
+
+## Remove current cron jobs
+echo ""
+echo "Removing cron jobs for geoblocker_bash..."
+crontab -u root -l 2>/dev/null | grep -v "\"$run_command\"" | sudo crontab -u root -
+
 
 # If action is "remove", don't assume that persistence is required
 # Only create new cron jobs if prior cron jobs exist
@@ -302,7 +345,7 @@ if [ "$action" = "remove" ] && [ -z "$curr_cron_jobs" ]; then
 fi
 
 # If new countries list is empty, skip creating cron jobs
-if [ -z "${new_countries[@]}" ]; then
+if [ -z "${new_tlds[@]}" ]; then
 	skip_cron=true
 	debugtr "NOTE: New countries list is empty."
 fi
@@ -314,7 +357,7 @@ if [ ! "$skip_cron" ]; then
 
 	debugpr ""
 	echo -n "Creating periodic cron job... "
-	echo -e "$(sudo crontab -u root -l 2>/dev/null)\n$cron_schedule \"$run_command\" $nodrop -a apply &>/dev/null" | sudo crontab -u root -
+	echo -e "$(sudo crontab -u root -l 2>/dev/null)\n$cron_schedule \"$run_command\" $nodrop -a update &>/dev/null" | sudo crontab -u root -
 	rv=$?
 
 	if [ $rv -ne 0 ]; then
@@ -333,7 +376,7 @@ if [ ! "$skip_cron" ]; then
 	# using the -s switch for the *run script to skip fetching at reboot
 	## otherwise if there was no internet connection at reboot time, *fetch would fail which would cause *run to fail,
 	## so *apply wouldn't run, which would leave the system without geoblocking rules
-	echo -e "$(sudo crontab -u root -l 2>/dev/null)\n@reboot sleep $sleeptime && \"$run_command\" $nodrop -a apply -s &>/dev/null" | \
+	echo -e "$(sudo crontab -u root -l 2>/dev/null)\n@reboot sleep $sleeptime && \"$run_command\" $nodrop  -a update -s &>/dev/null" | \
                 sudo crontab -u root -; rv=$?
 
 	if [ $rv -ne 0 ]; then
