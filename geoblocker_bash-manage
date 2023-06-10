@@ -272,7 +272,9 @@ crontab -u root -l 2>/dev/null | grep -v "\"$run_command\"" | sudo crontab -u ro
 
 # TODO: add -r option to *apply
 
-echo $run_command $debug -a "$action" -c "${countries_to_change[@]}" | bash; rv=$?
+# Call the *run script
+echo $run_command $debug $nodrop -a "$action" -c "${countries_to_change[@]}" | bash; rv=$?
+
 if [ $rv -ne 0 ]; then
 	echo ""
 	echo "Error performing action \"$action\" for countries \"${countries_to_change[@]}\"."
@@ -298,7 +300,7 @@ fi
 # If new countries list is empty, skip creating cron jobs
 if [ -z "${new_countries[@]}" ]; then
 	skip_cron=true
-	debugtr "New countries list is empty."
+	debugtr "NOTE: New countries list is empty."
 fi
 
 
@@ -308,7 +310,7 @@ if [ ! "$skip_cron" ]; then
 
 	debugpr ""
 	echo -n "Creating periodic cron job... "
-	echo -e "$(sudo crontab -u root -l 2>/dev/null)\n$cron_schedule \"$run_command\" -a "apply" &>/dev/null" | sudo crontab -u root -
+	echo -e "$(sudo crontab -u root -l 2>/dev/null)\n$cron_schedule \"$run_command\" $nodrop -a apply &>/dev/null" | sudo crontab -u root -
 	rv=$?
 
 	if [ $rv -ne 0 ]; then
@@ -327,7 +329,7 @@ if [ ! "$skip_cron" ]; then
 	# using the -s switch for the *run script to skip fetching at reboot
 	## otherwise if there was no internet connection at reboot time, *fetch would fail which would cause *run to fail,
 	## so *apply wouldn't run, which would leave the system without geoblocking rules
-	echo -e "$(sudo crontab -u root -l 2>/dev/null)\n@reboot sleep $sleeptime && \"$run_command\" -a apply -s &>/dev/null" | \
+	echo -e "$(sudo crontab -u root -l 2>/dev/null)\n@reboot sleep $sleeptime && \"$run_command\" $nodrop -a apply -s &>/dev/null" | \
                 sudo crontab -u root -; rv=$?
 
 	if [ $rv -ne 0 ]; then
