@@ -230,7 +230,8 @@ debugpr() {
 }
 
 
-#### Initialize variables
+#### VARIABLES
+
 conf_dir="/etc/geoblocker_bash"
 conf_file="${conf_dir}/geoblocker_bash.conf"
 
@@ -240,14 +241,14 @@ read -r datadir < <(getconfig "Datadir" "$conf_file")
 knowngood_file="${datadir}/iptables_knowngood.bak"
 whitelist_dir="${datadir}/ip_lists"
 whitelist_file="${whitelist_dir}/ipv4_${tld}"
-perm_ipset="geoblocker_whitelist_${tld}"
+perm_ipset="geoblocker_bash_${tld}"
 temp_ipset="${perm_ipset}_temp"
 iptables_comment="geoblocker_bash_${tld}"
 iptables_comment_global="geoblocker_bash_global"
 family="inet"
 
 
-#### Checks
+#### CHECKS
 
 # check for country tld
 if [ -z "$tld" ]; then
@@ -319,7 +320,7 @@ case "$action" in
 esac
 
 
-#### Main
+#### MAIN
 if [ "$action" = "add" ]; then
 	### Create a temporary ipset and load subnets from file into it
 
