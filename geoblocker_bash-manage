@@ -23,7 +23,7 @@ WARNING if removing a whitelist: Geoblocking will remain active after removal.
     Usage: $me -c <"tld [tld] ... [tld]"> -a <add|remove> [-s "<schedule>"] [-n] [-p] [-d] [-h]
 
     Options:
-        -c <"tld/s">    : tld / country codes. if passing multiple country codes, use double quotes
+        -c <"tld(s)">   : tld / country codes. if passing multiple country codes, use double quotes
         -a <action>     : action to perform: "add" or "remove" associated rules and cron jobs
         -s "<schedule>" : schedule expression for the cron job, must be inside double quotes
 
