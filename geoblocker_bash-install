@@ -18,7 +18,7 @@
 
 me=$(basename "$0")
 
-#### FUNCTIONS
+#### USAGE
 
 usage() {
 
@@ -36,20 +36,37 @@ This script:
 6) Accepts a custom cron schedule expression as an argument. Default cron schedule is "0 4 * * *" - at 4:00 [am] every day.
 7) If an error occurs during installation, calls the uninstall script to revert any changes made to the system.
 
-    Usage: $me -c country [-s "schedule"] [-n] [-d] [-h]
+    Usage: $me -c <"tld [tld] ... [tld]"> [-s "schedule"] [-n] [-p] [-d] [-h]
 
     Options:
-    -c tld          : tld / country code
-    -s "schedule"   : schedule expression for the cron job, must be inside double quotes
+        -c <"tld(s)">   : tld / country codes. if passing multiple country codes, use double quotes
+        -s "schedule"   : schedule expression for the cron job, must be inside double quotes
                           default: "0 4 * * *" (at 4:00 [am] every day)
 
-    -n              : No persistence (will not create cron jobs)
-    -d              : Debug
-    -h              : This help
+        -p              : No Drop: applies the config but skips setting INPUT chain default policy to DROP
+        -n              : No persistence (will not create cron jobs)
+        -d              : Debug
+        -h              : This help
 
 EOF
 }
 
+#### PARSE ARGUMENTS
+
+while getopts "c:s:npdh" opt; do
+	case $opt in
+		c) tlds=$OPTARG;;
+		s) cron_schedule=$OPTARG;;
+		n) no_persistence="-n";;
+		p) nodrop="-p";;
+		d) debug="-d";;
+		h) usage; exit 0;;
+		\?) usage; exit 1;;
+	esac
+done
+
+
+#### FUNCTIONS
 
 get_script_dir () {
 	SOURCE=${BASH_SOURCE[0]}
@@ -92,20 +109,8 @@ copyscript() {
 	chmod +x "$install_dir/$scriptfile"
 }
 
-#### PARSE ARGUMENTS
 
-while getopts "c:s:ndh" opt; do
-	case $opt in
-		c) country=$OPTARG;;
-		s) cron_schedule=$OPTARG;;
-		n) no_persistence="-n";;
-		d) debug="-d";;
-		h) usage; exit 0;;
-		\?) usage; exit 1;;
-	esac
-done
-
-#### Initialize variables
+#### VARIABLES
 install_dir="/usr/local/bin"
 datadir="/var/lib/geoblocker_bash"
 preinstall_policies_file="$datadir/preinstall_policies.bak"
@@ -120,16 +125,16 @@ cron_schedule="${cron_schedule:-"$default_schedule"}"
 sleeptime="30"
 
 run_command="${install_dir}/geoblocker_bash-run"
-run_args="-c \"$country\" -w \"$whitelist_dir\" -b \"$knowngood_file\""
+run_args="-c \"$tlds\" -w \"$whitelist_dir\" -b \"$knowngood_file\""
 run_args_reboot="${run_args} -s"
 
 echo ""
 
-#### Checks
+#### CHECKS
 
-if [ -z "$country" ]; then
+if [ -z "$tlds" ]; then
 	usage
-	echo "Specify country with \"-c <country>\"!"
+	echo "Specify countries with \"-c <tlds>\"!"
 	echo ""
 	exit 1
 fi
@@ -211,30 +216,8 @@ check_file_exists "validate_cron_schedule.sh"
 check_file_exists "geoblocker_bash-uninstall"
 check_file_exists "check_ip_in_ripe.sh"
 
-if [ ! "$no_persistence" ]; then
-	# validate cron schedule
-	bash validate_cron_schedule.sh -x "$cron_schedule"; rv=$?
-	if [ $rv -ne 0 ]; then
-		echo "Error validating cron schedule. Exiting." >&2
-		echo ""
-		exit 1
-	fi
 
-
-	# Make sure that cron is enabled
-	(systemctl is-enabled cron.service) > /dev/null; rv=$?
-
-	if [ $rv -ne 0 ]; then
-		echo "Error: cron service seems to be disabled."
-		echo "On Debian and derivatives, enable it with \"systemctl enable cron.service\". Exiting." >&2
-		echo ""
-	fi
-else
-	[ $debug ] && echo "Debug: No persistence was requested, skipping cron checks."
-fi
-
-
-#### Main
+#### MAIN
 
 # Create the directory for config and, if required, parent directories
 mkdir -p "$conf_dir"
@@ -319,12 +302,12 @@ else
 	[ $debug ] && echo "INPUT: $preinstall_input_policy, FORWARD: $preinstall_forward_policy"
 fi
 
-# cd into script directory
+# cd into the install directory
 # exit in case "cd" fails
 cd "$installdir" || echo "Error: could not change directory to \"$scriptdir\". Exiting."; install_failed
 
-### Add whitelist for $country to managed whitelists, then fetch and apply the whitelist
-geoblocker_bash-manage "$debug" "$no_persistence" -c "$country" -a "add" -s "$cron_schedule"; rv=$?
+### Add whitelist(s) for $tlds to managed whitelists, then fetch and apply the whitelist(s)
+geoblocker_bash-manage "$debug" "$no_persistence" "$nodrop" -c "$tlds" -a "add" -s "$cron_schedule"; rv=$?
 
 if [ $rv -ne 0 ]; then
 	echo "Failed to add and apply whitelist."
