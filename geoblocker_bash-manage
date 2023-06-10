@@ -23,12 +23,12 @@ WARNING if removing a whitelist: Geoblocking will remain active after removal.
     Usage: $me -c <"tld [tld] ... [tld]"> -a <add|remove> [-s "<schedule>"] [-n] [-p] [-d] [-h]
 
     Options:
-        -c <tld>        : tld / country codes. if passing multiple country codes, use double quotes
+        -c <"tld/s">    : tld / country codes. if passing multiple country codes, use double quotes
         -a <action>     : action to perform: "add" or "remove" associated rules and cron jobs
         -s "<schedule>" : schedule expression for the cron job, must be inside double quotes
 
         -n              : No persistence (skip creating cron jobs)
-        -p              : No Drop: applies the config but skips setting INPUT chain default policy to DROP.
+        -p              : No Drop: applies the config but skips setting INPUT chain default policy to DROP
                                    (continue to accept all connections)
         -d              : Debug
         -h              : This help
@@ -54,7 +54,8 @@ shift $((OPTIND -1))
 
 # TODO: implement nodrop in *run and *apply, and possibly in *install
 
-#### Functions
+
+#### FUNCTIONS
 
 get_script_dir () {
 	SOURCE=${BASH_SOURCE[0]}
@@ -103,7 +104,7 @@ debugpr() {
 	[ "$debug" ] && echo "Debug: $@"
 }
 
-#### Initialize variables
+#### VARIABLES
 
 #convert country codes to lower case
 countries=echo "${countries,,}"
@@ -131,7 +132,7 @@ read -r scriptdir < <(get_script_dir)
 run_command="${scriptdir}/geoblocker_bash-run"
 
 
-#### Checks
+#### CHECKS
 
 if [ -z "$countries" ]; then
 	usage
@@ -172,13 +173,7 @@ if [[ "$crondisabled" ]] && [ "$action" = "add" ]; then
 	exit 1
 fi
 
-
-
 echo ""
-
-
-#### MAIN
-
 
 # cd into script directory
 # exit in case "cd" fails
@@ -203,7 +198,7 @@ else
 fi
 
 
-#### Main
+#### MAIN
 
 ### Get current set of countries from the the config file into array curr_countries
 curr_countries=( $(getconfig "$Countries" "$conf_file") )
@@ -268,15 +263,16 @@ debugpr "Countries to change: ${countries_to_change[@]}"
 	debugpr ""
 
 ### Remove current cron jobs
+# This has to be done before calling the *run script, so in case of a failure there will be no persistence
 
 echo ""
 echo "Removing cron jobs for geoblocker_bash..."
 crontab -u root -l 2>/dev/null | grep -v "\"$run_command\"" | sudo crontab -u root -
 
 
-### Apply the action
+### Call the *run script
 
-# TODO: add -r option to *apply
+# TODO: add -r option to *apply for rules removal
 
 # Call the *run script
 echo $run_command $debug $nodrop -a "$action" -c "${countries_to_change[@]}" | bash; rv=$?
@@ -296,6 +292,8 @@ else
 	debugpr "Successfully performed action \"$action\" for countries \"${countries_to_change[@]}\"."
 fi
 
+
+### Cron jobs management
 
 # If action is "remove", don't assume that persistence is required
 # Only create new cron jobs if prior cron jobs exist
