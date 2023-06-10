@@ -2,13 +2,13 @@
 
 # geoblocker_bash-run
 
-# runs the geoblocker_bash-fetch script to fetch ip list from RIPE
-# then runs geoblocker_bash-apply to apply the ip list to iptables
-
+# Runs the geoblocker_bash-fetch script to fetch ip lists from RIPE
+# Then runs geoblocker_bash-apply to add/remove/apply the ip lists to iptables
+# Config (including countries list) is taken from the config file in /etc/geoblocker_bash/geoblocker_bash.conf
 
 me=$(basename "$0")
 
-#### FUNCTIONS
+#### USAGE
 
 usage() {
     cat <<EOF
@@ -16,48 +16,101 @@ usage() {
 Runs the geoblocker_bash-fetch script to fetch ip list from RIPE.
 Then runs geoblocker_bash-apply to apply the ip list to iptables.
 
-    Usage: $me -c country -p path -k path [-d] [-h]
+    Usage: $me -a <add|remove|apply> [-s] [-d] [-h]
 
     Options:
-    -c <tld>   : tld / country code
-    -w <path>  : Path to folder where the whitelist file will be stored
-    -b <file>  : path to file where a backup of last known-good iptables state will be saved
-    -s         : Skip fetching (only run the apply script)
+        -a <action>     : action to perform: "add" or "remove" associated rules and cron jobs
+        -s              : Skip fetching (only run the apply script)
+        -p              : No Drop: applies the config but skips setting INPUT chain default policy to DROP
+                                   (continue to accept all connections)
 
-    -d         : Debug
-    -h         : This help
+        -d              : Debug
+        -h              : This help
 
 EOF
 }
 
+#### PARSE ARGUMENTS
+
+while getopts "a:spdh" opt; do
+	case $opt in
+		a) action=$OPTARG;;
+		s) skipfetch="true";;
+		p) nodrop="-p";;
+		d) debug="-d";;
+		h) usage; exit 0;;
+		\?) usage; exit 1;;
+	esac
+done
+shift $((OPTIND -1))
+
+
+#### FUNCTIONS
+
 die() {
+	echo ""
 	echo "$@" 1>&2
 	echo ""
 	logger -t geoblocker_bash-run "$@"
 	exit 1
 }
 
-#### PARSE ARGUMENTS
+get_script_dir () {
+	SOURCE=${BASH_SOURCE[0]}
+	while [ -L "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symlink
+		DIR=$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )
+		SOURCE=$(readlink "$SOURCE")
+		[[ $SOURCE != /* ]] && SOURCE=$DIR/$SOURCE
+		# if $SOURCE was a relative symlink, we need to resolve it relative to the path where the symlink file was located
+	done
+	DIR=$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )
+	echo "$DIR"
+}
 
-while getopts "c:w:b:sdh" opt; do
-	case $opt in
-	c) country=$OPTARG;;
-	w) whitelist_path=$OPTARG;;
-	b) knowngood_file=$OPTARG;;
-	s) skipfetch="true";;
-	d) debug="-d";;
-	h) usage; exit 0;;
-	\?) usage; exit 1;;
-	esac
-done
-shift $((OPTIND -1))
+getconfig() {
+# reads a field named $1 from the config file $2
+# outputs the resulting field
+# returns 0 if successful, 1 if not
+	fieldname="$1"
+	configfile="$2"
+	read -r field < <(grep "$fieldname=" "$conf_file" | sed 's/.*$fieldname=//'); rv=$?
+	if [ -z "$field" ]; then
+		echo ""
+		rv=$((rv + 1))
+	else
+		echo "$field"
+	fi
+	return $rv
+}
+
+debugpr() {
+# prints a debug message
+	[ "$debug" ] && echo "Debug: $@"
+}
 
 
-#### Initialize variables
+#### VARIABLES
+
+conf_dir="/etc/geoblocker_bash"
+conf_file="${conf_dir}/geoblocker_bash.conf"
+
+# get datadir from the config file
+read -r datadir < <(getconfig "Datadir" "$conf_file")
+preinstall_policies_file="$datadir/preinstall_policies.bak"
+knowngood_file="$datadir/iptables_knowngood.bak"
+whitelist_dir="$datadir/ip_lists"
+
+# get countries from the config file
+read -r countries < <(getconfig "Countries" "$conf_file")
+
+
+# get the script path
+read -r scriptdir < <(get_script_dir)
 
 echo ""
 
-#### Checks
+
+#### CHECKS
 
 # check for geoblocker_bash-fetch
 [ ! $skipfetch ] && if ! command -v geoblocker_bash-fetch &> /dev/null; then
@@ -72,59 +125,89 @@ if ! command -v geoblocker_bash-apply &> /dev/null; then
 fi
 
 
-if [ -z "$country" ]; then
-	err="Specify country with -c! Exiting."
+if [ -z "$countries" ]; then
+	err="Countries variable can not be empty! Exiting."
 	usage
-	echo ""
 	die "$err"
 fi
 
 if [ -z "$knowngood_file" ]; then
 	err="Error: Known-good file path can not be empty! Exiting."
 	usage
-	echo ""
 	die "$err"
 fi
 
 if [ -z "$whitelist_path" ]; then
 	err="Error: Whitelist file path can not be empty! Exiting."
 	usage
-	echo ""
 	die "$err"
 fi
 
 # check for root
 if [ "$EUID" -ne 0 ]; then
 	err="This needs to be run as root."
-	echo ""
 	die "$err"
 fi
 
-#### Main
 
-if [ ! $skipfetch ]; then
-	geoblocker_bash-fetch $debug -c "$country" -p "$whitelist_path"; rv=$?
-	if [ $rv -ne 0 ]; then
-		echo ""
-		exit 1
-	else
-		[ $debug ] && echo "Successfully retrieved ip list from RIPE."
-		logger -t geoblocker_bash-run "Successfully fetched the whitelist."
+#### MAIN
+
+# cd into script directory
+# exit in case "cd" fails
+cd "$scriptdir" || err="Error: could not change directory to \"$scriptdir\". Exiting."; die "$err"
+
+### Fetch ip lists
+errcnt="0"
+success_cnt="0"
+failed_tlds=""
+success_tlds=""
+if [ ! "$skipfetch" ] && [ "$action" != "remove" ]; then
+	for country in $(echo "${countries}"); do
+		geoblocker_bash-fetch $debug -c "$country"; rv=$?
+		if [ $rv -ne 0 ]; then
+			errcnt=$((errcnt + 1)
+			failed_tlds="$(echo $failed_tlds) $country"
+			debugpr "Failed to retrieve ip list for country \"$country\"."
+		else
+			success_cnt=$((success_cnt + 1)
+			success_tlds="$(echo $success_tlds) $country"
+			debugpr "Successfully retrieved ip list for country \"$country\"."
+		fi
+	done
+	if [ "$errcnt" -gt 0 ]; then
+		logger -t geoblocker_bash-run "Failed to fetch the whitelist for countries\"$failed_tlds\"."
 	fi
+	if [ "$success_cnt" -gt 0 ]; then
+		logger -t geoblocker_bash-run "Successfully fetched the whitelist for countries\"$success_tlds\"."
+	else
+		err="All fetch attempts failed."
+		die "$err"
+	fi
+	# remove countries for which fetch failed from the "countries" string
+	countries="$success_tlds"
 else
 	echo "Note: Skipped fetching because -s switch was used"
 fi
 
-geoblocker_bash-apply $debug -f "$whitelist_path/ipv4_$country" -b "$knowngood_file"; rv=$?
-if [ $rv -ne 0 ]; then
-	echo ""
-	exit 1
-else
-	[ $debug ] && echo "Successfully applied the whitelist."
-fi
 
-logger -t geoblocker_bash-run "Successfully applied the whitelist."
+### Apply ip lists
+
+# TODO: implement nodrop in *apply
+# TODO: implement actions in *apply
+
+for country in $(echo "${countries}"); do
+	geoblocker_bash-apply $debug $nodrop -a "$action"; rv=$?
+	if [ $rv -ne 0 ]; then
+		# if any errors occur in *apply, we exit
+		echo ""
+		exit 1
+	else
+		debugpr "Successfully applied the whitelist for country \"$country\"."
+	fi
+done
+
+logger -t geoblocker_bash-run "Successfully applied action \"$action\" for countries \"$countries\"."
 
 echo ""
 
-exit 0
+exit $errcnt
