@@ -73,6 +73,11 @@ get_config() {
 	return rv
 }
 
+debugpr() {
+# print debug message
+[ "$debug" ] && echo "Debug: $@"
+}
+
 #### Checks
 
 if [ -z "$countries" ]; then
@@ -159,7 +164,7 @@ if [ ! "$no_persistence" ] && [ "$action" = "add" ]; then
 		exit 1
 	fi
 else
-	[ $debug ] && echo "Debug: Skipping cron checks."
+	debugpr "Skipping cron checks."
 fi
 
 
@@ -167,12 +172,17 @@ fi
 
 ### Get current set of countries from the the config file into array curr_countries
 curr_countries=( $(getconfig "$Countries" "$conf_file") )
+debugpr "Current countries in config: \"$curr_countries\"."
+
 
 # Get new set of countries from the argument into array arg_countries
 arg_countries=( $(echo "$countries") )
+debugpr "Countries in arguments: \"$arg_countries\"."
 
 case "$action" in
-	add) 
+# some fairly ugly array-to-string-and-back conversions but appears to be the most straightforward way to do this
+
+add) 
 		# merge curr_countries and arg_countries arrays into new_countries array while removing duplicates
 		new_countries=( $(printf '%s\n'  "${curr_countries[@]}" "${new_countries[@]}" | sort -ibu) )
 
@@ -180,7 +190,7 @@ case "$action" in
 		countries_to_change_str="$(arg_countries[@])"
 		for item in "${curr_countries[@]}"; do
 			# compare $item with every element of countries_to_change and remove exact matches in countries_to_change
-			countries_to_change_str=${countries_to_change//$item/}
+			countries_to_change_str=${countries_to_change_str//$item/}
 		done
 		# convert to array while removing duplicates
 		countries_to_change=( $(echo "$countries_to_change_str" | sort -ibu) )
@@ -195,11 +205,13 @@ case "$action" in
 		# convert to array while removing duplicates
 		new_countries=( $(echo "$new_countries_str" | sort -ibu) )
 
-		 # find intersection between the 2 arrays so later we know what countries to remove
-		 read -r -d '' -a countries_to_change < <(join <(printf %s\\n "${curr_countries[@]}" | sort -u) \
+		# find duplicate-free intersection between {curr_countries[@]} and {arg_countries[@]} so later we know what countries to remove
+		read -r -d '' -a countries_to_change < <(join <(printf %s\\n "${curr_countries[@]}" | sort -u) \
                           <(printf %s\\n "${arg_countries[@]}" | sort -u))
 	;;
 esac
+
+debugpr "Countries to change: ${countries_to_change[@]}"
 
 ### Remove cron jobs
 
@@ -207,16 +219,20 @@ echo ""
 echo "Removing cron jobs for geoblocker_bash..."
 crontab -u root -l 2>/dev/null | grep -v "\"$run_command\"" | sudo crontab -u root -	
 
-### Fetch and apply the whitelist
+
+### Apply the action
 
 # TODO: add -r option to *apply
 
-echo $run_command $debug -a "$action" -c "$countries_to_change" | bash; rv=$?
+echo $run_command $debug -a "$action" -c "${countries_to_change[@]}" | bash; rv=$?
 if [ $rv -ne 0 ]; then
 	echo ""
+	echo "Error performing action \"$action\" for countries \"${countries_to_change[@]}\"."
 	exit 1
 else
-	[ $debug ] && echo "Successfully changed rules for countries \"$countries_to_change\"."
+	setconfig "Countries" "$(echo ${new_countries[@})"
+	debugpr "New countries in config: $(getconfig Countries $conf_file)"
+	debugpr "Successfully performed action "\$action\" for countries \"${countries_to_change[@]}\"."
 fi
 
 # if no persistence was requested, skip adding cron jobs
@@ -224,7 +240,7 @@ if [ ! "$no_persistence" ]; then
 
 ### Create cron jobs
 
-	[ $debug ] && echo ""
+	debugpr ""
 	echo -n "Creating periodic cron job... "
 	echo -e "$(sudo crontab -u root -l 2>/dev/null)\n$cron_schedule \"$run_command\" -a "apply" &>/dev/null" | sudo crontab -u root -
 	rv=$?
@@ -239,7 +255,7 @@ if [ ! "$no_persistence" ]; then
 		echo "Cron line: \"$cron_line_result\""
 	fi
 
-	[ $debug ] && echo ""
+	debugpr ""
 	echo -n "Creating reboot cron job... "
 
 	# using the -s switch for the *run script to skip fetching at reboot
