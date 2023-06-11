@@ -121,7 +121,7 @@ conf_dir="/etc/geoblocker_bash"
 conf_file="${conf_dir}/geoblocker_bash.conf"
 
 default_schedule="0 4 * * *"
-cron_schedule="${cron_schedule:-"$default_schedule"}"
+cron_schedule="${cron_schedule:-$default_schedule}"
 sleeptime="30"
 
 run_command="${install_dir}/geoblocker_bash-run"
@@ -206,7 +206,8 @@ fi
 scriptdir="$(get_script_dir)"
 # cd into script directory
 # exit in case "cd" fails
-cd "$scriptdir" || echo "Error: could not change directory to \"$scriptdir\". Exiting."; exit 1
+cd "$scriptdir"; rv=$?
+if [ -z "$scriptdir" ] || [ "$rv" -ne 0 ]; then echo "Error: could not change directory to \"$scriptdir\". Exiting."; exit 1; fi
 
 check_file_exists "geoblocker_bash-fetch"
 check_file_exists "geoblocker_bash-apply"
@@ -223,7 +224,7 @@ check_file_exists "check_ip_in_ripe.sh"
 mkdir -p "$conf_dir"
 
 # delete config file if it exists
-rm "$conf_file" > /dev/null
+rm "$conf_file" &> /dev/null
 
 # write datadir path to the config file
 echo "Datadir=$datadir" > "$conf_file"
@@ -304,10 +305,13 @@ fi
 
 # cd into the install directory
 # exit in case "cd" fails
-cd "$installdir" || echo "Error: could not change directory to \"$scriptdir\". Exiting."; install_failed
+cd "$install_dir"; rv=$?
+if [ -z "$install_dir" ] || [ "$rv" -ne 0 ]; then echo "Error: could not change directory to \"$install_dir\". Exiting."; install_failed; fi
 
+manage_opts=( "$debug" "$no_persistence" "$nodrop" -a "add" )
 ### Add whitelist(s) for $tlds to managed whitelists, then fetch and apply the whitelist(s)
-geoblocker_bash-manage "$debug" "$no_persistence" "$nodrop" -c "$tlds" -a "add" -s "$cron_schedule"; rv=$?
+# have to use array to prevent getopts errors. have to provide cron schedule separately to prevent * expansion
+geoblocker_bash-manage ${manage_opts[@]} -c "$tlds" -s "$cron_schedule"; rv=$?
 
 if [ $rv -ne 0 ]; then
 	echo "Failed to add and apply whitelist."
