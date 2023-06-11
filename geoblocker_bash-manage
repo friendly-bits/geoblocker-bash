@@ -18,14 +18,14 @@ This script:
 
 WARNING if removing a whitelist: Geoblocking will remain active after removal.
         If you remove your country's whitelist, you may lose remote access to your system.
-        
 
-    Usage: $me -c <"tld [tld] ... [tld]"> -a <add|remove> [-s "<schedule>"] [-n] [-p] [-d] [-h]
+
+    Usage: $me -c <"tld [tld] ... [tld]"> -a <add|remove> [-s <"schedule">] [-n] [-p] [-d] [-h]
 
     Options:
         -c <"tld(s)">   : tld / country codes. if passing multiple country codes, use double quotes
         -a <action>     : action to perform: "add" or "remove" associated rules and cron jobs
-        -s "<schedule>" : schedule expression for the cron job, must be inside double quotes
+        -s <"schedule"> : schedule expression for the cron job, must be inside double quotes
 
         -n              : No persistence (skip creating cron jobs)
         -p              : No Drop: applies the config but skips setting INPUT chain default policy to DROP
@@ -37,7 +37,6 @@ EOF
 }
 
 #### PARSE ARGUMENTS
-
 while getopts "c:a:s:npdh" opt; do
 	case $opt in
 		c) tlds=$OPTARG;;
@@ -52,10 +51,12 @@ while getopts "c:a:s:npdh" opt; do
 done
 shift $((OPTIND -1))
 
-# TODO: implement nodrop in *run and *apply, and possibly in *install
-
-
 #### FUNCTIONS
+
+debugpr() {
+# prints a debug message
+	[ "$debug" ] && echo "Debug: $@"
+}
 
 get_script_dir () {
 	SOURCE=${BASH_SOURCE[0]}
@@ -75,7 +76,8 @@ getconfig() {
 # returns 0 if successful, 1 if not
 	fieldname="$1"
 	configfile="$2"
-	read -r field < <(grep "$fieldname=" "$conf_file" | sed 's/.*$fieldname=//'); rv=$?
+	if [ -z "$fieldname" ] || [ -z "$configfile" ]; then return 1; fi
+	read -r field < <(grep "$fieldname=" "$configfile" | sed "s/.*$fieldname=//"); rv=$?
 	if [ -z "$field" ]; then
 		echo ""
 		rv=$((rv + 1))
@@ -91,23 +93,21 @@ setconfig() {
 	fieldname="$1"
 	configfile="$2"
 	field="$3"
-	# remove corresponding config line
-	grep -v "$fieldname=" "$conf_file" > "$conf_file"
-	# add updated config line
-	echo -e "$(cat "$conf_file")\n$fieldname=$field" > "$conf_file"; rv=$?
-	debugpr "New config line: $(getconfig $fieldname $configfile)"
-	return $rv
-}
+	if [ -z "$fieldname" ] || [ -z "$configfile" ] || [ -z "$field" ]; then return 1; fi
 
-debugpr() {
-# prints a debug message
-	[ "$debug" ] && echo "Debug: $@"
+	# remove corresponding config line
+	cat "$configfile" | grep -v "$fieldname=" > "${configfile}.temp"
+	mv "${configfile}.temp" "$configfile"
+
+	# add updated config line
+	echo -e "$fieldname=$field" >> "$configfile"; rv=$?
+	return $rv
 }
 
 #### VARIABLES
 
 #convert country codes to lower case
-tlds=echo "${tlds,,}"
+tlds="$(echo ${tlds,,})"
 
 # TODO: implement config saving in the *install script
 
@@ -178,9 +178,10 @@ echo ""
 
 # cd into script directory
 # exit in case "cd" fails
-cd "$scriptdir" || echo "Error: could not change directory to \"$scriptdir\". Exiting."; exit 1
+cd "$scriptdir"; rv=$?
+if [ -z "$scriptdir" ] || [ "$rv" -ne 0 ]; then echo "Error: could not change directory to \"$scriptdir\". Exiting."; exit 1; fi
 
-if [ ! "$skip_cron" ] && [ "$action" = "add" ]; then
+if [ ! "$skip_cron" ]; then
 
 	# if cron_schedule wasn't provided in args, use the default schedule from the config file
 	if [ -z "$cron_schedule" ]; then
@@ -203,32 +204,29 @@ fi
 
 ### Read current set of countries from the the config file into array config_tlds
 config_tlds=( $(getconfig "Countries" "$conf_file") )
-debugpr "Current countries in config: \"$config_tlds\"."
-
 
 # Get new set of countries from the argument into array arg_tlds
 arg_tlds=( $(echo "$tlds") )
-debugpr "Countries in arguments: \"$arg_tlds\"."
 
 case "$action" in
 # some fairly ugly array-to-string-and-back conversions but appears to be the most straightforward way to do this
 
-	add) 
+	add)
 		# merge config_tlds and arg_tlds arrays into new_tlds array while removing duplicates
-		new_tlds=( $(printf '%s\n'  "${config_tlds[@]}" "${new_tlds[@]}" | sort -ibu) )
+		new_tlds=( $(printf '%s\n'  "${config_tlds[@]}" "${arg_tlds[@]}" | sort -ibu) )
 
 		# convert to string
-		tlds_to_change_str="$(arg_tlds[@])"
-		
+		tlds_to_change_str="${arg_tlds[@]}"
+
 		# tlds_to_change should contain countries that are not already in config_tlds
 		# compare $item with every element of tlds_to_change and remove exact matches in tlds_to_change
 		for item in "${config_tlds[@]}"; do
-			tlds_to_change_str=${tlds_to_change_str//$item/}
+			tlds_to_change_str="${tlds_to_change_str//$item/}"
 		done
 		# convert to array while removing duplicates
 		tlds_to_change=( $(echo "$tlds_to_change_str" | sort -ibu) )
-		if [ -z "${tlds_to_change[@]}"]; then
-			echo "Error: can not add countries \"$arg_tlds\" because they have already been added."
+		if [ -z "$(echo ${tlds_to_change[@]})" ]; then
+			echo "Error: can not add countries \"${arg_tlds[@]}\" because they have already been added."
 			echo ""
 			exit 1
 		fi
@@ -236,48 +234,50 @@ case "$action" in
 	remove)
 		# convert to string
 		new_tlds_str="${config_tlds[@]}"
-		
+
 		# compare $item with every element of new_tlds_str and remove exact matches in new_tlds_str
 		for item in "${arg_tlds[@]}"; do
-			new_tlds_str=${new_tlds_str//$item/}
+			new_tlds_str="${new_tlds_str//$item/}"
 		done
+
 		# convert to array while removing duplicates
 		new_tlds=( $(echo "$new_tlds_str" | sort -ibu) )
 
 		# find duplicate-free intersection between {config_tlds[@]} and {arg_tlds[@]} so later we know what countries to remove
 		read -r -d '' -a tlds_to_change < <(join <(printf %s\\n "${config_tlds[@]}" | sort -u) \
                           <(printf %s\\n "${arg_tlds[@]}" | sort -u))
-		if [ -z "${tlds_to_change[@]}"]; then
-			echo "Error: can not remove countries \"$arg_tlds\" because they have not been added."
+
+		if [ -z "$(echo ${tlds_to_change[@]})" ]; then
+			echo "Error: can not remove countries \"${arg_tlds[@]}\" because they have not been added."
 			echo ""
 			exit 1
 		fi
 	;;
 esac
 
-debugpr "Countries to change: ${tlds_to_change[@]}"
+debugpr "tlds to change: ${tlds_to_change[@]}"
 
-setconfig "Countries" "$conf_file" "${new_tlds[@]}"; rv=$?
+setconfig "Countries" "$conf_file" "$(echo ${new_tlds[@]})"; rv=$?
 if [ $rv -ne 0 ]; then
 	echo ""
 	echo "Error writing new config for countries \"${new_tlds[@]}\" to file \"$conf_file\"."
 	exit 1
 fi
-debugpr "New countries in config: $(getconfig Countries $conf_file)"
+debugpr "Countries in updated config: $(getconfig Countries $conf_file)"
 
 
 ### Call the *run script
 
 # TODO: add -r option to *apply for rules removal
 
-echo $run_command $debug $nodrop -a "$action" -c "${tlds_to_change[@]}" | bash; rv=$?
+$run_command $debug $nodrop -a "$action" -c "$(echo ${tlds_to_change[@]})"; rv=$?
 
-# positive return code means fetch failure
-if [ $rv -gt 0 ]; then
+# 254 return code means fetch failure
+if [ $rv -eq 254 ]; then
 	echo ""
 	echo "Error performing action \"$action\" for countries \"${tlds_to_change[@]}\"."
 	echo "Removing failed tld's from config..."
-	
+
 	# read failed tlds from file into array failed_tlds
 	failed_tlds=( $(getconfig "FailedTLDs" "$failed_tlds_file") )
 
@@ -286,7 +286,7 @@ if [ $rv -gt 0 ]; then
                    <(printf %s\\n "${failed_tlds[@]}" | sort -u))
 
 	# only remove newly-added tlds that failed to fetch
-	if [ -n "${tlds_to_remove[@]}"]; then
+	if [ -n "$(echo ${tlds_to_remove[@]})" ]; then
 		# remove only the intersection tlds from config
 
 		#convert array to string
@@ -294,24 +294,30 @@ if [ $rv -gt 0 ]; then
 
 		# compare $item with every element of new_tlds_str and remove exact matches in new_tlds_str
 		for item in "${tlds_to_remove[@]}"; do
-			new_tlds_str=${new_tlds_str//$item/}
+			new_tlds_str="${new_tlds_str//$item/}"
 		done
 
 		# convert to array while removing duplicates
 		new_tlds=( $(echo "$new_tlds_str" | sort -ibu) )
-		
+
 		# write new tlds list to config file
 		setconfig "Countries" "$conf_file" "${new_tlds[@]}"; rv=$?
 	fi
 
-# negative return code means apply failure
-elif [ $rv -lt 0 ]; then
+# positive return code means apply failure or another permanent error, except for 254
+elif [ $rv -gt 0 ] && [ $rv -ne 254 ]; then
 	echo ""
 	echo "Error performing action \"$action\" for countries \"${tlds_to_change[@]}\"."
+
+	if [ -z "$(echo ${config_tlds[@]})" ]; then
+		echo "Can not restore previous countries set because it is not found in the config file."
+		exit 1
+	fi
+
 	# restore old countries set in the config file
 	echo -n "Restoring previous countries set: \"${config_tlds[@]}\"..."
 	setconfig "Countries" "$conf_file" "${config_tlds[@]}"
-	echo $run_command $debug $nodrop -a "update"; rv=$?
+	echo $run_command $debug $nodrop -a "update" | bash; rv=$?
 	if [ $rv -eq 0 ]; then
 		echo "Ok."
 	else
@@ -328,10 +334,7 @@ fi
 
 ## Read current cron jobs into variable
 	read -r curr_cron_jobs < <(crontab -u root -l 2>/dev/null | grep "\"$run_command\"")
-	debugpr "Current cron jobs:"
-	debugpr "$curr_cron_jobs"
-	debugpr "Current cron jobs exist? $([[ "$curr_cron_jobs" ]] && echo \"yes\" || echo \"no\")."
-	debugpr ""
+	debugpr "Current cron jobs: $curr_cron_jobs"
 
 ## Remove current cron jobs
 echo ""
@@ -342,22 +345,24 @@ crontab -u root -l 2>/dev/null | grep -v "\"$run_command\"" | sudo crontab -u ro
 # If action is "remove", don't assume that persistence is required
 # Only create new cron jobs if prior cron jobs exist
 if [ "$action" = "remove" ] && [ -z "$curr_cron_jobs" ]; then
-	skip_cron=true
+	skip_cron="true"
 fi
 
+new_tlds_str="$(echo ${new_tlds[@]})"
+
 # If new countries list is empty, skip creating cron jobs
-if [ -z "${new_tlds[@]}" ]; then
-	skip_cron=true
+if [ -z "$new_tlds_str" ]; then
+	skip_cron="true"
 	debugtr "NOTE: New countries list is empty."
 fi
 
 
-if [ ! "$skip_cron" ]; then			
+if [ ! "$skip_cron" ]; then
 
 	### Create cron jobs
 
-	debugpr ""
 	echo -n "Creating periodic cron job... "
+	debugpr "applying cron line: $cron_schedule \"$run_command\" $nodrop -a update &>/dev/null"
 	echo -e "$(sudo crontab -u root -l 2>/dev/null)\n$cron_schedule \"$run_command\" $nodrop -a update &>/dev/null" | sudo crontab -u root -
 	rv=$?
 
@@ -371,7 +376,6 @@ if [ ! "$skip_cron" ]; then
 		echo "Cron line: \"$cron_line_result\""
 	fi
 
-	debugpr ""
 	echo -n "Creating reboot cron job... "
 
 	# using the -s switch for the *run script to skip fetching at reboot
