@@ -36,7 +36,7 @@ EOF
 while getopts "a:c:spdh" opt; do
 	case $opt in
 		a) action=$OPTARG;;
-		c) arg_tlds=$OPTARG;;
+		c) arg_tlds="$OPTARG";;
 		s) skipfetch="true";;
 		p) nodrop="-p";;
 		d) debug="-d";;
@@ -51,10 +51,10 @@ shift $((OPTIND -1))
 
 die() {
 	echo ""
-	echo "$@" 1>&2
+	echo "$2" 1>&2
 	echo ""
-	logger -t geoblocker_bash-run "$@"
-	exit 1
+	logger -t geoblocker_bash-run "$2"
+	exit $1
 }
 
 get_script_dir () {
@@ -75,7 +75,8 @@ getconfig() {
 # returns 0 if successful, 1 if not
 	fieldname="$1"
 	configfile="$2"
-	read -r field < <(grep "$fieldname=" "$conf_file" | sed 's/.*$fieldname=//'); rv=$?
+	if [ -z "$fieldname" ] || [ -z "$configfile" ]; then return 1; fi
+	read -r field < <(grep "$fieldname=" "$configfile" | sed "s/.*$fieldname=//"); rv=$?
 	if [ -z "$field" ]; then
 		echo ""
 		rv=$((rv + 1))
@@ -121,13 +122,13 @@ echo ""
 # check for geoblocker_bash-fetch
 [ ! $skipfetch ] && if ! command -v geoblocker_bash-fetch &> /dev/null; then
 	err="Error: Cannot find \"geoblocker_bash-fetch\". Did you run setup? Exiting."
-	die "$err"
+	die 1 "$err"
 fi
 
 # check for geoblocker_bash-apply
 if ! command -v geoblocker_bash-apply &> /dev/null; then
 	err="Error: Cannot find \"geoblocker_bash-apply\". Did you run setup? Exiting."
-	die "$err"
+	die 1 "$err"
 fi
 
 case "$action" in
@@ -141,33 +142,36 @@ esac
 if [ -z "$tlds" ]; then
 	err="tlds variable can not be empty! Exiting."
 	usage
-	die "$err"
+	die 1 "$err"
 fi
 
 if [ -z "$knowngood_file" ]; then
 	err="Error: Known-good file path can not be empty! Exiting."
 	usage
-	die "$err"
+	die 1 "$err"
 fi
 
-if [ -z "$whitelist_path" ]; then
+if [ -z "$whitelist_dir" ]; then
 	err="Error: Whitelist file path can not be empty! Exiting."
 	usage
-	die "$err"
+	die 1 "$err"
 fi
 
 # check for root
 if [ "$EUID" -ne 0 ]; then
 	err="This needs to be run as root."
-	die "$err"
+	die 1 "$err"
 fi
 
 
 #### MAIN
 
+
 # cd into script directory
 # exit in case "cd" fails
-cd "$scriptdir" || err="Error: could not change directory to \"$scriptdir\". Exiting."; die "$err"
+cd "$scriptdir"; rv=$?
+if [ -z "$scriptdir" ] || [ "$rv" -ne 0 ]; then echo "Error: could not change directory to \"$scriptdir\". Exiting."; exit 1; fi
+
 
 ### Fetch ip lists
 errcnt="0"
@@ -176,13 +180,17 @@ failed_tlds=""
 ok_tlds=""
 if [ ! "$skipfetch" ] && [ "$action" != "remove" ]; then
 	for tld in $(echo "${tlds}"); do
-		geoblocker_bash-fetch $debug -c "$tld"; rv=$?
-		if [ $rv -ne 0 ]; then
-			errcnt=$((errcnt + 1)
+		geoblocker_bash-fetch $debug -c "$tld" -p "$whitelist_dir"; rv=$?
+		if [ $rv -gt 0 ] && [ $rv -ne 254 ]; then
+			# positive return value from fetch means fatal code error rather than fetch error, except for 254
+			die 1 "Error in *fetch script, something is broken."
+		fi
+		if [ $rv -eq 254 ]; then
+			errcnt=$(( errcnt + 1 ))
 			failed_tlds="$(echo $failed_tlds) $tld"
 			debugpr "Failed to retrieve ip list for country \"$tld\"."
 		else
-			ok_cnt=$((ok_cnt + 1)
+			ok_cnt=$(( ok_cnt + 1 ))
 			ok_tlds="$(echo $ok_tlds) $tld"
 			debugpr "Successfully retrieved ip list for country \"$tld\"."
 		fi
@@ -197,7 +205,7 @@ if [ ! "$skipfetch" ] && [ "$action" != "remove" ]; then
 		logger -t geoblocker_bash-run "Successfully fetched the whitelist for countries\"$ok_tlds\"."
 	else
 		err="All fetch attempts failed."
-		die "$err"
+		die 254 "$err"
 	fi
 
 	tlds="$ok_tlds"
@@ -213,7 +221,7 @@ for tld in $(echo "${tlds}"); do
 	if [ $rv -ne 0 ]; then
 		echo ""
 		# if any errors occur in *apply, exit with a negative return code
-		exit -1
+		exit 1
 	else
 		debugpr "Successfully applied the whitelist for country \"$tld\"."
 	fi
@@ -223,4 +231,6 @@ logger -t geoblocker_bash-run "Successfully applied action \"$action\" for count
 
 echo ""
 
-exit $errcnt
+if [ "$errcnt" -ne 0 ]; then rv=254; else rv=0; fi
+
+exit $rv
