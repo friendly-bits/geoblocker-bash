@@ -2,9 +2,6 @@
 
 # geoblocker_bash-manage
 
-echo "passed arguments: $@"
-exit
-
 # Allows to add or remove a whitelist for specified countries to/from geoblocking rules
 #       and creates or updates associated cron jobs
 
