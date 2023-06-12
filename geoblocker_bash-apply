@@ -101,8 +101,8 @@ restore_from_file() {
 
 	# count lines in the corresponding portion of the backup file
 	case $restoretarget in
-		iptables) line_cnt=$(sed -e '/\[IPSET\]/Q' "$restorefile" | wc -l) ;;
-		ipset) line_cnt=$(sed -n "/create ${perm_ipset}/,\$p" "$restorefile" | grep "add $perm_ipset" | wc -l) ;;
+		iptables) line_cnt=$(sed -e '/\[IPSET\].*/Q' "$restorefile" | wc -l) ;;
+		ipset) line_cnt=$(sed -n "/create geoblocker_bash/,\$p" "$restorefile" | grep "add $geoblocker_bash" | wc -l) ;;
 	esac
 	debugpr "$restoretarget lines number in backup: $line_cnt"
 
@@ -113,8 +113,8 @@ restore_from_file() {
 			# reads <$restorefile> from beginning to [IPSET] and pipes the result into iptables-restore
 			iptables) sed -e '/\[IPSET\]/Q' "$restorefile" 2>&1 | iptables-restore; rv="${PIPESTATUS[1]}" ;;
 
-			# reads <$restorefile> from "create <$perm_ipset>" to EOF and pipes the result into "ipset restore"
-			ipset) sed -n "/create ${perm_ipset}/,\$p" "$restorefile" 2>&1 | ipset restore; rv="${PIPESTATUS[1]}" ;;
+			# reads <$restorefile> from "create geoblocker_bash" to EOF and pipes the result into "ipset restore"
+			ipset) sed -n "/create geoblocker_bash/,\$p" "$restorefile" 2>&1 | ipset restore; rv="${PIPESTATUS[1]}" ;;
 		esac
 
 		if [ $rv -eq 0 ]; then
@@ -213,7 +213,8 @@ getconfig() {
 # returns 0 if successful, 1 if not
 	fieldname="$1"
 	configfile="$2"
-	read -r field < <(grep "$fieldname=" "$conf_file" | sed 's/.*$fieldname=//'); rv=$?
+	if [ -z "$fieldname" ] || [ -z "$configfile" ]; then return 1; fi
+	read -r field < <(grep "$fieldname=" "$configfile" | sed "s/.*$fieldname=//"); rv=$?
 	if [ -z "$field" ]; then
 		echo ""
 		rv=$((rv + 1))
@@ -397,6 +398,7 @@ if [ $rv -ne 0 ]; then
 fi
 echo "Ok."
 
+echo -n "Removing existing global iptables rules for \"geoblocker_bash\"... "
 iptables-save | sed -r "/INPUT.*comment.*${iptables_comment_global}/s/-A/iptables -D/e" &>/dev/null; rv=$?
 if [ $rv -ne 0 ]; then
 	echo "Failure."
@@ -404,6 +406,18 @@ if [ $rv -ne 0 ]; then
 	die "$err"
 fi
 echo "Ok."
+
+if [ "$action" = "remove" ]; then
+	echo "destroying ipset for country \"$tld\"... "
+	ipset destroy "$perm_ipset"; rv=$?
+	if [ $rv -ne 0 ]; then
+		echo "Failure."
+		err="Error destroying ipset $perm_ipset. Exiting."
+		die "$err"
+	fi
+echo "Ok."
+fi
+
 
 
 ### Create new iptables rules
@@ -527,19 +541,21 @@ if [ $rv -ne 0 ]; then
 fi
 echo "Ok."
 
-echo -n "Creating backup of current ipset... "
+echo -n "Creating backup of current ipsets... "
+	# we use the same file for iptables and ipset backup
+	# the "[IPSET]" line separates portions of the file
+	echo "[IPSET]" >> "$knowngood_file.new"
 
-# we use the same file for iptables and ipset backup
-# the "[IPSET]" line separates the two portions of the file
-echo "[IPSET]" >> "$knowngood_file.new"
-
-ipset save "$perm_ipset" >> "$knowngood_file.new"; rv=$?
-if [ $rv -ne 0 ]; then
-	echo ""
-	err="Error creating backup of ipset \"$perm_ipset\". Exiting."
-	die "$err"
-fi
-echo "Ok."
+for curr_ipset in $(ipset list -n); do
+	debugpr -n "Creating backup of ipset $curr_ipset... "
+	ipset save "$curr_ipset" >> "$knowngood_file.new"; rv=$?
+	if [ $rv -ne 0 ]; then
+		echo ""
+		err="Error creating backup of ipset \"$curr_ipset\". Exiting."
+		die "$err"
+	fi
+	echo "Ok."
+done
 
 echo "Backup file: \"$knowngood_file\""
 
