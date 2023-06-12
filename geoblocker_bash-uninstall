@@ -53,7 +53,8 @@ getconfig() {
 # returns 0 if successful, 1 if not
 	fieldname="$1"
 	configfile="$2"
-	read -r field < <(grep "$fieldname=" "$conf_file" | sed 's/.*$fieldname=//'); rv=$?
+	if [ -z "$fieldname" ] || [ -z "$configfile" ]; then return 1; fi
+	read -r field < <(grep "$fieldname=" "$configfile" | sed "s/.*$fieldname=//"); rv=$?
 	if [ -z "$field" ]; then
 		echo ""
 		rv=$((rv + 1))
