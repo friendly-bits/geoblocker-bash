@@ -41,13 +41,14 @@ EOF
 }
 
 die() {
-	echo "$@" 1>&2
 	echo ""
-	logger -t geoblocker_bash-fetch "$@"
-	exit 1
+	echo "$2" 1>&2
+	echo ""
+	logger -t geoblocker_bash-fetch "$2"
+	exit $1
 }
 
-findlocalsubnet() {
+getlocalsubnet() {
 # attempts to find local subnet for the main network interface
 
 	# we are relying on the global variable $subnet_regex, so verify that it's not empty
@@ -107,17 +108,15 @@ subnet_regex="${ip_regex}${mask_regex}"
 
 if [ -z "$country" ]; then
 	usage
-	echo ""
 	err="Specify country with \"-c <country>\"!"
-	die "$err"
+	die 1 "$err"
 fi
 
 # check that we have iplist file path
 if [ -z "$iplist_path" ]; then
 	usage
 	err="Specify iplist file path with \"-p <path-to-file>\"!"
-	echo ""
-	die "$err"
+	die 1 "$err"
 fi
 
 # use curl or wget, depending on which one we find
@@ -130,9 +129,14 @@ fi
 # check that we have jq
 if ! command -v jq &> /dev/null; then
 	err="Error: Cannot find \"jq\" - Json processor. Install it with 'apt install jq' or similar. Exiting"
-	die "$err"
+	die 1 "$err"
 fi
 
+# check that iplist directory exists
+if [ ! -d "$iplist_path" ]; then
+	err="Directory \"$iplist_path\" doesn't exist!"
+	die 1 "$err"
+fi
 
 #### Main
 
@@ -149,7 +153,7 @@ if [ $rv -ne 0 ]; then
 	echo "Failed."
 	err="Error $rv trying to run $curl_or_wget $url. Exiting."
 	rm "$fetched_file" &>/dev/null
-	die "$err"
+	die 254 "$err"
 fi
 
 
@@ -161,12 +165,12 @@ if [ ! "$status" = "ok" ]; then
 	echo "Requested url was: '$url'"
 	err="Error: could not fetch ip list from RIPE. Exiting"
 	rm "$fetched_file" &>/dev/null
-	die "$err"
+	die 254 "$err"
 fi
 
 echo "Success."
 
-## 
+##
 if [ -f "$out_list" ]; then
 # if $out_list exists then store its date in date_old
 	date_old=$(stat --printf "%Y" "$out_list")
@@ -197,7 +201,7 @@ else
 		rm "$parsed_file" &>/dev/null
 		rm "$validated_file" &>/dev/null
 		rm "$fetched_file"
-		die "$err"
+		die 254 "$err"
 	fi
 
 	echo -n "Validating downloaded subnets... "
@@ -219,7 +223,7 @@ else
 			rm "$parsed_file" &>/dev/null
 			rm "$validated_file" &>/dev/null
 			rm "$fetched_file"
-			die "$err"
+			die 254 "$err"
 		fi
 	fi
 
@@ -229,13 +233,13 @@ else
 
 	# Add local subnet to the list, only for ipv4
 	if [ "$family" = "ipv4" ]; then
-		subnet="$(findlocalsubnet)";
+		subnet="$(getlocalsubnet)";
 		if [ -z "$subnet" ]; then
 			err="Error: couldn't determine local subnet."
 			rm "$parsed_file" &>/dev/null
 			rm "$validated_file" &>/dev/null
 			rm "$fetched_file" &>/dev/null
-			die "$err"
+			die 1 "$err"
 		else
 			echo "Found local subnet: \"$subnet\". Adding it to the list."
 			echo "$subnet" >> "$validated_file"
@@ -250,7 +254,7 @@ else
 		rm "$parsed_file" &>/dev/null
 		rm "$validated_file" &>/dev/null
 		rm "$fetched_file" &>/dev/null
-		die "$err"
+		die 1 "$err"
 	fi
 	echo "Ok."
 	touch -d "$ripe_db_time" "$out_list"
