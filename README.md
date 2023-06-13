@@ -24,12 +24,15 @@ https://github.com/blunderful-scripts/geoblocker_bash/releases
  (when specifying multiple countries, put the list in double quotes)
  
  To manage:
- run "sudo geoblocker_bash-manage -c "<country_code [country_code] ... [country_code]>" -a <add|remove>
- _example (to add whitelists for Germany and Netherlands): 'sudo geoblocker-manage -c "DE NL" -a add_
- _example (to remove whitelist for Germany): 'sudo geoblocker-manage -c DE -a remove_
+ 
+run 'sudo geoblocker_bash-manage -c "<country_code [country_code] ... [country_code]>" -a <add|remove>'
+ 
+example (to add whitelists for Germany and Netherlands): _'sudo geoblocker-manage -c "DE NL" -a add'_
+ 
+example (to remove whitelist for Germany): _'sudo geoblocker-manage -c DE -a remove'_
  
  To uninstall:
- run "sudo geoblocker_bash-uninstall"
+     run 'sudo geoblocker_bash-uninstall'
 
 **Prerequisites**:
 - Linux running systemd (tested on Debian and Mint, should work on any Debian derivative, may require modifications to work on other distributions)
