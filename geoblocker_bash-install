@@ -17,6 +17,7 @@
 # geoblocker_bash-fetch, geoblocker_bash-apply, geoblocker_bash-run, geoblocker_bash-uninstall, validate_cron_schedule.sh, check_ip_in_ripe.sh
 
 me=$(basename "$0")
+args="$@"
 
 #### USAGE
 
@@ -24,6 +25,7 @@ usage() {
 
     cat <<EOF
 
+$me
 Installer for geoip blocking suite of bash scripts.
 Must be run as root.
 
@@ -68,6 +70,35 @@ done
 
 #### FUNCTIONS
 
+debugprint() {
+# prints a debug message
+	[ "$debug" ] && echo -e "    Debug: $@"
+}
+
+echo ""
+debugprint "\033[1;33mStarted *install with args: '$args'\033[0m"
+
+setconfig() {
+# changes a field named $1 in the config file $2 to value $3
+# returns 0 if successful, 1 if not
+	fieldname="$1"
+	configfile="$2"
+	field="$3"
+	if [ -z "$fieldname" ] || [ -z "$configfile" ] || [ -z "$field" ]; then return 1; fi
+
+	# create the config file if it doesn't exist
+	touch "$conf_file"; rv01=$?
+
+	# remove corresponding config line
+	cat "$configfile" | grep -v "$fieldname=" > "${configfile}.temp"
+	mv "${configfile}.temp" "$configfile"; rv02=$?
+
+	# add updated config line
+	echo -e "$fieldname=$field" >> "$configfile"; rv03=$?
+	rv0=$(( rv01 + rv02 + rv03 ))
+	return $rv0
+}
+
 get_script_dir () {
 	SOURCE=${BASH_SOURCE[0]}
 	while [ -L "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symlink
@@ -103,19 +134,18 @@ copyscript() {
 		echo "$errormessage" >&2
 		echo ""
 		install_failed
-	else
-		[ $debug ] && echo "Debug: Successfully copied $scriptfile to $install_dir."
 	fi
-	chmod +x "$install_dir/$scriptfile"
+	chmod +x "${install_dir}/$scriptfile"
 }
 
 
 #### VARIABLES
 install_dir="/usr/local/bin"
 datadir="/var/lib/geoblocker_bash"
-preinstall_policies_file="$datadir/preinstall_policies.bak"
-knowngood_file="$datadir/iptables_knowngood.bak"
-whitelist_dir="$datadir/ip_lists"
+preinstall_policies_file="${datadir}/preinstall_policies.bak"
+knowngood_file="${datadir}/iptables_knowngood.bak"
+whitelist_dir="${datadir}/ip_lists"
+backup_script="${install_dir}/geoblocker_bash-backup"
 
 conf_dir="/etc/geoblocker_bash"
 conf_file="${conf_dir}/geoblocker_bash.conf"
@@ -128,7 +158,6 @@ run_command="${install_dir}/geoblocker_bash-run"
 run_args="-c \"$tlds\" -w \"$whitelist_dir\" -b \"$knowngood_file\""
 run_args_reboot="${run_args} -s"
 
-echo ""
 
 #### CHECKS
 
@@ -213,8 +242,9 @@ check_file_exists "geoblocker_bash-fetch"
 check_file_exists "geoblocker_bash-apply"
 check_file_exists "geoblocker_bash-run"
 check_file_exists "geoblocker_bash-manage"
-check_file_exists "validate_cron_schedule.sh"
+check_file_exists "geoblocker_bash-backup"
 check_file_exists "geoblocker_bash-uninstall"
+check_file_exists "validate_cron_schedule.sh"
 check_file_exists "check_ip_in_ripe.sh"
 
 
@@ -226,14 +256,18 @@ mkdir -p "$conf_dir"
 # delete config file if it exists
 rm "$conf_file" &> /dev/null
 
-# write datadir path to the config file
-echo "Datadir=$datadir" > "$conf_file"
-
-# write default schedule to the config file
-echo "Default_schedule=$default_schedule" >> "$conf_file"
-
-# write reboot sleeptime to the config file
-echo "RebootSleep=$sleeptime" >> "$conf_file"
+# write some config to the config file
+echo -n "Setting initial config... "
+setconfig "Datadir" "$conf_file" "$datadir"; rv1=$?
+setconfig "Default_schedule" "$conf_file" "$default_schedule"; rv2=$?
+setconfig "RebootSleep" "$conf_file" "$sleeptime"; rv3=$?
+setconfig "Backup_script" "$conf_file" "$backup_script"; rv4=$?
+rv=$(( rv1 + rv2 + rv3 + rv4 ));
+if [ "$rv" -ne 0 ]; then
+	echo "Failed."
+	install_failed
+else echo "Ok."
+fi
 
 # Create the directory for downloaded lists and, if required, parent directories
 mkdir -p "$whitelist_dir"
@@ -253,7 +287,7 @@ else
 		echo "Error."
 		install_failed
 	fi
-	echo "Success."
+	echo "Ok."
 fi
 
 ## Copy scripts to $install_dir
@@ -262,15 +296,15 @@ fi
 if [ "$scriptdir" != "$install_dir" ]; then
 	echo ""
 	echo -n "Copying scripts to $install_dir... "
-	[ $debug ] && echo ""
-	copyscript "geoblocker_bash-fetch" "$install_dir/geoblocker_bash-fetch"
-	copyscript "geoblocker_bash-apply" "$install_dir/geoblocker_bash-apply"
-	copyscript "geoblocker_bash-manage" "$install_dir/geoblocker_bash-manage"
-	copyscript "geoblocker_bash-install" "$install_dir/geoblocker_bash-install"
-	copyscript "geoblocker_bash-run" "$install_dir/geoblocker_bash-run"
-	copyscript "geoblocker_bash-uninstall" "$install_dir/geoblocker_bash-uninstall"
-	copyscript "validate_cron_schedule.sh" "$install_dir/validate_cron_schedule.sh"
-	copyscript "check_ip_in_ripe.sh" "$install_dir/check_ip_in_ripe.sh"
+	copyscript "geoblocker_bash-install" "${install_dir}/"
+	copyscript "geoblocker_bash-fetch" "${install_dir}/"
+	copyscript "geoblocker_bash-apply" "${install_dir}/"
+	copyscript "geoblocker_bash-run" "${install_dir}/"
+	copyscript "geoblocker_bash-manage" "${install_dir}/"
+	copyscript "geoblocker_bash-backup" "${install_dir}/"
+	copyscript "geoblocker_bash-uninstall" "${install_dir}/"
+	copyscript "validate_cron_schedule.sh" "${install_dir}/"
+	copyscript "check_ip_in_ripe.sh" "${install_dir}/"
 	echo "Ok."
 fi
 
@@ -314,13 +348,9 @@ manage_opts=( "$debug" "$no_persistence" "$nodrop" -a "add" )
 geoblocker_bash-manage ${manage_opts[@]} -c "$tlds" -s "$cron_schedule"; rv=$?
 
 if [ $rv -ne 0 ]; then
-	echo "Failed to add and apply whitelist."
+	echo "Failed to create and apply the whitelist."
 	install_failed
 fi
-
-echo ""
-echo "View iptables rules with \"sudo iptables -L\""
-echo ""
 
 echo "Install done."
 
