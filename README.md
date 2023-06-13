@@ -23,7 +23,7 @@ https://github.com/blunderful-scripts/geoblocker_bash/releases
 - _example: 'sudo bash geoblocker_bash-install -c "DE NL"' (for Germany and Netherlands)_
  (when specifying multiple countries, put the list in double quotes)
  
-** To manage:**
+**To manage:**
  
 run 'sudo geoblocker_bash-manage -c "<country_code [country_code] ... [country_code]>" -a <add|remove>'
  
@@ -31,7 +31,7 @@ example (to add whitelists for Germany and Netherlands): _'sudo geoblocker-manag
  
 example (to remove whitelist for Germany): _'sudo geoblocker-manage -c DE -a remove'_
  
-** To uninstall:**
+**To uninstall:**
      run 'sudo geoblocker_bash-uninstall'
 
 **Prerequisites**:
