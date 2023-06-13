@@ -15,7 +15,7 @@ me=$(basename "$0")
 usage() {
     cat <<EOF
 
-This script:
+$me
 1) Deletes associated cron jobs
 2) Restores pre-install state of default policies for INPUT and FORWARD chains
 3) Deletes associated iptables rules and removes the whitelist ipset
@@ -27,6 +27,7 @@ This script:
 
     Options:
 	-p     : partial uninstall: restores iptables to pre-install state and removes cron jobs but leaves files in place
+    -d     : debug
 	-h     : This help
 
 EOF
@@ -34,9 +35,10 @@ EOF
 
 #### PARSE ARGUMENTS
 
-while getopts "ph" opt; do
+while getopts "phd" opt; do
 	case $opt in
 		p) partial_uninstall="true";;
+		d) debug="-d";;
 		h) usage; exit 0;;
 		\?) usage; exit 1;;
 	esac
@@ -46,6 +48,14 @@ shift $((OPTIND -1))
 echo ""
 
 ####Functions
+
+debugprint() {
+# prints a debug message
+	[ "$debug" ] && echo -e "    Debug: $@"
+}
+
+echo ""
+debugprint "\033[1;33mStarted *uninstall\033[0m"
 
 getconfig() {
 # reads a field named $1 from the config file $2
@@ -116,18 +126,8 @@ iptables-save | sed -r "/INPUT.*comment.*$iptables_comment/s/-A/iptables -D/e" &
 
 
 ### Destroy associated ipsets
-echo "Phase 1 destroying ipsets"
-for tld in $(getconfig "Countries" "$conf_file"); do
-	perm_ipset="geoblocker_bash_${tld}"
-	temp_ipset="$perm_ipset_temp"
-	echo "Destroying ipset $perm_ipset..."
-	ipset destroy "$perm_ipset"
-	echo "Destroying ipset $temp_ipset..."
-	ipset destroy "$temp_ipset"
-done
-
-echo "Phase 2 destroying ipsets"
-for ipset_name in $(ipset list -n | grep "geoblocker"); do
+echo "Destroying ipsets for geoblocker_bash..."
+for ipset_name in $(ipset list -n | grep "geoblocker_bash"); do
 	echo "Found ipset \"$ipset_name\", destroying..."
 	ipset destroy "$ipset_name"
 done
@@ -147,7 +147,8 @@ if [ ! "$partial_uninstall" ]; then
 	rm "$install_dir/validate_cron_schedule.sh"
 	rm "$install_dir/check_ip_in_ripe.sh"
 	rm "$install_dir/geoblocker_bash-uninstall"
-	
+	rm "$install_dir/geoblocker_bash-backup"
+
 	### Delete the config file
 	echo "Deleting config..."
 	rm -rf "$conf_dir"
