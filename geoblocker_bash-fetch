@@ -16,8 +16,10 @@
 
 
 me=$(basename "$0")
+parent_script="$(ps -o args= $PPID | awk -v RS='/| ' '/^geoblocker/')"
+args="$@"
 
-#### FUNCTIONS
+#### USAGE
 
 usage() {
     cat <<EOF
@@ -40,19 +42,44 @@ This script:
 EOF
 }
 
+#### Parse arguments
+
+while getopts "c:p:dh" opt; do
+	case $opt in
+	c) country=$OPTARG;;
+	p) iplist_path=$OPTARG;;
+	d) debug=true;;
+	h) usage; exit 0;;
+	\?) usage; exit 1;;
+	esac
+done
+shift $((OPTIND -1))
+
+
+#### FUNCTIONS
+
+# prints a debug message
+debugprint() {
+	[ "$debug" ] && echo -e "    Debug: $@"
+}
+
+echo ""
+debugprint "\033[1;33mStarted *fetch with args: '$args'\033[0m"
+
 die() {
 	echo ""
 	echo "$2" 1>&2
 	echo ""
 	logger -t geoblocker_bash-fetch "$2"
-	exit $1
+	[ -n "$parent_script" ] && debugprint "\033[1;33mBack to $parent_script...\033[0m"
+	exit "$1"
 }
 
 getlocalsubnet() {
 # attempts to find local subnet for the main network interface
 
 	# we are relying on the global variable $subnet_regex, so verify that it's not empty
-	if [ -z "$subnet_regex" ]; then exit 1; fi
+	if [ -z "$subnet_regex" ]; then die 1; fi
 
 	# returns local ip with subnet mask
 	localip="$(ip addr | grep 'state UP' -A2 | tail -n1 | awk '{print $2}')"
@@ -71,20 +98,6 @@ getlocalsubnet() {
 	fi
 	return $rv
 }
-
-
-#### Parse arguments
-
-while getopts "c:p:dh" opt; do
-	case $opt in
-	c) country=$OPTARG;;
-	p) iplist_path=$OPTARG;;
-	d) debug=true;;
-	h) usage; exit 0;;
-	\?) usage; exit 1;;
-	esac
-done
-shift $((OPTIND -1))
 
 
 #### Initialize variables
@@ -142,9 +155,8 @@ fi
 
 fetched_file=$(mktemp "/tmp/fetched-$country-XXXX.json")
 
-echo -n "Fetching iplist from RIPE... "
-[ $debug ] && echo ""
-[ $debug ] && echo "Debug: Trying: $curl_or_wget '$url'" >&2
+# debugprint "Trying: $curl_or_wget '$url'" >&2
+echo -n "Fetching iplist from RIPE for country '$country'... "
 
 $curl_or_wget "$url" > "$fetched_file"
 rv=$?
@@ -168,7 +180,7 @@ if [ ! "$status" = "ok" ]; then
 	die 254 "$err"
 fi
 
-echo "Success."
+echo "Ok."
 
 ##
 if [ -f "$out_list" ]; then
@@ -180,7 +192,7 @@ fi
 
 # get date of the newly fetched file
 ripe_db_time=$(jq -r '.data.query_time' "$fetched_file")
-[ $debug ] && echo "Debug: ripe_db_time=$ripe_db_time" >&2
+# debugprint "ripe_db_time=$ripe_db_time" >&2
 date_new=$(date -d "$ripe_db_time" +%s)
 
 if [ ! "$date_new" -gt "$date_old" ] && [ ! "$debug" ]; then
@@ -195,7 +207,7 @@ else
 
 	parsed_subnet_cnt=$(wc -l < "$parsed_file")
 	if [ "$parsed_subnet_cnt" -ge "$min_subnets_num" ]; then
-		echo "Success."
+		echo "Ok."
 	else
 		err="Error: parsed subnets count is less than $min_subnets_num. Probably a download error. Exiting."
 		rm "$parsed_file" &>/dev/null
@@ -217,7 +229,7 @@ else
 		echo "Invalid subnets removed from the list." >&2
 	else
 		if [ "$validated_subnet_cnt" -ge "$min_subnets_num" ]; then
-			echo "Success."
+			echo "Ok."
 		else
 			err="Error: validated subnets count is less than $min_subnets_num. Probably a download error. Exiting." >&2
 			rm "$parsed_file" &>/dev/null
@@ -227,7 +239,7 @@ else
 		fi
 	fi
 
-	echo "Total validated subnets: $validated_subnet_cnt"
+	echo "Validated $validated_subnet_cnt subnets."
 	echo ""
 
 
@@ -264,3 +276,6 @@ rm "$parsed_file" &>/dev/null
 rm "$validated_file" &>/dev/null
 rm "$fetched_file" &>/dev/null
 echo ""
+
+[ -n "$parent_script" ] && debugprint "\033[1;33mBack to $parent_script...\033[0m"
+exit 0
