@@ -1,0 +1,290 @@
+#!/usr/bin/env bash
+#
+
+
+# geoblocker_bash-backup
+
+# creates a backup of the current iptables states and current ipsets,
+# or restores the above from backup
+# if restore from backup fails, calls the uninstall script
+
+me=$(basename "$0")
+parent_script="$(ps -o args= $PPID | awk -v RS='/| ' '/^geoblocker/')"
+args="$@"
+
+#### USAGE
+
+usage() {
+    cat <<EOF
+
+$me
+- Creates a backup of the current iptables states and current ipsets,
+- or restores the above from backup
+- if restore from backup fails, calls the uninstall script
+
+    Usage: $me -f <file> <-b|-r> [-d] [-h]
+
+    Options:
+        -f <file>   : file to use for backup of restore operation
+        -b          : action: create backup
+        -r          : action: restore from backup
+
+        -d          : Debug
+        -h          : This help
+
+EOF
+}
+
+#### PARSE ARGUMENTS
+while getopts "f:brdh" opt; do
+	case $opt in
+		f) knowngood_file="$OPTARG";;
+		b) act_backup="true";;
+		r) act_restore="true";;
+		d) debug="-d";;
+		h) usage; exit 0;;
+		\?) usage; exit 1;;
+	esac
+done
+shift $((OPTIND -1))
+
+
+#### FUNCTIONS
+
+# prints a debug message
+debugprint() {
+	[ "$debug" ] && echo -e "    Debug: $@"
+}
+
+echo ""
+debugprint "\033[1;33mStarted *backup with args: '$args'\033[0m"
+
+die() {
+# echo out the error passed in 1st argument and write it to syslog
+	echo ""
+	if [ -n "$1" ]; then
+		echo "$1" 1>&2
+		echo ""
+		logger -t "$me" "$1"
+	fi
+	[ -n "$parent_script" ] && debugprint "\033[1;33mBack to $parent_script...\033[0m"
+	exit 1
+}
+
+knowngood_failed() {
+	err1="$1"; err2="$2"
+	echo ""
+	echo "$err1" >&2; echo "$err2" >&2
+	# print errors to syslog
+	logger -t geoblocker_bash-backup "$err1"; logger -t geoblocker_bash-backup "$err2"
+	geoblocker_bash-uninstall -p
+	[ -n "$parent_script" ] && debugprint "\033[1;33mBack to $parent_script...\033[0m"
+	exit 1
+}
+
+restart_fail2ban() {
+# fail2ban doesn't handle well flushing the INPUT chain then restoring iptables
+# this function restarts fail2ban service after these operations in order to work around that issue
+	systemctl is-enabled fail2ban &> /dev/null; rv=$?
+	if [ $rv -eq 0 ]; then
+		echo -n "Restarting fail2ban..." >&2
+		systemctl restart fail2ban; rv=$?
+		if [ $rv -eq 0 ]; then
+			echo "Ok." >&2
+		else
+			echo "Failed." >&2
+		fi
+	fi
+	echo ""
+}
+
+restore_from_file() {
+# restores iptables and ipset state from a backup file
+	restoretarget="$1"
+	restorefile="$2"
+	echo "Checking the $restoretarget portion of the backup file..."
+
+	# count lines in the corresponding portion of the backup file
+	case "$restoretarget" in
+		iptables) line_cnt=$(sed -e '/\[IPSET\].*/Q' "$restorefile" | wc -l) ;;
+		ipset) line_cnt=$(sed -n "/create geoblocker_bash/,\$p" "$restorefile" | grep "add $geoblocker_bash" | wc -l) ;;
+	esac
+	debugprint "$restoretarget lines number in backup: $line_cnt"
+
+	if [ "$line_cnt" -gt 0 ]; then
+		echo -n "Restoring $restoretarget state from backup... "
+
+		case "$restoretarget" in
+			# reads <$restorefile> from beginning to [IPSET] and pipes the result into iptables-restore
+			iptables) sed -e '/\[IPSET\]/Q' "$restorefile" 2>&1 | iptables-restore; rv="${PIPESTATUS[1]}" ;;
+
+			# reads <$restorefile> from "create geoblocker_bash" to EOF and pipes the result into "ipset restore"
+			ipset) sed -n "/create geoblocker_bash/,\$p" "$restorefile" 2>&1 | ipset restore; rv="${PIPESTATUS[1]}" ;;
+		esac
+
+		if [ $rv -eq 0 ]; then
+			echo "Success."
+			if [ "$restoretarget" = "iptables" ]; then restart_fail2ban; fi
+			return 0
+		else
+			echo "Failure."
+			err1="Failed to restore $restoretarget known-good state from backup."
+		fi
+	else
+		err1="Error: $restoretarget backup appears to be empty or non-existing."
+	fi
+
+	# if we are here then something is seriously broken (unless the script ran in test mode with the -t switch)
+	# run the uninstall script with -p switch to restore iptables to pre-install state but leave files in place
+	err2="*** Reverting iptables to pre-install state and removing cron jobs ***"
+
+	# if -t switch wasn't specified at launch then it's not a test
+	if [ ! "$test" ]; then
+		knowngood_failed "$err1" "$err2"
+	else
+		echo "$err1"
+		echo "-t switch was specified, which means we are in test mode. Skipping uninstall."
+		echo "WARNING: RECOVERY TEST FAILED AND GEOBLOCKER IS CURRENTLY INACTIVE"
+
+		# still need to restart fail2ban if it's installed
+		if [ "$restoretarget" = "iptables" ]; then
+			restart_fail2ban
+			die 1
+		fi
+	fi
+	echo ""; echo ""
+}
+
+restoreknowngood() {
+# resets iptables policies and rules, destroys all associated ipsets and then initiates restore from file
+	restorefile="$1"
+
+	echo ""; echo ""
+	msg1="NOTE: Resetting iptables rules for geoblocker_bash... "
+	echo "$msg1" >&2
+	logger -t geoblocker_bash-backup  "$msg1"
+
+	echo "Setting INPUT chain policy to ACCEPT... "
+	iptables -P INPUT ACCEPT
+
+	# sed looks for rules with the comment which we use to stamp our rules
+	# sed executes iptables -D (delete) command on matching rules. execution is promtped by the switch /e (only available in GNU sed)
+	iptables-save | sed -r "/INPUT.*comment.*${iptables_comment}/s/-A/iptables -D/e" &>/dev/null; rv=$?
+	if [ $rv -ne 0 ]; then
+		echo "Failure."
+		die "Error removing existing rules with command: iptables-save | sed -r \"/INPUT.*comment.*$iptables_comment/s/-A/iptables -D/e\". Exiting."
+	else
+		echo "Ok."
+	fi
+
+	for curr_ipset in $(ipset list -n | grep "$ipset_tag"); do
+		echo -n "Destroying ipset \"$curr_ipset\"... "
+		ipset destroy "$curr_ipset"; rv=$?
+		if [ $rv -ne 0 ]; then
+			echo ""
+			die "Error destroying ipset \"$curr_ipset\"."
+		else
+			echo "Ok."
+		fi
+	done
+
+	msg1="NOTE: Restoring last known-good ipset and iptables from backup... "
+	echo "$msg1" >&2
+	echo "Backup file: $restorefile"
+	echo ""
+
+	restore_from_file "ipset" "$restorefile"
+	restore_from_file "iptables" "$restorefile"
+	msg1="Successfully restored known-good ipset and iptables state from backup."
+	echo "$msg1"; echo ""
+	logger -t geoblocker_bash-backup  "$msg1"
+}
+
+
+#### VARIABLES
+
+iptables_comment="geoblocker_bash"
+ipset_tag="geoblocker_bash"
+
+
+#### CHECKS
+
+# check that conflicting actions were not requested
+if [ "$act_backup" ] && [ "$act_restore" ]; then usage; die "Conflicting actions requested: -b and -r can not be used together."; fi
+
+# check that an action was specified
+if [ ! "$act_backup" ] && [ ! "$act_restore" ]; then usage; die "Use \"-b\" or \"-r\" to specify action"; fi
+
+# check for knowngood file path
+if [ -z "$knowngood_file" ]; then
+	usage
+	die "Error: backup file path can not be empty. Exiting."
+fi
+
+# check for root
+if [ "$EUID" -ne 0 ]; then
+	die "This needs to be run as root."
+fi
+
+# Check for ipset utility
+if ! command -v "ipset" &> /dev/null; then
+	die "Error: Cannot find 'ipset'. Install it with 'apt install ipset' or similar. Exiting."
+fi
+
+# Check for iptables-save utility
+if ! command -v "iptables-save" &> /dev/null; then
+	die "Error: Cannot find 'iptables-save'. Exiting."
+fi
+
+# Check for iptables-restore utility
+if ! command -v "iptables-restore" &> /dev/null; then
+	die "Error: Cannot find 'iptables-restore'. Exiting."
+fi
+
+
+#### MAIN
+
+if [ "$act_backup" ]; then
+### Create backup file for known-good iptables state and save current state to the file
+
+	echo -n "Creating backup of current iptables state... "
+	touch "${knowngood_file}.new"
+
+	iptables-save > "${knowngood_file}.new"; rv=$?
+	if [ $rv -ne 0 ]; then
+		die "Error creating backup of iptables state with command: \"iptables-save > ${knowngood_file}.new\". Exiting."
+	fi
+	echo "Ok."
+
+		# we use the same file for iptables and ipset backup
+		# the "[IPSET]" line separates portions of the file
+		echo "[IPSET]" >> "${knowngood_file}.new"
+
+	for curr_ipset in $(ipset list -n | grep "$ipset_tag"); do
+		echo -n "Creating backup of ipset \"$curr_ipset\"... "
+		ipset save "$curr_ipset" >> "${knowngood_file}.new"; rv=$?
+		if [ $rv -ne 0 ]; then
+			die "Error creating backup of ipset \"$curr_ipset\". Exiting."
+		fi
+		echo "Ok."
+	done
+
+	mv "$knowngood_file.new" "$knowngood_file"; rv=$?
+	if [ $rv -ne 0 ]; then
+		die "Error overwriting backup file for ipset and iptables state. Exiting."
+	fi
+
+	echo ""
+	echo "Successfully created a backup of ipsets and iptables rules."
+	echo "Backup file: \"$knowngood_file\""
+fi
+
+if [ "$act_restore" ]; then
+### Restore iptables and ipsets to known-good state from backup file
+	restoreknowngood "$knowngood_file"
+fi
+
+echo ""
+[ -n "$parent_script" ] && debugprint "\033[1;33mBack to $parent_script...\033[0m"
+
+exit 0
