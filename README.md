@@ -5,7 +5,7 @@ Suite of bash scripts with easy install and uninstall, focusing on reliability a
 
 The ip list is fetched from RIPE - regional Internet registry for Europe, the Middle East and parts of Central Asia. RIPE appears to store ip lists for countries in other regions as well, so currently this can be used for any country in the world.
 
-Intended use case is a server/computer that needs to be publically accessible in your country but does not need to be internationally accessible.
+Intended use case is a server/computer that needs to be publically accessible only in a certain country or countries.
 
 **TL;DR**
 
