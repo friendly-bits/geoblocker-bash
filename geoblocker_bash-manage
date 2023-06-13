@@ -6,13 +6,15 @@
 #       and creates or updates associated cron jobs
 
 me=$(basename "$0")
+parent_script="$(ps -o args= $PPID | awk -v RS='/| ' '/^geoblocker/')"
+args="$@"
 
 #### USAGE
 
 usage() {
     cat <<EOF
 
-This script:
+$me
     Allows to add or delete whitelists for specified countries to/from geoblocking rules
         and creates or updates associated cron jobs.
 
@@ -51,14 +53,23 @@ while getopts "c:a:s:npdh" opt; do
 done
 shift $((OPTIND -1))
 
+
 #### FUNCTIONS
 
-debugpr() {
+debugprint() {
 # prints a debug message
-	[ "$debug" ] && echo "Debug: $@"
+	[ "$debug" ] && echo -e "    Debug: $@"
 }
 
-get_script_dir () {
+echo ""
+debugprint "\033[1;33mStarted *manage with args: '$args'\033[0m"
+
+die() {
+[ -n "$parent_script" ] && debugprint "\033[1;33mBack to $parent_script...\033[0m"
+exit 1
+}
+
+get_script_dir() {
 	SOURCE=${BASH_SOURCE[0]}
 	while [ -L "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symlink
 		DIR=$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )
@@ -116,6 +127,7 @@ conf_file="${conf_dir}/geoblocker_bash.conf"
 
 # get datadir from the config file
 read -r datadir < <(getconfig "Datadir" "$conf_file")
+
 preinstall_policies_file="$datadir/preinstall_policies.bak"
 knowngood_file="$datadir/iptables_knowngood.bak"
 whitelist_dir="$datadir/ip_lists"
@@ -123,9 +135,6 @@ failed_tlds_file="$datadir/FailedTLDs"
 
 # get sleeptime (for reboot) from the config file
 read -r sleeptime < <(getconfig "RebootSleepTime" "$conf_file")
-
-# TODO: implement setting sleeptime config in *install and in *manage
-# TODO: implement setting datadir config in *install and in *manage
 
 # get the script path
 read -r scriptdir < <(get_script_dir)
@@ -139,13 +148,13 @@ if [ -z "$tlds" ]; then
 	usage
 	echo "Specify countries with \"-c <tlds>\"!"
 	echo ""
-	exit 1
+	die
 fi
 
 case "$action" in
 	add) ;;
 	remove) ;;
-	\?) usage; echo "Unsupported action \"$action\"."; exit 1;;
+	\?) usage; echo "Unsupported action \"$action\"."; die;;
 esac
 
 # TODO: test empty "action" etc
@@ -154,13 +163,13 @@ if [ -z "$action" ]; then
 	usage
 	echo "Specify action with \"-a <action>\"!"
 	echo ""
-	exit 1
+	die
 fi
 
 # check for root
 if [ "$EUID" -ne 0 ]
   then echo "This needs to be run as root."
-  exit
+  die
 fi
 
 # check if cron service is enabled
@@ -171,32 +180,33 @@ if [[ "$crondisabled" ]] && [ "$action" = "add" ]; then
 	echo "Error: cron service seems to be disabled. Can not perform action \"$action\""
 	echo "On Debian and derivatives, enable the cron service with \"systemctl enable cron.service\". Exiting." >&2
 	echo ""
-	exit 1
+	die
 fi
-
-echo ""
 
 # cd into script directory
 # exit in case "cd" fails
 cd "$scriptdir"; rv=$?
-if [ -z "$scriptdir" ] || [ "$rv" -ne 0 ]; then echo "Error: could not change directory to \"$scriptdir\". Exiting."; exit 1; fi
+if [ -z "$scriptdir" ] || [ "$rv" -ne 0 ]; then echo "Error: could not change directory to \"$scriptdir\". Exiting."; die; fi
 
 if [ ! "$skip_cron" ]; then
 
 	# if cron_schedule wasn't provided in args, use the default schedule from the config file
 	if [ -z "$cron_schedule" ]; then
-		cron_schedule=$(getconfig "Default_schedule" "$conf_file")
+		read -r cron_schedule < <(getconfig "Default_schedule" "$conf_file")
 	fi
 
 	# validate cron schedule
-	bash validate_cron_schedule.sh -x "$cron_schedule"; rv=$?
+	debugprint "Validating cron schedule: '$cron_schedule'."
+	read -r cron_schedule < <(validate_cron_schedule.sh $debug -x "$cron_schedule"); rv=$?
 	if [ $rv -ne 0 ]; then
-		echo "Error validating cron schedule. Exiting." >&2
+		echo "Error validating cron schedule '$cron_schedule'. Exiting." >&2
 		echo ""
-		exit 1
+		die
+	else
+		debugprint "Successfully validated cron schedule: '$cron_schedule'."
 	fi
 else
-	debugpr "Skipping cron schedule validation."
+	debugprint "Skipping cron schedule validation."
 fi
 
 
@@ -228,7 +238,7 @@ case "$action" in
 		if [ -z "$(echo ${tlds_to_change[@]})" ]; then
 			echo "Error: can not add countries \"${arg_tlds[@]}\" because they have already been added."
 			echo ""
-			exit 1
+			die
 		fi
 	;;
 	remove)
@@ -250,27 +260,27 @@ case "$action" in
 		if [ -z "$(echo ${tlds_to_change[@]})" ]; then
 			echo "Error: can not remove countries \"${arg_tlds[@]}\" because they have not been added."
 			echo ""
-			exit 1
+			die
 		fi
 	;;
 esac
 
-debugpr "tlds to change: ${tlds_to_change[@]}"
+debugprint "tlds to change: ${tlds_to_change[@]}"
 
 setconfig "Countries" "$conf_file" "$(echo ${new_tlds[@]})"; rv=$?
 if [ $rv -ne 0 ]; then
 	echo ""
 	echo "Error writing new config for countries \"${new_tlds[@]}\" to file \"$conf_file\"."
-	exit 1
+	die
 fi
-debugpr "Countries in updated config: $(getconfig Countries $conf_file)"
+debugprint "Countries in updated config: $(getconfig Countries $conf_file)"
 
 
 ### Call the *run script
 
 # TODO: add -r option to *apply for rules removal
 
-$run_command $debug $nodrop -a "$action" -c "$(echo ${tlds_to_change[@]})"; rv=$?
+echo $run_command $debug $nodrop -a "$action" -c "'$(echo ${tlds_to_change[@]})'" | bash; rv=$?
 
 # 254 return code means fetch failure
 if [ $rv -eq 254 ]; then
@@ -311,7 +321,7 @@ elif [ $rv -gt 0 ] && [ $rv -ne 254 ]; then
 
 	if [ -z "$(echo ${config_tlds[@]})" ]; then
 		echo "Can not restore previous countries set because it is not found in the config file."
-		exit 1
+		die
 	fi
 
 	# restore old countries set in the config file
@@ -323,10 +333,10 @@ elif [ $rv -gt 0 ] && [ $rv -ne 254 ]; then
 	else
 		echo "Failed."
 	fi
-	exit 1
+	die
 
 elif [ $rv -eq 0 ]; then
-	debugpr "Successfully performed action \"$action\" for countries \"${tlds_to_change[@]}\"."
+	debugprint "Successfully performed action \"$action\" for countries \"${tlds_to_change[@]}\"."
 fi
 
 
@@ -334,7 +344,7 @@ fi
 
 ## Read current cron jobs into variable
 	read -r curr_cron_jobs < <(crontab -u root -l 2>/dev/null | grep "\"$run_command\"")
-	debugpr "Current cron jobs: $curr_cron_jobs"
+	debugprint "Current cron jobs: $curr_cron_jobs"
 
 ## Remove current cron jobs
 echo ""
@@ -353,7 +363,7 @@ new_tlds_str="$(echo ${new_tlds[@]})"
 # If new countries list is empty, skip creating cron jobs
 if [ -z "$new_tlds_str" ]; then
 	skip_cron="true"
-	debugtr "NOTE: New countries list is empty."
+	debugprint "NOTE: New countries list is empty."
 fi
 
 
@@ -362,18 +372,18 @@ if [ ! "$skip_cron" ]; then
 	### Create cron jobs
 
 	echo -n "Creating periodic cron job... "
-	debugpr "applying cron line: $cron_schedule \"$run_command\" $nodrop -a update &>/dev/null"
+	debugprint "applying cron line: $cron_schedule \"$run_command\" $nodrop -a update &>/dev/null"
 	echo -e "$(sudo crontab -u root -l 2>/dev/null)\n$cron_schedule \"$run_command\" $nodrop -a update &>/dev/null" | sudo crontab -u root -
 	rv=$?
 
 	if [ $rv -ne 0 ]; then
 		echo "Error running crontab command." >&2
 		echo ""
-		exit 1
+		die
 	else
-		echo "Success."
+		echo "Ok."
 		cron_line_result=$(crontab -u root -l 2>/dev/null |  grep  "\"$run_command\"")
-		echo "Cron line: \"$cron_line_result\""
+		debugprint "Cron line: \"$cron_line_result\""
 	fi
 
 	echo -n "Creating reboot cron job... "
@@ -387,14 +397,22 @@ if [ ! "$skip_cron" ]; then
 	if [ $rv -ne 0 ]; then
 		echo "Error running crontab command." >&2
 		echo ""
-		exit 1
+		die
 	else
-		echo "Success."
+		echo "Ok."
 		cron_line_result=$(crontab -u root -l 2>/dev/null |  grep "reboot sleep .* && \"$run_command\"")
-		echo "Reboot cron line: \"$cron_line_result\""
+		debugprint "Reboot cron line: \"$cron_line_result\""
 		echo ""
 		echo "View cron jobs with \"sudo crontab -l\""
 	fi
 else
 	echo "NOTE: Skipping cron jobs creation."
 fi
+
+echo ""
+echo "View iptables rules with \"sudo iptables -L\""
+echo ""
+
+[ -n "$parent_script" ] && debugprint "\033[1;33mBack to $parent_script...\033[0m"
+
+exit 0
