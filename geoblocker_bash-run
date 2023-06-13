@@ -113,7 +113,7 @@ read -r backup_script < <(getconfig "Backup_script" "$conf_file")
 preinstall_policies_file="$datadir/preinstall_policies.bak"
 knowngood_file="$datadir/iptables_knowngood.bak"
 whitelist_dir="$datadir/ip_lists"
-failed_tlds_file="$datadir/FailedTLDs"
+tlds_status_file="$datadir/tlds_status"
 
 if [ -z "$arg_tlds" ] || [ "$action" = "update" ]; then
 	# read tlds from the config file
@@ -124,6 +124,9 @@ else
 	tlds="$arg_tlds"
 fi
 
+# trim single-quotes if any
+tlds="$(echo ${tlds//\'})"
+
 # get the script path
 read -r scriptdir < <(get_script_dir)
 
@@ -132,19 +135,19 @@ read -r scriptdir < <(get_script_dir)
 
 # check for geoblocker_bash-fetch
 [ ! $skipfetch ] && if ! command -v geoblocker_bash-fetch &> /dev/null; then
-	err="Error: Cannot find \"geoblocker_bash-fetch\". Did you run setup? Exiting."
+	err="Error: Cannot find 'geoblocker_bash-fetch'. Did you run setup? Exiting."
 	die 1 "$err"
 fi
 
 # check for geoblocker_bash-apply
 if ! command -v geoblocker_bash-apply &> /dev/null; then
-	err="Error: Cannot find \"geoblocker_bash-apply\". Did you run setup? Exiting."
+	err="Error: Cannot find 'geoblocker_bash-apply'. Did you run setup? Exiting."
 	die 1 "$err"
 fi
 
 # check for geoblocker_bash-backup
 if ! command -v geoblocker_bash-backup &> /dev/null; then
-	err="Error: Cannot find \"geoblocker_bash-apply\". Did you run setup? Exiting."
+	err="Error: Cannot find 'geoblocker_bash-apply'. Did you run setup? Exiting."
 	die 1 "$err"
 fi
 
@@ -152,7 +155,7 @@ case "$action" in
 	add) apply_action="add" ;;
 	remove) apply_action="remove" ;;
 	update) apply_action="add" ;;
-	*) usage; die 1 "Error: unsupported action \"$action\"" ;;
+	*) usage; die 1 "Error: unsupported action '$action'" ;;
 esac
 
 # check for country tlds
@@ -182,13 +185,12 @@ fi
 
 
 #### MAIN
-
 debugprint "tlds: $tlds"
 
 # cd into script directory
 # exit in case "cd" fails
 cd "$scriptdir"; rv=$?
-if [ -z "$scriptdir" ] || [ "$rv" -ne 0 ]; then die 1 "Error: could not change directory to \"$scriptdir\". Exiting."; fi
+if [ -z "$scriptdir" ] || [ "$rv" -ne 0 ]; then die 1 "Error: could not change directory to '$scriptdir'. Exiting."; fi
 
 
 ### Fetch ip lists
@@ -206,21 +208,26 @@ if [ ! "$skipfetch" ] && [ "$action" != "remove" ]; then
 		if [ $rv -eq 254 ]; then
 			errcnt=$(( errcnt + 1 ))
 			failed_tlds="$(echo $failed_tlds) $tld"
-			debugprint "Failed to retrieve ip list for country \"$tld\"."
+			debugprint "Failed to retrieve ip list for country '$tld'."
 		else
 			ok_cnt=$(( ok_cnt + 1 ))
 			ok_tlds="$(echo $ok_tlds) $tld"
-			debugprint "Successfully retrieved ip list for country \"$tld\"."
+			debugprint "Successfully retrieved ip list for country '$tld'."
 		fi
 	done
 
 	if [ "$errcnt" -gt 0 ]; then
-		logger -t geoblocker_bash-run "Failed to fetch the whitelist for countries\"$failed_tlds\"."
-		echo "FailedTLDs=$failed_tlds" > "$failed_tlds_file"
+		msg="Failed to fetch the whitelist for countries'$failed_tlds'."
+		echo "$msg"
+		logger -t geoblocker_bash-run "$msg"
+		echo "FailedTLDs=$failed_tlds" >> "$tlds_status_file"
 	fi
 
 	if [ "$ok_cnt" -gt 0 ]; then
-		logger -t geoblocker_bash-run "Successfully fetched the whitelist for countries\"$ok_tlds\"."
+		msg="Successfully fetched the whitelist for countries'$ok_tlds'."
+		echo "$msg"
+		logger -t geoblocker_bash-run "$msg"
+		echo "OkTLDs=$ok_tlds" >> "$tlds_status_file"
 	else
 		err="All fetch attempts failed."
 		die 254 "$err"
@@ -246,14 +253,14 @@ for tld in $(echo "${tlds}"); do
 		$backup_script $debug -f "$knowngood_file" -r
 		die 1 ""
 	else    # if the *apply script exited with code 0
-		debugprint "Successfully applied the whitelist for country \"$tld\"."
+		debugprint "Successfully applied action '$apply_action' for country '$tld'."
 	fi
 done
 
 # call the backup script to create a known-good backup of ipsets and iptables state
 $backup_script $debug -f "$knowngood_file" -b
 
-logger -t geoblocker_bash-run "Successfully applied action \"$action\" for countries \"$tlds\"."
+logger -t geoblocker_bash-run "Successfully applied action '$action' for countries '$tlds'."
 
 echo ""
 

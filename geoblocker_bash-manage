@@ -18,16 +18,18 @@ $me
     Allows to add or delete whitelists for specified countries to/from geoblocking rules
         and creates or updates associated cron jobs.
 
-WARNING if removing a whitelist: Geoblocking will remain active after removal.
-        If you remove your country's whitelist, you may lose remote access to your system.
+WARNING: if removing a whitelist: Geoblocking will remain active after removal.
+         If you remove your country's whitelist, you may lose remote access to your system.
 
 
-    Usage: $me -c <"tld [tld] ... [tld]"> -a <add|remove> [-s <"schedule">] [-n] [-p] [-d] [-h]
+    Usage: $me -a <add|remove|schedule> [-c "[tld] [tld] ... [tld]"] [-s "schedule"] [-n] [-p] [-d] [-h]
 
     Options:
-        -c <"tld(s)">   : tld / country codes. if passing multiple country codes, use double quotes
-        -a <action>     : action to perform: "add" or "remove" associated rules and cron jobs
-        -s <"schedule"> : schedule expression for the cron job, must be inside double quotes
+        -a action       : action to perform: "add" or "remove" associated rules and cron jobs
+                          or "schedule" to change the cron schedule without changing iptables rules
+
+        -c "tld(s)"     : tld / country codes. if passing multiple country codes, use double quotes
+        -s "schedule"   : schedule expression for the periodic cron job, must be inside double quotes
 
         -n              : No persistence (skip creating cron jobs)
         -p              : No Drop: applies the config but skips setting INPUT chain default policy to DROP
@@ -39,10 +41,10 @@ EOF
 }
 
 #### PARSE ARGUMENTS
-while getopts "c:a:s:npdh" opt; do
+while getopts "a:c:s:npdh" opt; do
 	case $opt in
-		c) tlds=$OPTARG;;
 		a) action=$OPTARG;;
+		c) tlds=$OPTARG;;
 		s) cron_schedule=$OPTARG;;
 		n) skip_cron=true;;
 		p) nodrop="-p";;
@@ -113,7 +115,7 @@ setconfig() {
 	fieldname="$1"
 	configfile="$2"
 	field="$3"
-	if [ -z "$fieldname" ] || [ -z "$configfile" ] || [ -z "$field" ]; then return 1; fi
+	if [ -z "$fieldname" ] || [ -z "$configfile" ]; then return 1; fi
 
 	# remove corresponding config line
 	cat "$configfile" | grep -v "$fieldname=" > "${configfile}.temp"
@@ -138,7 +140,7 @@ read -r datadir < <(getconfig "Datadir" "$conf_file")
 preinstall_policies_file="$datadir/preinstall_policies.bak"
 knowngood_file="$datadir/iptables_knowngood.bak"
 whitelist_dir="$datadir/ip_lists"
-failed_tlds_file="$datadir/FailedTLDs"
+tlds_status_file="$datadir/tlds_status"
 
 # get sleeptime (for reboot) from the config file
 read -r sleeptime < <(getconfig "RebootSleepTime" "$conf_file")
@@ -151,23 +153,7 @@ run_command="${scriptdir}/geoblocker_bash-run"
 
 #### CHECKS
 
-if [ -z "$tlds" ]; then
-	usage
-	die "Specify countries with \"-c <tlds>\"!"
-fi
-
-case "$action" in
-	add) ;;
-	remove) ;;
-	\?) usage; die "Unsupported action \"$action\".";;
-esac
-
 # TODO: test empty "action" etc
-
-if [ -z "$action" ]; then
-	usage
-	die "Specify action with \"-a <action>\"!"
-fi
 
 # check for root
 if [ "$EUID" -ne 0 ]; then
@@ -178,9 +164,44 @@ fi
 (systemctl is-enabled cron.service) > /dev/null; rv=$?
 if [ $rv -ne 0 ]; then crondisabled="true"; fi
 
-if [[ "$crondisabled" ]] && [ "$action" = "add" ]; then
-	err1="Error: cron service seems to be disabled. Can not perform action \"$action\""
-	err2="On Debian and derivatives, enable the cron service with \"systemctl enable cron.service\". Exiting."
+
+# Check the passed arguments for sanity
+
+if [ -z "$action" ]; then
+	usage
+	die "Specify action with '-a <action>'!"
+fi
+
+if [ "$action" != "schedule" ] && [ -z "$tlds" ]; then
+	die "Error: action '$action' requires to specify countries with '-c <tlds>'!"
+fi
+
+if [ "$action" = "schedule" ] && [ -n "$tlds" ]; then
+	die "Error: action '$action' only supports changing the cron schedule! Do not use it with the '-c' option!"
+fi
+
+if [ "$action" = "schedule" ] && [ -n "$skip_cron" ]; then
+	die "Error: action '$action' is incompatible with option '-n'!"
+fi
+
+if [ "$action" = "schedule" ] && [ -z "$cron_schedule" ]; then
+	die "Error: action '$action' requires to provide cron schedule with option '-s'!"
+fi
+
+if [ "$action" = "schedule" ] && [ -n "$nodrop" ]; then
+	die "Error: action '$action' is for setting the cron schedule only, don't use it with '-p'!"
+fi
+
+case "$action" in
+	add) ;;
+	remove) ;;
+	schedule) ;;
+	\?) usage; die "Error: unsupported action '$action'.";;
+esac
+
+if [[ "$crondisabled" ]] && [ "$action" != "remove" ] && [ -z "$skip_cron" ]; then
+	err1="Error: cron service seems to be disabled. Can not perform action '$action'"
+	err2="On Debian and derivatives, enable the cron service with 'systemctl enable cron.service'. Exiting."
 	die "$err1" "$err2"
 fi
 
@@ -191,7 +212,7 @@ fi
 # cd into script directory
 # exit in case "cd" fails
 cd "$scriptdir"; rv=$?
-if [ -z "$scriptdir" ] || [ "$rv" -ne 0 ]; then die "Error: could not change directory to \"$scriptdir\". Exiting."; fi
+if [ -z "$scriptdir" ] || [ "$rv" -ne 0 ]; then die "Error: could not change directory to '$scriptdir'. Exiting."; fi
 
 if [ ! "$skip_cron" ]; then
 
@@ -217,6 +238,7 @@ fi
 
 ### Read current set of countries from the the config file into array config_tlds
 config_tlds=( $(getconfig "Countries" "$conf_file") )
+debugprint "Countries in initial config: ${config_tlds[@]}"
 
 # Get new set of countries from the argument into array arg_tlds
 arg_tlds=( $(echo "$tlds") )
@@ -239,7 +261,7 @@ case "$action" in
 		# convert to array while removing duplicates
 		tlds_to_change=( $(echo "$tlds_to_change_str" | sort -ibu) )
 		if [ -z "$(echo ${tlds_to_change[@]})" ]; then
-			die "Error: can not add countries \"${arg_tlds[@]}\" because they have already been added."
+			die "Error: can not add countries '${arg_tlds[@]}' because they have already been added."
 		fi
 	;;
 	remove)
@@ -259,78 +281,63 @@ case "$action" in
                           <(printf %s\\n "${arg_tlds[@]}" | sort -u))
 
 		if [ -z "$(echo ${tlds_to_change[@]})" ]; then
-			die "Error: can not remove countries \"${arg_tlds[@]}\" because they have not been added."
+			die "Error: can not remove countries '${arg_tlds[@]}' because they have not been added."
 		fi
 	;;
 esac
 
-debugprint "tlds to change: ${tlds_to_change[@]}"
+if [ "$action" = "schedule" ]; then
+	debugprint "Note: Skipping the *run script call because specified action was 'schedule'."
+else
+	setconfig "Countries" "$conf_file" "$(echo ${new_tlds[@]})"; rv=$?
+	if [ $rv -ne 0 ]; then
+		die "Error writing new config for countries '${new_tlds[@]}' to file '$conf_file'."
+	fi
 
-setconfig "Countries" "$conf_file" "$(echo ${new_tlds[@]})"; rv=$?
-if [ $rv -ne 0 ]; then
-	die "Error writing new config for countries \"${new_tlds[@]}\" to file \"$conf_file\"."
+	# re-create tlds_status_file
+	echo "" > "$tlds_status_file"
+
+	### Call the *run script
+
+	$run_command $debug $nodrop -a "$action" -c "$(echo ${tlds_to_change[@]})"; rv=$?
+
+	# 254 return code means fetch failure
+	if [ $rv -eq 254 ]; then
+		# read failed tlds from file into array failed_tlds
+		failed_tlds=( $(getconfig "FailedTLDs" "$tlds_status_file") )
+		echo "Error performing action '$action' for countries '${failed_tlds[@]}'."
+
+	# positive return code means apply failure or another permanent error, except for 254
+	elif [ $rv -gt 0 ] && [ $rv -ne 254 ]; then
+		echo "Error performing action '$action' for countries '${tlds_to_change[@]}'."
+
+		if [ -z "$(echo ${config_tlds[@]})" ]; then
+			die "Can not restore previous countries set because it is not found in the config file."
+		fi
+
+		# restore old countries set in the config file
+		echo -n "Restoring previous countries set: '${config_tlds[@]}'..."
+		setconfig "Countries" "$conf_file" "${config_tlds[@]}"
+		$run_command $debug $nodrop -a "update"; rv=$?
+		if [ $rv -eq 0 ]; then
+			echo "Ok."
+			err="Successfully restored previous countries set from backup."
+		else
+			echo "Failed."
+			err="Failed to restore previous countries set from backup."
+		fi
+		die "$err"
+	fi
+
+	if [ "$action" = "add" ]; then
+		# store successfully fetched and applied tlds in array ok_tlds
+		ok_tlds=( $(getconfig "OkTLDs" "$tlds_status_file") )
+		new_tlds_str="$(echo ${config_tlds[@]}) $(echo ${ok_tlds[@]})"
+
+		# add successfully fetched and applied tlds list to config file, effectively removing failed tlds (if any) from config
+		setconfig "Countries" "$conf_file" "$new_tlds_str"; rv=$?
+	fi
 fi
-debugprint "Countries in updated config: $(getconfig Countries $conf_file)"
-
-
-### Call the *run script
-
-echo $run_command $debug $nodrop -a "$action" -c "'$(echo ${tlds_to_change[@]})'" | bash; rv=$?
-
-# 254 return code means fetch failure
-if [ $rv -eq 254 ]; then
-	echo "Error performing action \"$action\" for countries \"${tlds_to_change[@]}\"."
-	echo "Removing failed tld's from config..."
-
-	# read failed tlds from file into array failed_tlds
-	failed_tlds=( $(getconfig "FailedTLDs" "$failed_tlds_file") )
-
-	# get duplicate-free intersection between ${tlds_to_change[@]} and ${failed_tlds[@]}
-	read -r -d '' -a tlds_to_remove < <(join <(printf %s\\n "${tlds_to_change[@]}" | sort -u) \
-                   <(printf %s\\n "${failed_tlds[@]}" | sort -u))
-
-	# only remove newly-added tlds that failed to fetch
-	if [ -n "$(echo ${tlds_to_remove[@]})" ]; then
-		# remove only the intersection tlds from config
-
-		#convert array to string
-		new_tlds_str="${new_tlds[@]}"
-
-		# compare $item with every element of new_tlds_str and remove exact matches in new_tlds_str
-		for item in "${tlds_to_remove[@]}"; do
-			new_tlds_str="${new_tlds_str//$item/}"
-		done
-
-		# convert to array while removing duplicates
-		new_tlds=( $(echo "$new_tlds_str" | sort -ibu) )
-
-		# write new tlds list to config file
-		setconfig "Countries" "$conf_file" "${new_tlds[@]}"; rv=$?
-	fi
-
-# positive return code means apply failure or another permanent error, except for 254
-elif [ $rv -gt 0 ] && [ $rv -ne 254 ]; then
-	echo "Error performing action \"$action\" for countries \"${tlds_to_change[@]}\"."
-
-	if [ -z "$(echo ${config_tlds[@]})" ]; then
-		die "Can not restore previous countries set because it is not found in the config file."
-	fi
-
-	# restore old countries set in the config file
-	echo -n "Restoring previous countries set: \"${config_tlds[@]}\"..."
-	setconfig "Countries" "$conf_file" "${config_tlds[@]}"
-	echo $run_command $debug $nodrop -a "update" | bash; rv=$?
-	if [ $rv -eq 0 ]; then
-		echo "Ok."
-	else
-		echo "Failed."
-	fi
-	die "Failed to restore previous countries set."
-
-elif [ $rv -eq 0 ]; then
-	debugprint "Successfully performed action \"$action\" for countries \"${tlds_to_change[@]}\"."
-fi
-
 
 ### Cron jobs management
 
@@ -350,58 +357,59 @@ if [ "$action" = "remove" ] && [ -z "$curr_cron_jobs" ]; then
 	skip_cron="true"
 fi
 
-new_tlds_str="$(echo ${new_tlds[@]})"
-
-# If new countries list is empty, skip creating cron jobs
-if [ -z "$new_tlds_str" ]; then
-	skip_cron="true"
-	debugprint "NOTE: New countries list is empty."
-fi
-
 
 if [ ! "$skip_cron" ]; then
 
-	### Create cron jobs
+	# check that countries list in config is not empty
+	read -r config_tlds < <(getconfig "Countries" "$conf_file")
 
-	echo -n "Creating periodic cron job... "
-	debugprint "applying cron line: $cron_schedule \"$run_command\" $nodrop -a update &>/dev/null"
-	echo -e "$(sudo crontab -u root -l 2>/dev/null)\n$cron_schedule \"$run_command\" $nodrop -a update &>/dev/null" | sudo crontab -u root -
-	rv=$?
-
-	if [ $rv -ne 0 ]; then
-		die "Error running the crontab command."
+	if [ -z "$config_tlds" ]; then
+		die "Error: Countries list in the config file is empty! No point in creating cron jobs."
 	else
-		echo "Ok."
-		cron_line_result=$(crontab -u root -l 2>/dev/null |  grep  "\"$run_command\"")
-		debugprint "Cron line: \"$cron_line_result\""
-	fi
+		echo "Countries in final config: '$config_tlds'."
 
-	echo -n "Creating reboot cron job... "
+		### Create cron jobs
 
-	# using the -s switch for the *run script to skip fetching at reboot
-	## otherwise if there was no internet connection at reboot time, *fetch would fail which would cause *run to fail,
-	## so *apply wouldn't run, which would leave the system without geoblocking rules
-	echo -e "$(sudo crontab -u root -l 2>/dev/null)\n@reboot sleep $sleeptime && \"$run_command\" $nodrop  -a update -s &>/dev/null" | \
-                sudo crontab -u root -; rv=$?
-
-	if [ $rv -ne 0 ]; then
-		die "Error running the crontab command."
-	else
-		echo "Ok."
-		cron_line_result=$(crontab -u root -l 2>/dev/null |  grep "reboot sleep .* && \"$run_command\"")
-		debugprint "Reboot cron line: \"$cron_line_result\""
 		echo ""
-		echo "View cron jobs with \"sudo crontab -l\""
-	fi
+		echo -n "Creating periodic cron job with schedule '$cron_schedule'... "
+		echo -e "$(sudo crontab -u root -l 2>/dev/null)\n$cron_schedule \"$run_command\" $nodrop -a update &>/dev/null" | sudo crontab -u root -
+		rv=$?
 
-	# save cron schedule to the config file
-	setconfig "Cron_schedule" "$conf_file" "$cron_schedule"
+		if [ $rv -ne 0 ]; then
+			die "Error running the crontab command."
+		else
+			echo "Ok."
+			cron_line_result=$(crontab -u root -l 2>/dev/null |  grep  "\"$run_command\"")
+			debugprint "Cron line: '$cron_line_result'"
+		fi
+
+		echo -n "Creating reboot cron job... "
+
+		# using the -s switch for the *run script to skip fetching at reboot
+		## otherwise if there was no internet connection at reboot time, *fetch would fail which would cause *run to fail,
+		## so *apply wouldn't run, which would leave the system without geoblocking rules
+		echo -e "$(sudo crontab -u root -l 2>/dev/null)\n@reboot sleep $sleeptime && \"$run_command\" $nodrop  -a update -s &>/dev/null" | \
+                	sudo crontab -u root -; rv=$?
+
+		if [ $rv -ne 0 ]; then
+			die "Error running the crontab command."
+		else
+			echo "Ok."
+			cron_line_result=$(crontab -u root -l 2>/dev/null |  grep "reboot sleep .* && \"$run_command\"")
+			debugprint "Reboot cron line: '$cron_line_result'"
+			echo ""
+			echo "View cron jobs with 'sudo crontab -l'"
+		fi
+
+		# save cron schedule to the config file
+		setconfig "Cron_schedule" "$conf_file" "$cron_schedule"
+	fi
 else
 	echo "NOTE: Skipping cron jobs creation."
 fi
 
 echo ""
-echo "View iptables rules with \"sudo iptables -L\""
+echo "View iptables rules with 'sudo iptables -L'"
 echo ""
 
 [ -n "$parent_script" ] && debugprint "\033[1;33mBack to $parent_script...\033[0m"

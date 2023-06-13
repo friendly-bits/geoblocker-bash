@@ -8,7 +8,6 @@
 ## See https://stat.ripe.net/docs/data_api
 #
 # Parses, validates and compiles the downloaded (JSON formatted) list into a plain list, and saves to a file
-# Attempts to determine the local ipv4 subnet for the main network interface and appends it to the file
 
 # Requires jq - JSON processor.
 ## On Debian and derivatives, if you are missing jq then install it using this command:
@@ -75,30 +74,6 @@ die() {
 	exit "$1"
 }
 
-getlocalsubnet() {
-# attempts to find local subnet for the main network interface
-
-	# we are relying on the global variable $subnet_regex, so verify that it's not empty
-	if [ -z "$subnet_regex" ]; then die 1; fi
-
-	# returns local ip with subnet mask
-	localip="$(ip addr | grep 'state UP' -A2 | tail -n1 | awk '{print $2}')"
-
-	# Change last ipv4 octet to 0
-	localsubnet=$(echo "$localip" | sed 's|\([0-9]*\.[0-9]*\.[0-9]*\.\)[0-9]*|\10|')
-
-	# Verifies that the argument is a valid ipv4 subnet
-	echo "$localsubnet" | grep -P "$subnet_regex" &>/dev/null; rv=$?
-
-	if [ $rv -ne 0 ]; then
-		# if validation fails, output empty string
-		echo ""
-	else
-		echo "$localsubnet"
-	fi
-	return $rv
-}
-
 
 #### Initialize variables
 ripe_url="https://stat.ripe.net/data/country-resource-list/data.json?v4_format=prefix&resource="
@@ -121,14 +96,14 @@ subnet_regex="${ip_regex}${mask_regex}"
 
 if [ -z "$country" ]; then
 	usage
-	err="Specify country with \"-c <country>\"!"
+	err="Specify country with '-c <country>'!"
 	die 1 "$err"
 fi
 
 # check that we have iplist file path
 if [ -z "$iplist_path" ]; then
 	usage
-	err="Specify iplist file path with \"-p <path-to-file>\"!"
+	err="Specify iplist file path with '-p <path-to-file>'!"
 	die 1 "$err"
 fi
 
@@ -141,13 +116,13 @@ fi
 
 # check that we have jq
 if ! command -v jq &> /dev/null; then
-	err="Error: Cannot find \"jq\" - Json processor. Install it with 'apt install jq' or similar. Exiting"
+	err="Error: Cannot find 'jq' - Json processor. Install it with 'apt install jq' or similar. Exiting"
 	die 1 "$err"
 fi
 
 # check that iplist directory exists
 if [ ! -d "$iplist_path" ]; then
-	err="Directory \"$iplist_path\" doesn't exist!"
+	err="Directory '$iplist_path' doesn't exist!"
 	die 1 "$err"
 fi
 
@@ -241,22 +216,6 @@ else
 
 	echo "Validated $validated_subnet_cnt subnets."
 	echo ""
-
-
-	# Add local subnet to the list, only for ipv4
-	if [ "$family" = "ipv4" ]; then
-		subnet="$(getlocalsubnet)";
-		if [ -z "$subnet" ]; then
-			err="Error: couldn't determine local subnet."
-			rm "$parsed_file" &>/dev/null
-			rm "$validated_file" &>/dev/null
-			rm "$fetched_file" &>/dev/null
-			die 1 "$err"
-		else
-			echo "Found local subnet: \"$subnet\". Adding it to the list."
-			echo "$subnet" >> "$validated_file"
-		fi
-	fi
 
 	echo -n "Updating $out_list... "
 	mv "$validated_file" "$out_list"; rv=$?

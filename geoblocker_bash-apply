@@ -123,6 +123,35 @@ getconfig() {
 	return $rv
 }
 
+getlocalsubnet() {
+# attempts to find local subnet for the main network interface
+
+	# regex patterns used for ipv4 validation
+	# using Perl regex syntax because grep is faster with it than with native grep syntax
+	# regex compiled from 2 suggestions found here:
+	# https://stackoverflow.com/questions/5284147/validating-ipv4-addresses-with-regexp
+	ip_regex='^((25[0-5]|(2[0-4]|1\d|[1-9]|)\d)\.?\b){4}'
+	mask_regex='(/([01]?\d\d?|2[0-4]\d|25[0-5]))$'
+	subnet_regex="${ip_regex}${mask_regex}"
+
+	# returns local ip with subnet mask
+	localip="$(ip addr | grep 'state UP' -A2 | tail -n1 | awk '{print $2}')"
+
+	# Change last ipv4 octet to 0
+	lsubnet=$(echo "$localip" | sed 's|\([0-9]*\.[0-9]*\.[0-9]*\.\)[0-9]*|\10|')
+
+	# Verifies that the argument is a valid ipv4 subnet
+	echo "$lsubnet" | grep -P "$subnet_regex" &>/dev/null; rv=$?
+
+	if [ $rv -ne 0 ]; then
+		# if validation fails, output empty string
+		echo ""
+	else
+		echo "$lsubnet"
+	fi
+	return $rv
+}
+
 
 #### VARIABLES
 
@@ -185,13 +214,13 @@ fi
 
 # check that the whitelist file exists
 if [ ! -f "$whitelist_file" ]; then
-	die "Error: Cannot find the whitelist file at path: \"$whitelist_file\". Exiting." "nonfatal"
+	die "Error: Cannot find the whitelist file at path: '$whitelist_file'. Exiting." "nonfatal"
 fi
 
 case "$action" in
 	add) ;;
 	remove) ;;
-	*) usage; echo "Error: unsupported action \"$action\"" "nonfatal" ;;
+	*) usage; echo "Error: unsupported action '$action'" "nonfatal" ;;
 esac
 
 
@@ -205,7 +234,7 @@ if [ "$action" = "add" ]; then
 
 	# count lines in the whitelist file
 	ip_cnt=$(wc -l < "$whitelist_file")
-	debugprint "ip count in the whitelist file \"$whitelist_file\": $ip_cnt"
+	debugprint "ip count in the whitelist file '$whitelist_file': $ip_cnt"
 
 	# calculate necessary ipset size = (next high power of 2 > $ip_cnt)
 	ipset_maxelem=$(round_up_to_power2 "$ip_cnt")
@@ -222,10 +251,10 @@ if [ "$action" = "add" ]; then
 	debugprint "final hashsize for the new ipset: $ipset_hashsize"
 
 	# create new temporary ipset
-	debugprint "Creating new ipset \"$temp_ipset\"... "
+	debugprint "Creating new ipset '$temp_ipset'... "
 	ipset create "$temp_ipset" hash:net family "$family" hashsize "$ipset_hashsize" maxelem "$ipset_maxelem"; rv=$?
 	if [ $rv -ne 0 ]; then
-		die "Error creating ipset \"$temp_ipset\" with hashsize $ipset_hashsize and maxelem $ipset_maxelem. Exiting." "nonfatal"
+		die "Error creating ipset '$temp_ipset' with hashsize $ipset_hashsize and maxelem $ipset_maxelem. Exiting." "nonfatal"
 	fi
 	debugprint "Ok."
 
@@ -236,7 +265,7 @@ if [ "$action" = "add" ]; then
 	do
 		ipset add "$temp_ipset" "$ip"; rv=$?
 		if [ $rv -ne 0 ]; then
-			die "Error when running the command: \"ipset add $perm_ipset $ip\". Exiting." "nonfatal"
+			die "Error when running the command: 'ipset add $perm_ipset $ip'. Exiting." "nonfatal"
 		fi
 	done < "$whitelist_file"
 
@@ -252,13 +281,13 @@ fi
 echo -n "Setting INPUT chain policy to ACCEPT... "
 iptables -P INPUT ACCEPT; rv=$?
 if [ $rv -ne 0 ]; then
-	die "Error trying to change iptables policy with command \"iptables -P INPUT ACCEPT\". Exiting." "nonfatal"
+	die "Error trying to change iptables policy with command 'iptables -P INPUT ACCEPT'. Exiting." "nonfatal"
 fi
 echo "Ok."
 
 ## delete existing iptables rules matching comment "$iptables_comment" and "$iptables_comment_global" which we use to mark our rules
 
-echo -n "Removing existing iptables rules for country \"$tld\"... "
+echo -n "Removing existing iptables rules for country '$tld'... "
 
 # sed looks for rules with the comment which we use to stamp our rules
 # sed executes iptables -D (delete) command on matching rules. execution is promtped by the switch /e (only available in GNU sed)
@@ -269,7 +298,7 @@ if [ $rv -ne 0 ]; then
 fi
 echo "Ok."
 
-echo -n "Removing existing global iptables rules for \"geoblocker_bash\"... "
+echo -n "Removing existing global iptables rules for 'geoblocker_bash'... "
 iptables-save | sed -r "/INPUT.*comment.*${iptables_comment_global}/s/-A/iptables -D/e" &>/dev/null; rv=$?
 if [ $rv -ne 0 ]; then
 	echo "Failure."
@@ -278,7 +307,7 @@ fi
 echo "Ok."
 
 if [ "$action" = "remove" ]; then
-	echo -n "Destroying ipset for country \"$tld\"... "
+	echo -n "Destroying ipset for country '$tld'... "
 	ipset destroy "$perm_ipset"; rv=$?
 	if [ $rv -ne 0 ]; then
 		echo "Failure."
@@ -292,10 +321,24 @@ fi
 
 ### Create new iptables rules
 
+# Add rule to allow connections from the local subnet
+localsubnet="$(getlocalsubnet)";
+if [ -z "$localsubnet" ]; then
+	die "Error: couldn't determine local subnet."
+else
+	echo "Found local subnet: '$localsubnet'."
+	echo -n "Appending rule to allow all traffic from the local subnet... "
+	iptables -A INPUT -s "$localsubnet" -j ACCEPT -m comment --comment "${iptables_comment_global}"; rv=$?
+	if [ $rv -ne 0 ]; then
+		die "Error $rv trying to append rule with command 'iptables -A INPUT -s \"$localsubnet\" -j ACCEPT'. Exiting."
+	fi
+	echo "Ok."
+fi
+
 echo -n "Inserting rule to allow all traffic from the loopback interface... "
 iptables -I INPUT -i lo -j ACCEPT -m comment --comment "${iptables_comment_global}"; rv=$?
 if [ $rv -ne 0 ]; then
-	die "Error $rv trying to insert rules with command \"iptables -A INPUT -i lo -j ACCEPT\". Exiting."
+	die "Error $rv trying to insert rules with command 'iptables -A INPUT -i lo -j ACCEPT'. Exiting."
 fi
 echo "Ok."
 
@@ -303,7 +346,7 @@ echo "Ok."
 echo -n "Inserting rule to allow established/related connections... "
 iptables -I INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT -m comment --comment "${iptables_comment_global}"; rv=$?
 if [ $rv -ne 0 ]; then
-	die "Error $rv trying to insert rules with command \"iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT\". Exiting."
+	die "Error $rv trying to insert rules with command 'iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT'. Exiting."
 fi
 echo "Ok."
 
@@ -314,13 +357,13 @@ if [ "$action" = "add" ]; then
 
 	if [ "$ipset_length" -ge "7" ]; then
 		perm_ipset_exists="true"
-		debugprint "found existing permanent ipset \"$perm_ipset\"."
+		debugprint "found existing permanent ipset '$perm_ipset'."
 	else
 		perm_ipset_exists="false"
 	fi
 
 	if [ "$ipset_length" -eq 0 ]; then
-		debugprint "Ipset \"$perm_ipset\" doesn't exist yet."
+		debugprint "Ipset '$perm_ipset' doesn't exist yet."
 		# to avoid being dependent on ipset output staying constant down the road,
 		# still trying to destroy the ipset, just in case, but not checking the return value
 		ipset destroy "$perm_ipset" &>/dev/null
@@ -329,10 +372,10 @@ if [ "$action" = "add" ]; then
 	## if permanent ipset doesn't exist yet, create it
 	if [ ! "$perm_ipset_exists" = "true" ]; then
 		# create new permanent ipset
-		debugprint "Creating permanent ipset \"$perm_ipset\"... "
+		debugprint "Creating permanent ipset '$perm_ipset'... "
 		ipset create "$perm_ipset" hash:net family "$family" hashsize "$ipset_hashsize" maxelem "$ipset_maxelem"; rv=$?
 		if [ $rv -ne 0 ]; then
-			die "Error creating ipset \"$perm_ipset\" with hashsize $ipset_hashsize and maxelem $ipset_maxelem. Exiting."
+			die "Error creating ipset '$perm_ipset' with hashsize $ipset_hashsize and maxelem $ipset_maxelem. Exiting."
 		else
 			debugprint "Ok."
 		fi
@@ -361,7 +404,7 @@ if [ "$action" = "add" ]; then
 	debugprint "Destroying temporary ipset... "
 	ipset destroy "$temp_ipset"; rv=$?
 	if [ $rv -ne 0 ]; then
-		die "Error $rv destroying ipset \"$temp_ipset\". Strange......... Exiting."
+		die "Error $rv destroying ipset '$temp_ipset'. Strange......... Exiting."
 	fi
 	debugprint "Ok."
 fi
@@ -373,12 +416,12 @@ if [ -z "$nodrop" ]; then
 	echo -n "Setting default iptables policies for INPUT and FORWARD to DROP... "
 	iptables -P INPUT DROP; rv=$?
 	if [ $rv -ne 0 ]; then
-		die "Error $rv changing iptables policy with command \"iptables -P INPUT DROP\". Exiting."
+		die "Error $rv changing iptables policy with command 'iptables -P INPUT DROP'. Exiting."
 	fi
 
 	iptables -P FORWARD DROP; rv=$?
 	if [ $rv -ne 0 ]; then
-		die "Error $rv changing iptables policy with command \"iptables -P FORWARD DROP\". Exiting."
+		die "Error $rv changing iptables policy with command 'iptables -P FORWARD DROP'. Exiting."
 	fi
 	echo "Ok."
 else
@@ -391,7 +434,7 @@ fi
 
 
 echo ""
-echo "Successfully applied new iptables rules."
+echo "Successfully applied new iptables rules for country '$tld'."
 echo ""
 
 [ -n "$parent_script" ] && debugprint "\033[1;33mBack to $parent_script...\033[0m"

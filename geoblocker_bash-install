@@ -275,12 +275,11 @@ mkdir -p "$whitelist_dir"
 
 ## Create a backup file for known-good iptables state
 
-echo ""
 echo -n "Creating file for backup of iptables state..."
 
 # if a backup file already exists, continue installing but skip overwriting the backup file
 if [ -f "$knowngood_file" ]; then
-	echo ""; echo "Backup file already exists, skipping."
+	echo "Backup file already exists, skipping."
 else
 	touch "$knowngood_file"; rv=$?
 	if [ $rv -ne 0 ]; then
@@ -294,7 +293,6 @@ fi
 
 # if we are running from $install_dir, assume that all other necessary scripts have already been installed, skip copying
 if [ "$scriptdir" != "$install_dir" ]; then
-	echo ""
 	echo -n "Copying scripts to $install_dir... "
 	copyscript "geoblocker_bash-install" "${install_dir}/"
 	copyscript "geoblocker_bash-fetch" "${install_dir}/"
@@ -311,12 +309,11 @@ fi
 
 ### Back up pre-install policies for INPUT and FORWARD chains
 
-echo ""
 echo -n "Creating backup of current INPUT and FORWARD iptables chains policies... "
 
 # if a backup file already exists, continue installing but skip overwriting the backup file
 if [ -f "$preinstall_policies_file" ]; then
-	echo ""; echo "Backup file already exists, skipping creation of iptables policies backup." >&2
+	echo "Backup file already exists, skipping creation of iptables policies backup." >&2
 else
 	preinstall_input_policy=$(iptables -nL | grep "Chain INPUT" | awk -F'policy |)' '{print $2}')
 	preinstall_forward_policy=$(iptables -nL | grep "Chain FORWARD" | awk -F'policy |)' '{print $2}')
