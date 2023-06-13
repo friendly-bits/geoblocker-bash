@@ -7,12 +7,15 @@
 # Config (including countries list) is taken from the config file in /etc/geoblocker_bash/geoblocker_bash.conf
 
 me=$(basename "$0")
+parent_script="$(ps -o args= $PPID | awk -v RS='/| ' '/^geoblocker/')"
+args="$@"
 
 #### USAGE
 
 usage() {
     cat <<EOF
 
+$me
 Runs the geoblocker_bash-fetch script to fetch ip list from RIPE.
 Then runs geoblocker_bash-apply to apply the ip list to iptables.
 
@@ -36,7 +39,7 @@ EOF
 while getopts "a:c:spdh" opt; do
 	case $opt in
 		a) action=$OPTARG;;
-		c) arg_tlds="$OPTARG";;
+		c) arg_tlds=$OPTARG;;
 		s) skipfetch="true";;
 		p) nodrop="-p";;
 		d) debug="-d";;
@@ -49,12 +52,21 @@ shift $((OPTIND -1))
 
 #### FUNCTIONS
 
+debugprint() {
+# prints a debug message
+	[ "$debug" ] && echo -e "    Debug: $@"
+}
+
+echo ""
+debugprint "\033[1;33mStarted *run with args: '$args'\033[0m"
+
 die() {
 	echo ""
 	echo "$2" 1>&2
 	echo ""
 	logger -t geoblocker_bash-run "$2"
-	exit $1
+	[ -n "$parent_script" ] && debugprint "\033[1;33mBack to $parent_script...\033[0m"
+	exit "$1"
 }
 
 get_script_dir () {
@@ -86,11 +98,6 @@ getconfig() {
 	return $rv
 }
 
-debugpr() {
-# prints a debug message
-	[ "$debug" ] && echo "Debug: $@"
-}
-
 
 #### VARIABLES
 
@@ -99,6 +106,10 @@ conf_file="${conf_dir}/geoblocker_bash.conf"
 
 # read datadir from the config file
 read -r datadir < <(getconfig "Datadir" "$conf_file")
+
+# read the path to backup_script from the config file
+read -r backup_script < <(getconfig "Backup_script" "$conf_file")
+
 preinstall_policies_file="$datadir/preinstall_policies.bak"
 knowngood_file="$datadir/iptables_knowngood.bak"
 whitelist_dir="$datadir/ip_lists"
@@ -106,15 +117,15 @@ failed_tlds_file="$datadir/FailedTLDs"
 
 if [ -z "$arg_tlds" ] || [ "$action" = "update" ]; then
 	# read tlds from the config file
+	debugprint "Loading tlds from file..."
 	read -r tlds < <(getconfig "Countries" "$conf_file")
 else
+	debugprint "Got tlds from args: '$arg_tlds'"
 	tlds="$arg_tlds"
 fi
 
 # get the script path
 read -r scriptdir < <(get_script_dir)
-
-echo ""
 
 
 #### CHECKS
@@ -131,11 +142,17 @@ if ! command -v geoblocker_bash-apply &> /dev/null; then
 	die 1 "$err"
 fi
 
+# check for geoblocker_bash-backup
+if ! command -v geoblocker_bash-backup &> /dev/null; then
+	err="Error: Cannot find \"geoblocker_bash-apply\". Did you run setup? Exiting."
+	die 1 "$err"
+fi
+
 case "$action" in
 	add) apply_action="add" ;;
 	remove) apply_action="remove" ;;
 	update) apply_action="add" ;;
-	*) usage; echo "Error: unsupported action \"$action\""; exit 1 ;;
+	*) usage; die 1 "Error: unsupported action \"$action\"" ;;
 esac
 
 # check for country tlds
@@ -166,11 +183,12 @@ fi
 
 #### MAIN
 
+debugprint "tlds: $tlds"
 
 # cd into script directory
 # exit in case "cd" fails
 cd "$scriptdir"; rv=$?
-if [ -z "$scriptdir" ] || [ "$rv" -ne 0 ]; then echo "Error: could not change directory to \"$scriptdir\". Exiting."; exit 1; fi
+if [ -z "$scriptdir" ] || [ "$rv" -ne 0 ]; then die 1 "Error: could not change directory to \"$scriptdir\". Exiting."; fi
 
 
 ### Fetch ip lists
@@ -188,11 +206,11 @@ if [ ! "$skipfetch" ] && [ "$action" != "remove" ]; then
 		if [ $rv -eq 254 ]; then
 			errcnt=$(( errcnt + 1 ))
 			failed_tlds="$(echo $failed_tlds) $tld"
-			debugpr "Failed to retrieve ip list for country \"$tld\"."
+			debugprint "Failed to retrieve ip list for country \"$tld\"."
 		else
 			ok_cnt=$(( ok_cnt + 1 ))
 			ok_tlds="$(echo $ok_tlds) $tld"
-			debugpr "Successfully retrieved ip list for country \"$tld\"."
+			debugprint "Successfully retrieved ip list for country \"$tld\"."
 		fi
 	done
 
@@ -218,14 +236,22 @@ fi
 
 for tld in $(echo "${tlds}"); do
 	geoblocker_bash-apply $debug $nodrop -a "$apply_action" -c "$tld"; rv=$?
-	if [ $rv -ne 0 ]; then
+	if [ $rv -eq 254 ]; then
 		echo ""
-		# if any errors occur in *apply, exit with a negative return code
-		exit 1
-	else
-		debugpr "Successfully applied the whitelist for country \"$tld\"."
+		# if non-fatal errors occur in *apply, exit with an error
+		die 1 ""
+	elif [ $rv -gt 0 ] && [ $rv -ne 254 ]; then
+		echo ""
+		#if fatal errors occur in *apply, attempt to restore last known-good ipsets and iptables state
+		$backup_script $debug -f "$knowngood_file" -r
+		die 1 ""
+	else    # if the *apply script exited with code 0
+		debugprint "Successfully applied the whitelist for country \"$tld\"."
 	fi
 done
+
+# call the backup script to create a known-good backup of ipsets and iptables state
+$backup_script $debug -f "$knowngood_file" -b
 
 logger -t geoblocker_bash-run "Successfully applied action \"$action\" for countries \"$tlds\"."
 
@@ -233,4 +259,6 @@ echo ""
 
 if [ "$errcnt" -ne 0 ]; then rv=254; else rv=0; fi
 
-exit $rv
+[ -n "$parent_script" ] && debugprint "\033[1;33mBack to $parent_script...\033[0m"
+
+exit "$rv"
