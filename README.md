@@ -17,23 +17,19 @@ Recommended to read the NOTES section below.
 https://github.com/blunderful-scripts/geoblocker_bash/releases
 3) Put *all* scripts in this suite into the same folder
 4) Use the check_ip_in_ripe script to make sure that your public ip address is included in the list fetched from RIPE, so you do not get locked out of your server.
-- _example: 'bash check_ip_in_ripe.sh -c DE -i <your_public_ip_address>' (for Germany)_
+- example: _'bash check_ip_in_ripe.sh -c DE -i <your_public_ip_address>' (for Germany)_
 5) Once verified that your public ip address is included in the list, run 'sudo bash geoblocker_bash-install -c "<country_code [country_code] ... [country_code]>"'
-- _example: 'sudo bash geoblocker_bash-install -c DE' (for Germany)_
-- _example: 'sudo bash geoblocker_bash-install -c "DE NL"' (for Germany and Netherlands)_
+- example: _'sudo bash geoblocker_bash-install -c DE' (for Germany)_
+- example: _'sudo bash geoblocker_bash-install -c "DE NL"' (for Germany and Netherlands)_
  (when specifying multiple countries, put the list in double quotes)
  
 **To manage:**
- 
-run 'sudo geoblocker_bash-manage -c "<country_code [country_code] ... [country_code]>" -a <add|remove>'
- 
-example (to add whitelists for Germany and Netherlands): _'sudo geoblocker-manage -c "DE NL" -a add'_
- 
-example (to remove whitelist for Germany): _'sudo geoblocker-manage -c DE -a remove'_
+- run 'sudo geoblocker_bash-manage -c "<country_code [country_code] ... [country_code]>" -a <add|remove>'
+- example (to add whitelists for Germany and Netherlands): _'sudo geoblocker-manage -c "DE NL" -a add'_
+- example (to remove whitelist for Germany): _'sudo geoblocker-manage -c DE -a remove'_
  
 **To uninstall:**
-
-run 'sudo geoblocker_bash-uninstall'
+- run 'sudo geoblocker_bash-uninstall'
 
 **Prerequisites**:
 - Linux running systemd (tested on Debian and Mint, should work on any Debian derivative, may require modifications to work on other distributions)
