@@ -11,6 +11,8 @@
 #    This is a simplified version, adapted to receive one cron schedule expression in an argument.
 
 me=$(basename "$0")
+parent_script="$(ps -o args= $PPID | awk -v RS='/| ' '/^geoblocker/')"
+args="$@"
 
 #### USAGE
 
@@ -22,23 +24,26 @@ usage() {
     where min is 0-59, hr 0-23, dom is 1-31, mon is 1-12 (or names) and dow is 0-7 (or names).  Fields can have ranges (a-e), lists
     separated by commas (a,c,z), or an asterisk. Note that the step value notation of Vixie cron is not supported (e.g., 2-6/2).
 
-    Usage: $me -x "expression" [-h]
+    Usage: $me -x "expression" [-h] [-d]
 
     Options:
     -x "expression"    : crontab schedule expression ***in double quotes***
-    				example: "0 4 * * 6"
-				format: min hr dom mon dow
+                         example: "0 4 * * 6"
+                         format: min hr dom mon dow
+
+    -d                 : debug
     -h                 : This help
 
 EOF
-}
+} >&2
 
 #### Parse arguments
 
-while getopts "x:h" opt; do
+while getopts "x:hd" opt; do
 	case $opt in
 	x) sourceline=$OPTARG;;
 	h) usage; exit 0;;
+	d) debug="-d";;
 	\?) usage; exit 1;;
 	esac
 done
@@ -46,6 +51,13 @@ shift $((OPTIND -1))
 
 
 #### Functions
+
+# prints a debug message
+debugprint() {
+	[ "$debug" ] && echo -e "    Debug: $@" >&2
+}
+
+debugprint "\033[1;33mStarted validate_cron_schedule with args: '$args'\033[0m"
 
 validateNum() {
 # returns 0 if valid, 1 if not. Specify number, minvalue and maxvalue as args
@@ -124,12 +136,12 @@ validateField() {
 		return 1
 	fi
 
-	# split the input field by commas (if any) and store resulting slices in the slices[] array 
+	# split the input field by commas (if any) and store resulting slices in the slices[] array
 	IFS="," read -ra slices <<< "$fieldString"
 
 	for slice in "${slices[@]}"; do
 		segmentsnum=0
-		# split the slice by dashes (if any) and store resulting segments in the segments[] array 
+		# split the slice by dashes (if any) and store resulting segments in the segments[] array
 		IFS="-", read -ra segments <<< "$slice"
 		for segment in "${segments[@]}"; do
 			# try validating the segment as a number (or as an asterisk)
@@ -171,8 +183,6 @@ validateField() {
 	fi
 }
 
-echo ""
-
 
 #### Initialize variables
 
@@ -182,38 +192,39 @@ exitstatus=0
 
 #### Basic sanity check for input arguments
 
+# trim single-quotes if any
+sourceline=$(echo "${sourceline//\'}")
+
 # separate the input by spaces and store results in variables
 read -r min hour dom mon dow extra <<< "$sourceline"
 
 # if $extra is not empty then too many arguments have been passed
 if [ -n "$extra" ]; then
 	usage
-	echo ""
+	echo "" >&2
 	echo "Error: Too many fields in schedule expression! I don't know what to do with \"$extra\"!" >&2
 	echo "Use double braces around your expression!" >&2
 	echo "You entered: \"$sourceline\"" >&2
 	echo "Valid example: \"0 4 * * 6\"" >&2
-	echo ""
-	exit 1;
+	echo "" >&2
+	die
 fi
 
 # if some arguments are missing
 if [ -z "$min" ] || [ -z "$hour" ] || [ -z "$dom" ] || [ -z "$mon" ] || [ -z "$dow" ]; then
 	usage
-	echo ""
-	echo "Not enough fields in schedule expression!"
+	echo "" >&2
+	echo "Not enough fields in schedule expression!" >&2
 	echo "This script requires crontab schedule line as an argument!" >&2
 	echo "Use double braces around your expression!" >&2
 	echo "You entered: \"$sourceline\"" >&2
 	echo "Valid example: \"0 4 * * 6\"" >&2
-	echo ""
-	exit 1
+	echo "" >&2
+	die
 fi
 
 
 #### Main
-
-echo "Validating cron schedule \"$sourceline\" ..."
 
 # minute check
 validateField "minute" "$min" "0" "60"
@@ -232,12 +243,14 @@ validateField "day of week" "$dow" "1" "7"
 
 if [ "$errors" -gt 0 ] ; then
 	exitstatus=1
-	echo ""
+	echo "" >&2
 	echo "You entered: \"$sourceline\"" >&2
 	echo "Valid example: \"0 4 * * 6\"" >&2
-else
-	echo "Successfully validated cron schedule."
 fi
-echo ""
+
+# output sourceline
+echo "$sourceline"
+
+[ -n "$parent_script" ] && debugprint "\033[1;33mBack to $parent_script...\033[0m"
 
 exit $exitstatus
