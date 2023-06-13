@@ -259,7 +259,7 @@ rm "$conf_file" &> /dev/null
 # write some config to the config file
 echo -n "Setting initial config... "
 setconfig "Datadir" "$conf_file" "$datadir"; rv1=$?
-setconfig "Default_schedule" "$conf_file" "$default_schedule"; rv2=$?
+setconfig "Cron_schedule" "$conf_file" "$cron_schedule"; rv2=$?
 setconfig "RebootSleep" "$conf_file" "$sleeptime"; rv3=$?
 setconfig "Backup_script" "$conf_file" "$backup_script"; rv4=$?
 rv=$(( rv1 + rv2 + rv3 + rv4 ));
