@@ -32,7 +32,8 @@ example (to add whitelists for Germany and Netherlands): _'sudo geoblocker-manag
 example (to remove whitelist for Germany): _'sudo geoblocker-manage -c DE -a remove'_
  
 **To uninstall:**
-     run 'sudo geoblocker_bash-uninstall'
+
+run 'sudo geoblocker_bash-uninstall'
 
 **Prerequisites**:
 - Linux running systemd (tested on Debian and Mint, should work on any Debian derivative, may require modifications to work on other distributions)
