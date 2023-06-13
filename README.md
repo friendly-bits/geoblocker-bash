@@ -11,7 +11,7 @@ Intended use case is a server/computer that needs to be publically accessible on
 
 Recommended to read the NOTES section below.
 
-To install:
+**To install:**
 1) Install prerequisites. On Debian and derivatives run: sudo apt install ipset jq wget grepcidr
 2) Download the latest realease:
 https://github.com/blunderful-scripts/geoblocker_bash/releases
@@ -23,7 +23,7 @@ https://github.com/blunderful-scripts/geoblocker_bash/releases
 - _example: 'sudo bash geoblocker_bash-install -c "DE NL"' (for Germany and Netherlands)_
  (when specifying multiple countries, put the list in double quotes)
  
- To manage:
+** To manage:**
  
 run 'sudo geoblocker_bash-manage -c "<country_code [country_code] ... [country_code]>" -a <add|remove>'
  
@@ -31,7 +31,7 @@ example (to add whitelists for Germany and Netherlands): _'sudo geoblocker-manag
  
 example (to remove whitelist for Germany): _'sudo geoblocker-manage -c DE -a remove'_
  
- To uninstall:
+** To uninstall:**
      run 'sudo geoblocker_bash-uninstall'
 
 **Prerequisites**:
