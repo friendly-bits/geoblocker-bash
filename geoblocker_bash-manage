@@ -65,8 +65,17 @@ echo ""
 debugprint "\033[1;33mStarted *manage with args: '$args'\033[0m"
 
 die() {
-[ -n "$parent_script" ] && debugprint "\033[1;33mBack to $parent_script...\033[0m"
-exit 1
+    if [ -n "$@" ]; then
+        echo ""
+		# loop through arguments and print them to stderr and to the syslog
+        for arg in "$@"; do
+            echo "$arg" 1>&2
+            logger -t "$me" "$arg"
+        done
+    fi
+    [ -n "$parent_script" ] && debugprint "\033[1;33mBack to $parent_script...\033[0m"
+    echo ""
+    exit 1
 }
 
 get_script_dir() {
@@ -120,8 +129,6 @@ setconfig() {
 #convert country codes to lower case
 tlds="$(echo ${tlds,,})"
 
-# TODO: implement config saving in the *install script
-
 conf_dir="/etc/geoblocker_bash"
 conf_file="${conf_dir}/geoblocker_bash.conf"
 
@@ -146,30 +153,25 @@ run_command="${scriptdir}/geoblocker_bash-run"
 
 if [ -z "$tlds" ]; then
 	usage
-	echo "Specify countries with \"-c <tlds>\"!"
-	echo ""
-	die
+	die "Specify countries with \"-c <tlds>\"!"
 fi
 
 case "$action" in
 	add) ;;
 	remove) ;;
-	\?) usage; echo "Unsupported action \"$action\"."; die;;
+	\?) usage; die "Unsupported action \"$action\".";;
 esac
 
 # TODO: test empty "action" etc
 
 if [ -z "$action" ]; then
 	usage
-	echo "Specify action with \"-a <action>\"!"
-	echo ""
-	die
+	die "Specify action with \"-a <action>\"!"
 fi
 
 # check for root
-if [ "$EUID" -ne 0 ]
-  then echo "This needs to be run as root."
-  die
+if [ "$EUID" -ne 0 ]; then
+  die "This needs to be run as root."
 fi
 
 # check if cron service is enabled
@@ -177,31 +179,32 @@ fi
 if [ $rv -ne 0 ]; then crondisabled="true"; fi
 
 if [[ "$crondisabled" ]] && [ "$action" = "add" ]; then
-	echo "Error: cron service seems to be disabled. Can not perform action \"$action\""
-	echo "On Debian and derivatives, enable the cron service with \"systemctl enable cron.service\". Exiting." >&2
-	echo ""
-	die
+	err1="Error: cron service seems to be disabled. Can not perform action \"$action\""
+	err2="On Debian and derivatives, enable the cron service with \"systemctl enable cron.service\". Exiting."
+	die "$err1" "$err2"
+fi
+
+if [ -n "$cron_schedule" ] && [ -n "$skip_cron" ]; then
+	die "Error: Conflicting arguments. Use either -s or -n but not both."
 fi
 
 # cd into script directory
 # exit in case "cd" fails
 cd "$scriptdir"; rv=$?
-if [ -z "$scriptdir" ] || [ "$rv" -ne 0 ]; then echo "Error: could not change directory to \"$scriptdir\". Exiting."; die; fi
+if [ -z "$scriptdir" ] || [ "$rv" -ne 0 ]; then die "Error: could not change directory to \"$scriptdir\". Exiting."; fi
 
 if [ ! "$skip_cron" ]; then
 
-	# if cron_schedule wasn't provided in args, use the default schedule from the config file
+	# if cron_schedule wasn't provided in args, use the schedule from the config file
 	if [ -z "$cron_schedule" ]; then
-		read -r cron_schedule < <(getconfig "Default_schedule" "$conf_file")
+		read -r cron_schedule < <(getconfig "Cron_schedule" "$conf_file")
 	fi
 
 	# validate cron schedule
 	debugprint "Validating cron schedule: '$cron_schedule'."
 	read -r cron_schedule < <(validate_cron_schedule.sh $debug -x "$cron_schedule"); rv=$?
 	if [ $rv -ne 0 ]; then
-		echo "Error validating cron schedule '$cron_schedule'. Exiting." >&2
-		echo ""
-		die
+		die "Error validating cron schedule '$cron_schedule'. Exiting."
 	else
 		debugprint "Successfully validated cron schedule: '$cron_schedule'."
 	fi
@@ -236,9 +239,7 @@ case "$action" in
 		# convert to array while removing duplicates
 		tlds_to_change=( $(echo "$tlds_to_change_str" | sort -ibu) )
 		if [ -z "$(echo ${tlds_to_change[@]})" ]; then
-			echo "Error: can not add countries \"${arg_tlds[@]}\" because they have already been added."
-			echo ""
-			die
+			die "Error: can not add countries \"${arg_tlds[@]}\" because they have already been added."
 		fi
 	;;
 	remove)
@@ -258,9 +259,7 @@ case "$action" in
                           <(printf %s\\n "${arg_tlds[@]}" | sort -u))
 
 		if [ -z "$(echo ${tlds_to_change[@]})" ]; then
-			echo "Error: can not remove countries \"${arg_tlds[@]}\" because they have not been added."
-			echo ""
-			die
+			die "Error: can not remove countries \"${arg_tlds[@]}\" because they have not been added."
 		fi
 	;;
 esac
@@ -269,22 +268,17 @@ debugprint "tlds to change: ${tlds_to_change[@]}"
 
 setconfig "Countries" "$conf_file" "$(echo ${new_tlds[@]})"; rv=$?
 if [ $rv -ne 0 ]; then
-	echo ""
-	echo "Error writing new config for countries \"${new_tlds[@]}\" to file \"$conf_file\"."
-	die
+	die "Error writing new config for countries \"${new_tlds[@]}\" to file \"$conf_file\"."
 fi
 debugprint "Countries in updated config: $(getconfig Countries $conf_file)"
 
 
 ### Call the *run script
 
-# TODO: add -r option to *apply for rules removal
-
 echo $run_command $debug $nodrop -a "$action" -c "'$(echo ${tlds_to_change[@]})'" | bash; rv=$?
 
 # 254 return code means fetch failure
 if [ $rv -eq 254 ]; then
-	echo ""
 	echo "Error performing action \"$action\" for countries \"${tlds_to_change[@]}\"."
 	echo "Removing failed tld's from config..."
 
@@ -316,12 +310,10 @@ if [ $rv -eq 254 ]; then
 
 # positive return code means apply failure or another permanent error, except for 254
 elif [ $rv -gt 0 ] && [ $rv -ne 254 ]; then
-	echo ""
 	echo "Error performing action \"$action\" for countries \"${tlds_to_change[@]}\"."
 
 	if [ -z "$(echo ${config_tlds[@]})" ]; then
-		echo "Can not restore previous countries set because it is not found in the config file."
-		die
+		die "Can not restore previous countries set because it is not found in the config file."
 	fi
 
 	# restore old countries set in the config file
@@ -333,7 +325,7 @@ elif [ $rv -gt 0 ] && [ $rv -ne 254 ]; then
 	else
 		echo "Failed."
 	fi
-	die
+	die "Failed to restore previous countries set."
 
 elif [ $rv -eq 0 ]; then
 	debugprint "Successfully performed action \"$action\" for countries \"${tlds_to_change[@]}\"."
@@ -377,9 +369,7 @@ if [ ! "$skip_cron" ]; then
 	rv=$?
 
 	if [ $rv -ne 0 ]; then
-		echo "Error running crontab command." >&2
-		echo ""
-		die
+		die "Error running the crontab command."
 	else
 		echo "Ok."
 		cron_line_result=$(crontab -u root -l 2>/dev/null |  grep  "\"$run_command\"")
@@ -395,9 +385,7 @@ if [ ! "$skip_cron" ]; then
                 sudo crontab -u root -; rv=$?
 
 	if [ $rv -ne 0 ]; then
-		echo "Error running crontab command." >&2
-		echo ""
-		die
+		die "Error running the crontab command."
 	else
 		echo "Ok."
 		cron_line_result=$(crontab -u root -l 2>/dev/null |  grep "reboot sleep .* && \"$run_command\"")
@@ -405,6 +393,9 @@ if [ ! "$skip_cron" ]; then
 		echo ""
 		echo "View cron jobs with \"sudo crontab -l\""
 	fi
+
+	# save cron schedule to the config file
+	setconfig "Cron_schedule" "$conf_file" "$cron_schedule"
 else
 	echo "NOTE: Skipping cron jobs creation."
 fi
