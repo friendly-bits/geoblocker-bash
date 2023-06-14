@@ -130,7 +130,14 @@ apply -a add -c country:
 - removes the ipset and iptables rules for specified country.
 
 **The backup script**
-- Creates a backup of the current iptables states and current ipsets or restores the above from backup.
+
+Supports actions: -b (backup), -r (restore)
+
+*backup -f backup_file -b:
+- Creates a backup of the current iptables states and current ipsets
+
+*backup -f backup_file -r: used for automatic recovery from fault conditions
+- Restores ipsets and iptables state from backup
 - If restore from backup fails, assumes a fundamental issue and calls the uninstall script to perform a partial uninstall (removes associated ipsets and iptables rules, restores pre-install policies for INPUT and FORWARD iptables chains, does not remove installed files, config and data).
 
 **The validate_cron_schedule.sh script** is used by the -manage script. It accepts cron schedule expression and attempts to make sure that it complies with the format that cron expects. Used to validate optionally user-specified cron schedule expression.
