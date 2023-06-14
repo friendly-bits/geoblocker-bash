@@ -1,23 +1,22 @@
 #!/usr/bin/env bash
-#
+
 # geoblocker_bash-install
-#
+
 # Installer for geoip blocking suite of bash scripts
 # Must be run as root
-#
-# Creates system folder structure for scripts and data.
+
+# Creates system folder structure for scripts, config and data.
 # Copies all scripts included in the suite to /usr/local/bin.
 # Creates backup of pre-install policies for INPUT and FORWARD chains.
-# Calls geoblocker_bash-run to fetch the whitelist and apply new firewall config.
-# Creates a periodic cron job and a reboot job. Cron jobs implement persistence and automatic list updates.
-# Accepts a custom cron schedule expression as an argument. Default cron schedule is "0 4 * * *" - at 4:00 [am] every day.
+# Calls geoblocker_bash-manage to set up geoblocker and then call the -fetch and -apply scripts.
 # If an error occurs during installation, calls the uninstall script to revert any changes made to the system.
-#
+# Accepts a custom cron schedule expression as an argument. Default cron schedule is "0 4 * * *" - at 4:00 [am] every day.
+
 # Requires the following additional scripts (included in the distribution):
 # geoblocker_bash-fetch, geoblocker_bash-apply, geoblocker_bash-run, geoblocker_bash-uninstall, validate_cron_schedule.sh, check_ip_in_ripe.sh
 
 me=$(basename "$0")
-args="$@"
+args="$*"
 
 #### USAGE
 
@@ -30,25 +29,24 @@ Installer for geoip blocking suite of bash scripts.
 Must be run as root.
 
 This script:
-1) Creates system folder structure for scripts and data.
+1) Creates system folder structure for scripts, config and data.
 2) Copies all scripts included in the suite to /usr/local/bin.
 3) Creates backup of pre-install policies for INPUT and FORWARD chains.
-4) Calls geoblocker_bash-run to fetch the whitelist and apply new firewall config.
-5) Creates a periodic cron job and a reboot job. Cron jobs implement persistence and automatic list updates.
+4) Calls geoblocker_bash-manage to set up geoblocker and then call the -fetch and -apply scripts.
+5) If an error occurs during installation, calls the uninstall script to revert any changes made to the system.
 6) Accepts a custom cron schedule expression as an argument. Default cron schedule is "0 4 * * *" - at 4:00 [am] every day.
-7) If an error occurs during installation, calls the uninstall script to revert any changes made to the system.
 
-    Usage: $me -c <"tld [tld] ... [tld]"> [-s "schedule"] [-n] [-p] [-d] [-h]
+    Usage: $me -c <"tld [tld] ... [tld]"> [-s "<schedule_expression>"] [-n] [-p] [-d] [-h]
 
     Options:
-        -c <"tld(s)">   : tld / country codes. if passing multiple country codes, use double quotes
-        -s "schedule"   : schedule expression for the cron job, must be inside double quotes
-                          default: "0 4 * * *" (at 4:00 [am] every day)
+        -c <"tld(s)">        : tld / country codes. if passing multiple country codes, use double quotes
+        -s "sch_expression"  : schedule expression for the cron job, must be inside double quotes
+                                  default: "0 4 * * *" (at 4:00 [am] every day)
 
-        -p              : No Drop: applies the config but skips setting INPUT chain default policy to DROP
-        -n              : No persistence (will not create cron jobs)
-        -d              : Debug
-        -h              : This help
+        -p                   : No Drop: applies the config but skips setting INPUT chain default policy to DROP
+        -n                   : No persistence (will not create cron jobs)
+        -d                   : Debug
+        -h                   : This help
 
 EOF
 }
@@ -72,7 +70,7 @@ done
 
 debugprint() {
 # prints a debug message
-	[ "$debug" ] && echo -e "    Debug: $@"
+	[ "$debug" ] && echo -e "    Debug: $*"
 }
 
 echo ""
