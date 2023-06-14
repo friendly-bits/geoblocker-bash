@@ -2,13 +2,32 @@
 
 # geoblocker_bash-run
 
-# Runs the geoblocker_bash-fetch script to fetch ip lists from RIPE
-# Then runs geoblocker_bash-apply to add/remove/apply the ip lists to iptables
-# Config (including countries list) is taken from the config file in /etc/geoblocker_bash/geoblocker_bash.conf
+# Serves as a proxy to call the -fetch, -apply and -backup scripts with arguments required for the action.
+#
+# Supported actions: add, remove, update
+
+# 'geoblocker_bash-run -a add -c <country_code>' : Calls the fetch script, then calls the apply script,
+#    passing required arguments to fetch and apply ipset and iptables rules for the specified country.
+#    If multiple countries are specified, repeats the operation for each country's ip list.
+
+# 'geoblocker_bash-run -a remove -c <country_code>' : Calls the apply script,
+#     passing required arguments to remove the ipset and iptables rules for the specified country.
+#     If multiple countries are specified, repeats the operation for each country's ip list.
+
+# 'geoblocker_bash-run -a update' : used for triggering from cron jobs.
+#     Calls the fetch script (unless called with the -s - Skip fetch option), then calls the apply script,
+#     passing required arguments to fetch and apply ipset and iptables rules for countries listed in the config file.
+#     Used to update the ip lists at a periodic schedule, and to activate the rules on reboot.
+
+# all actions:
+#     If successful, calls the backup script to create backup of the current (known-good) iptables state and current ipset.
+#     If an error is enountered, classifies it as a temporary or a permanent error.
+#     Permanent errors mean that something is fundamentally broken. Temporary errors are transient (for example a download error).
+#     For permanent errors, calls the -backup script to restore last known-good ipsets and iptables state.
 
 me=$(basename "$0")
 parent_script="$(ps -o args= $PPID | awk -v RS='/| ' '/^geoblocker/')"
-args="$@"
+args="$*"
 
 #### USAGE
 
@@ -16,20 +35,20 @@ usage() {
     cat <<EOF
 
 $me
-Runs the geoblocker_bash-fetch script to fetch ip list from RIPE.
-Then runs geoblocker_bash-apply to apply the ip list to iptables.
+Supported actions: add, remove, update.
+Serves as a proxy to call the -fetch, -apply and -backup scripts with arguments required for each action.
 
     Usage: $me -a <update|add|remove> [-c <"tld [tld] ... [tld]">] [-s] [-p] [-d] [-h]
 
     Options:
-        -a <action>     : action to perform: "update", "add" or "remove" associated iptables rules
-        -c <"tld/s">    : tld / country codes. if passing multiple country codes, use double quotes
-        -s              : Skip fetching (only run the apply script)
-        -p              : No Drop: applies the config but skips setting INPUT chain default policy to DROP
+        -a <action>          : action to perform: "update", "add" or "remove" associated iptables rules
+        -c <"country_codes"> : tld's (country codes). if passing multiple country codes, use double quotes
+        -s                   : Skip fetching (only run the apply script)
+        -p                   : No Drop: applies the config but skips setting INPUT chain default policy to DROP
                                    (continue to accept all connections)
 
-        -d              : Debug
-        -h              : This help
+        -d                   : Debug
+        -h                   : This help
 
 EOF
 }
@@ -54,7 +73,7 @@ shift $((OPTIND -1))
 
 debugprint() {
 # prints a debug message
-	[ "$debug" ] && echo -e "    Debug: $@"
+	[ "$debug" ] && echo -e "    Debug: $*"
 }
 
 echo ""
@@ -120,7 +139,6 @@ if [ -z "$arg_tlds" ] || [ "$action" = "update" ]; then
 	debugprint "Loading tlds from file..."
 	read -r tlds < <(getconfig "Countries" "$conf_file")
 else
-	debugprint "Got tlds from args: '$arg_tlds'"
 	tlds="$arg_tlds"
 fi
 
@@ -185,7 +203,7 @@ fi
 
 
 #### MAIN
-debugprint "tlds: $tlds"
+debugprint "tlds to process: $tlds"
 
 # cd into script directory
 # exit in case "cd" fails
