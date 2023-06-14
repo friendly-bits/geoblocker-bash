@@ -105,11 +105,11 @@ Currently supports actions: add, remove, schedule
 
 Supports actions: add, remove, update
 
-*run -a add -c country_code: Calls the fetch script (unless called with the -s - Skip fetching option), then calls the apply script, passing required arguments to fetch and apply ipset and iptables rules for the specified country. If multiple countries are specified, repeats the operation for each country's ip list.
+*run -a add -c country_code: Calls the fetch script, then calls the apply script, passing required arguments to fetch and apply ipset and iptables rules for the specified country. If multiple countries are specified, repeats the operation for each country's ip list.
 
  *run -a remove -c country_code: Calls the apply script, passing required arguments to remove the ipset and iptables rules for the specified country. If multiple countries are specified, repeats the operation for each country's ip list.
 
- *run -a update: used for triggering from the cron jobs. Calls the fetch script (unless called with the -s - Skip fetching option), then calls the apply script, passing required arguments to fetch and apply ipset and iptables rules for countries listed in the config file. Used to update the ip lists on a periodic schedule, and to set the rules upon reboot.
+ *run -a update: used for triggering from the cron jobs. Calls the fetch script (unless called with the -s - Skip fetch option), then calls the apply script, passing required arguments to fetch and apply ipset and iptables rules for countries listed in the config file. Used to update the ip lists at a periodic schedule, and to activate the rules on reboot.
  
  all actions:
 - If successful, calls the backup script to create backup of the current (known-good) iptables state and current ipset.
