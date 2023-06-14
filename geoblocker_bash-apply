@@ -241,7 +241,7 @@ if [ "$action" = "add" ]; then
 	debugprint "calculated maxelem for ipset: $ipset_maxelem"
 
 	# calculate hashsize = (512) or (ipset_maxelem / 32), whichever is larger
-	testhashsize=$(echo "scale=0 ; $ipset_maxelem / 32" | bc)
+	testhashsize=$(echo "scale=0 ; $ipset_maxelem / 4" | bc)
 	debugprint "calculated hashsize: $testhashsize"
 	if [ "$testhashsize" -lt 512 ]; then
 		ipset_hashsize=512
@@ -440,7 +440,11 @@ fi
 
 
 echo ""
-echo "Successfully applied new iptables rules for country '$tld'."
+case "$action" in
+	add) completed_action="added";;
+	remove) completed_action="removed";;
+esac
+echo "Successfully $completed_action iplist for country '$tld'."
 echo ""
 
 [ -n "$parent_script" ] && debugprint "\033[1;33mBack to $parent_script...\033[0m"
