@@ -122,11 +122,11 @@ Supports actions: add, remove, update
 **The apply script**
 - supports actions: add, remove
 
-apply -a add -c country:
+*apply -a add -c country_code:
 - Loads an existing whitelist file for the specified country into an ipset and sets iptables rules to only allow connections from subnets included in the ipset.
 - Attempts to determine the local ipv4 subnet for the main network interface and creates an iptables rule to allow all traffic from it.
 
- apply -a remove -c country:
+ *apply -a remove -c country_code:
 - removes the ipset and iptables rules for specified country.
 
 **The backup script**
