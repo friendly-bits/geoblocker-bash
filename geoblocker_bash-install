@@ -258,11 +258,11 @@ rm "$conf_file" &> /dev/null
 
 # write some config to the config file
 echo -n "Setting initial config... "
-setconfig "Datadir" "$conf_file" "$datadir"; rv1=$?
-setconfig "Cron_schedule" "$conf_file" "$cron_schedule"; rv2=$?
-setconfig "RebootSleep" "$conf_file" "$sleeptime"; rv3=$?
-setconfig "Backup_script" "$conf_file" "$backup_script"; rv4=$?
-rv=$(( rv1 + rv2 + rv3 + rv4 ));
+setconfig "Installdir" "$conf_file" "$install_dir"; rv=$(( rv + $?))
+setconfig "Datadir" "$conf_file" "$datadir"; rv=$(( rv + $?))
+setconfig "Cron_schedule" "$conf_file" "$cron_schedule"; rv=$(( rv + $?))
+setconfig "RebootSleep" "$conf_file" "$sleeptime"; rv=$(( rv + $?))
+setconfig "Backup_script" "$conf_file" "$backup_script"; rv=$(( rv + $?))
 if [ "$rv" -ne 0 ]; then
 	echo "Failed."
 	install_failed
