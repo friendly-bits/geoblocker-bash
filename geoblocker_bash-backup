@@ -1,16 +1,23 @@
 #!/usr/bin/env bash
-#
-
 
 # geoblocker_bash-backup
 
-# creates a backup of the current iptables states and current ipsets,
-# or restores the above from backup
-# if restore from backup fails, calls the uninstall script
+# Creates a backup of the current iptables states and current ipsets or restores the above from backup.
+# Supported actions: -b (backup), -r (restore)
+
+# 'geoblocker_bash-backup -f <backup_file> -b' :
+#     Creates a backup of the current iptables state and current geoblocker-associated ipsets
+
+# 'geoblocker_bash-backup -f backup_file -r' : Used for automatic recovery from fault conditions
+#     Restores ipsets and iptables state from backup.
+#     If restore from backup fails, assumes a fundamental issue and calls the uninstall script
+#     to perform a partial uninstall (removes associated ipsets and iptables rules,
+#     restores pre-install policies for INPUT and FORWARD iptables chains,
+#     does not remove installed files, config and data).
 
 me=$(basename "$0")
 parent_script="$(ps -o args= $PPID | awk -v RS='/| ' '/^geoblocker/')"
-args="$@"
+args="$*"
 
 #### USAGE
 
@@ -20,7 +27,7 @@ usage() {
 $me
 - Creates a backup of the current iptables states and current ipsets,
 - or restores the above from backup
-- if restore from backup fails, calls the uninstall script
+- if restore from backup fails, calls the uninstall script to perform a partial uninstall
 
     Usage: $me -f <file> <-b|-r> [-d] [-h]
 
@@ -53,7 +60,7 @@ shift $((OPTIND -1))
 
 # prints a debug message
 debugprint() {
-	[ "$debug" ] && echo -e "    Debug: $@"
+	[ "$debug" ] && echo -e "    Debug: $*"
 }
 
 echo ""
@@ -278,7 +285,7 @@ if [ "$act_backup" ]; then
 	fi
 
 	echo ""
-	echo "Successfully created a backup of ipsets and iptables rules."
+	echo "Successfully created backup of ipsets and iptables rules."
 	echo "Backup file: \"$knowngood_file\""
 fi
 
