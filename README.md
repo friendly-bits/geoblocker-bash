@@ -89,7 +89,8 @@ The suite currently includes 9 scripts:
 - Deletes the scripts from /usr/local/bin
 
 **The manage script**
-- Currently supports actions: add, remove, schedule
+
+Currently supports actions: add, remove, schedule
 
 *manage add|remove -c country_code:
 * Adds or removes whitelists for specified countries to/from the config file
