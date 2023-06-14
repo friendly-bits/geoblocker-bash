@@ -82,6 +82,7 @@ knowngood_failed() {
 	exit 1
 }
 
+# not needed anymore but leaving it in for now
 restart_fail2ban() {
 # fail2ban doesn't handle well flushing the INPUT chain then restoring iptables
 # this function restarts fail2ban service after these operations in order to work around that issue
@@ -124,7 +125,9 @@ restore_from_file() {
 
 		if [ $rv -eq 0 ]; then
 			echo "Success."
-			if [ "$restoretarget" = "iptables" ]; then restart_fail2ban; fi
+
+# not needed anymore
+#			if [ "$restoretarget" = "iptables" ]; then restart_fail2ban; fi
 			return 0
 		else
 			echo "Failure."
@@ -146,9 +149,9 @@ restore_from_file() {
 		echo "-t switch was specified, which means we are in test mode. Skipping uninstall."
 		echo "WARNING: RECOVERY TEST FAILED AND GEOBLOCKER IS CURRENTLY INACTIVE"
 
-		# still need to restart fail2ban if it's installed
 		if [ "$restoretarget" = "iptables" ]; then
-			restart_fail2ban
+# not needed anymore
+#			restart_fail2ban
 			die 1
 		fi
 	fi
