@@ -261,17 +261,23 @@ if [ "$action" = "add" ]; then
 	# import the whitelist into temporary ipset from file
 	echo -n "Importing the whitelist for country '$tld' into temporary ipset... "
 
-	while IFS= read -r ip
-	do
-		ipset add "$temp_ipset" "$ip"; rv=$?
-		if [ $rv -ne 0 ]; then
-			die "Error when running the command: 'ipset add $perm_ipset $ip'. Exiting." "nonfatal"
-		fi
-	done < "$whitelist_file"
+	# reads $whitelist_file, transforms each line into ipset add command and redirects the result into "ipset restore"
+	# this is about 50x faster than issuing discrete "ipset add" commands in a loop
+	# the '-exist' option prevents the restore command from getting stuck when encountering duplicates
+	while read -r network; do \
+		echo "add $temp_ipset $network"; \
+	done < "$whitelist_file" |\
+		ipset restore -exist; rv=$?
+
+	if [ $rv -ne 0 ]; then
+		echo ""
+		ipset destroy "$temp_ipset"
+		die "Error when importing the list from '$whitelist_file' into '$temp_ipset'. Exiting." "nonfatal"
+	fi
 
 	echo "Ok."
 
-	[ $debug ] && ipset_lines=$(ipset save "$temp_ipset" | grep "add $temp_ipset" | wc -l)
+	[ $debug ] && read -r ipset_lines < <(ipset save "$temp_ipset" | grep "add $temp_ipset" | wc -l)
 	debugprint "ip's in the temporary ipset: $ipset_lines"
 fi
 
