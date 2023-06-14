@@ -24,9 +24,10 @@ https://github.com/blunderful-scripts/geoblocker_bash/releases
  (when specifying multiple countries, put the list in double quotes)
  
 **To manage:**
-- run 'sudo geoblocker_bash-manage -c "<country_code [country_code] ... [country_code]>" -a <add|remove>'
-- example (to add whitelists for Germany and Netherlands): _'sudo geoblocker-manage -c "DE NL" -a add'_
-- example (to remove whitelist for Germany): _'sudo geoblocker-manage -c DE -a remove'_
+- run 'sudo geoblocker_bash-manage -a <add|remove|schedule> [-c "country_code country_code ... country_code"]'
+- example (to add whitelists for Germany and Netherlands): _'sudo geoblocker-manage -a add -c "DE NL"'_
+- example (to remove whitelist for Germany): _'sudo geoblocker-manage -a remove -c DE'_
+- example (to change periodic cron job schedule): _'sudo geoblocker-manage -a schedule -s "1 4 * * *"_
  
 **To uninstall:**
 - run 'sudo geoblocker_bash-uninstall'
@@ -76,7 +77,7 @@ The suite currently includes 9 scripts:
 - Creates system folder structure for scripts, config and data.
 - Copies all scripts included in this suite to /usr/local/bin
 - Creates backup of pre-install policies for INPUT and FORWARD chains
-- Calls geoblocker_bash-manage
+- Calls geoblocker_bash-manage to set up geoblocker and then call the -fetch and -apply scripts.
 - If an error occurs during the installation, calls the uninstall script to revert any changes made to the system.
 - Accepts optional custom cron schedule expression as an argument. Default cron schedule is "0 4 * * *" - at 4:00 [am] every day.
 
@@ -87,32 +88,55 @@ The suite currently includes 9 scripts:
 - Deletes scripts' data folder /var/lib/geoblocker_bash
 - Deletes the scripts from /usr/local/bin
 
-**The manage script**
-- Adds or removes whitelists for specified countries to/from geoblocking rules
-- Calls the -run script to fetch and apply the whitelists
-- Creates a periodic cron job and a reboot job. Cron jobs implement persistence and automatic list updates.
-- Accepts optional custom cron schedule expression as an argument.
-- If schedule is not specified, uses schedule from the config file (set during the installation by the -install script or later by the -manage script)
+**The manage script**: provides an interface for the user (and for the -install script) to set up geoblocking.
 
+Supported actions: add, remove, schedule
 
-**The run script** is called by the -manage script, and used for triggering from the cron jobs as well.
-- Calls the fetch script, then calls the apply script, passing required arguments. If multiple countries are specified, repeats the operation for each country's whitelist.
-- If all actions are successful, calls the -backup script to create a known-good backup of ipsets and iptables state.
-- If an error is enountered, classifies it as a fatal or a non-fatal error. Fatal errors mean that something is fundamentally broken. Non-fatal errors are transient (for example a download error). For fatal errors, calls the -backup script to restore last known-good ipsets and iptables state.
+*manage -a add|remove -c country_code :
+* Adds or removes the specified country codes (tld's) to/from the config file
+* Calls the -run script to fetch and apply the whitelists
+* Creates a periodic cron job and a reboot job, unless ran with the -n (no persistence) option. Cron jobs implement persistence and automatic list updates.
+* Accepts an optional custom cron schedule expression as an argument.
+* If schedule is not specified, uses schedule from the config file (set during the installation by the -install script or later by the -manage script)
+
+*manage -a schedule -s <schedule_expression> : changes the schedule for the periodic cron job
+
+**The run script**: Serves as a proxy to call the -fetch, -apply and -backup scripts with arguments required for each action.
+
+Supported actions: add, remove, update.
+
+*run -a add -c <country_code> : Calls the fetch script, then calls the apply script, passing required arguments to fetch and apply ipset and iptables rules for the specified country. If multiple countries are specified, repeats the operation for each country's ip list.
+
+ *run -a remove -c <country_code> : Calls the apply script, passing required arguments to remove the ipset and iptables rules for the specified country. If multiple countries are specified, repeats the operation for each country's ip list.
+
+ *run -a update : used for triggering from the cron jobs. Calls the fetch script (unless called with the -s - Skip fetch option), then calls the apply script, passing required arguments to fetch and apply ipset and iptables rules for countries listed in the config file. Used to update the ip lists at a periodic schedule, and to activate the rules on reboot.
+ 
+ all actions:
+- If successful, calls the backup script to create backup of the current (known-good) iptables state and current ipset.
+- If an error is enountered, classifies it as a permanent or a temporary error. Permanent errors mean that something is fundamentally broken. Temporary errors are transient (for example a download error). For permanent errors, calls the -backup script to restore last known-good ipsets and iptables state.
 
 **The fetch script**
 - Fetches ipv4 subnets list for a given country from RIPE.
 - Parses, validates and compiles the downloaded list into a plain list, and saves to a file.
-- Attempts to determine the local ipv4 subnet for the main network interface and appends it to the file.
 
-**The apply script**
-- Loads a user-specified whitelist file into an ipset and sets iptables rules to only allow connections from subnets included in the ipset.
-- If successful, creates backup of the current (known-good) iptables state and current ipset.
-- In case of an error, attempts to restore last known-good state from backup.
-- If that fails, the script assumes that something is broken and runs the uninstall script.
+**The apply script**:  Loads or removes ipsets and iptables rules for the specified country code.
+- supported actions: add, remove
 
-**The backup script**
-- Creates a backup of the current iptables states and current ipsets or restores the above from backup.
+*apply -a add -c <country_code> :
+- Loads an ip list file for the specified country into an ipset and sets iptables rules to only allow connections from the local subnet and from subnets included in the ipset.
+
+ *apply -a remove -c <country_code> :
+- removes the ipset and associated iptables rules for the specified country.
+
+**The backup script**: Creates a backup of the current iptables state and current geoblocker-associated ipsets, or restores the above from backup.
+
+Supported actions: -b (backup), -r (restore)
+
+*backup -f <backup_file> -b :
+- Creates a backup of the current iptables state and current geoblocker-associated ipsets
+
+*backup -f <backup_file> -r : used for automatic recovery from fault conditions
+- Restores ipsets and iptables state from backup
 - If restore from backup fails, assumes a fundamental issue and calls the uninstall script to perform a partial uninstall (removes associated ipsets and iptables rules, restores pre-install policies for INPUT and FORWARD iptables chains, does not remove installed files, config and data).
 
 **The validate_cron_schedule.sh script** is used by the -manage script. It accepts cron schedule expression and attempts to make sure that it complies with the format that cron expects. Used to validate optionally user-specified cron schedule expression.
