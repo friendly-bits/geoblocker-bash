@@ -1,27 +1,27 @@
 #!/bin/bash -l
 
 # geoblocker_bash-apply
-#
-# Loads a user-specified whitelist file into an ipset and sets iptables rules to only
-#         allow connections from subnets included in the ipset
-#
-# If successful, creates backup of the current (known-good) iptables state and current ipset
-#
-# In case of an error, restores last known-good state from backup
-#
-# If that fails, the script assumes that something is broken and runs the uninstall script
-#
+
+# Loads or removes ipsets and iptables rules for the specified country code.
+
+# Supported actions (specified by the -a option): add, remove
+
+# 'geoblocker_bash-apply -a add -c <country_code>' :
+#     Loads an ip list file for the specified country into an ipset
+#     and sets iptables rules to only allow connections
+#     from the local subnet and from subnets included in the ipset.
+
+# 'geoblocker_bash-apply -a remove -c <country_code>' :
+#     removes the ipset and associated iptables rules for the specified country.
+
 # Requires the 'ipset' utility. To install it on Debian or derivatives, use the command:
 ## apt install ipset
 #
-# Must be run as root
-#
-# For input, requires a plaintext file with ip subnet list in the format x[xx].x[xx].x[xx].x[xx]/x[xx]
-
+# Requires root priviliges
 
 me=$(basename "$0")
 parent_script="$(ps -o args= $PPID | awk -v RS='/| ' '/^geoblocker/')"
-args="$@"
+args="$*"
 
 #### USAGE
 
@@ -29,21 +29,20 @@ usage() {
     cat <<EOF
 
 $me
+    Loads or removes ipsets and iptables rules for the specified country code.
+    Supported actions (specified by the -a option): add, remove.
 
-Loads a user-specified whitelist file into an ipset and sets iptables rules to only
-      allow connections from subnets included in the ipset
-
-    Usage: $me -a <add|remove> -c <tld> [-p] [-d] [-t] [-h]
+    Usage: $me -a <add|remove> -c <country_code> [-p] [-d] [-t] [-h]
 
     Options:
-        -a <action>     : action to perform: "add" or "remove" associated iptables rules
-        -c <tld>        : tld / country code
-        -p              : No Drop: applies the config but skips setting INPUT chain default policy to DROP
+        -a <action>       : action to perform: "add" or "remove" ipset and associated iptables rules
+        -c <country_code> : tld / country code
+        -p                : No Drop: applies the config but skips setting INPUT chain default policy to DROP
                                    (continue to accept all connections)
 
-        -d              : Debug
-        -t              : Simulate fault and test recovery
-        -h              : This help
+        -d                : Debug
+        -t                : Simulate fault and test recovery
+        -h                : This help
 
 EOF
 }
@@ -70,7 +69,7 @@ echo ""
 
 # prints a debug message
 debugprint() {
-	[ "$debug" ] && echo -e "    Debug: $@"
+	[ "$debug" ] && echo -e "    Debug: $*"
 }
 
 echo ""
@@ -157,9 +156,6 @@ getlocalsubnet() {
 
 conf_dir="/etc/geoblocker_bash"
 conf_file="${conf_dir}/geoblocker_bash.conf"
-
-# read the path to backup_script from the config file
-read -r backup_script < <(getconfig "Backup_script" "$conf_file")
 
 # read datadir from the config file
 read -r datadir < <(getconfig "Datadir" "$conf_file")
