@@ -51,7 +51,7 @@ echo ""
 
 debugprint() {
 # prints a debug message
-	[ "$debug" ] && echo -e "    Debug: $@"
+	[ "$debug" ] && echo -e "    Debug: $*"
 }
 
 echo ""
