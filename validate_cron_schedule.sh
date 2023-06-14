@@ -12,7 +12,7 @@
 
 me=$(basename "$0")
 parent_script="$(ps -o args= $PPID | awk -v RS='/| ' '/^geoblocker/')"
-args="$@"
+args="$*"
 
 #### USAGE
 
@@ -24,15 +24,15 @@ usage() {
     where min is 0-59, hr 0-23, dom is 1-31, mon is 1-12 (or names) and dow is 0-7 (or names).  Fields can have ranges (a-e), lists
     separated by commas (a,c,z), or an asterisk. Note that the step value notation of Vixie cron is not supported (e.g., 2-6/2).
 
-    Usage: $me -x "expression" [-h] [-d]
+    Usage: $me -x "<schedule_expression>" [-h] [-d]
 
     Options:
-    -x "expression"    : crontab schedule expression ***in double quotes***
-                         example: "0 4 * * 6"
-                         format: min hr dom mon dow
+    -x "<sch_expression>"  : crontab schedule expression ***in double quotes***
+                                 example: "0 4 * * 6"
+                                 format: min hr dom mon dow
 
-    -d                 : debug
-    -h                 : This help
+    -d                     : debug
+    -h                     : This help
 
 EOF
 } >&2
@@ -54,7 +54,7 @@ shift $((OPTIND -1))
 
 # prints a debug message
 debugprint() {
-	[ "$debug" ] && echo -e "    Debug: $@" >&2
+	[ "$debug" ] && echo -e "    Debug: $*" >&2
 }
 
 debugprint "\033[1;33mStarted validate_cron_schedule with args: '$args'\033[0m"
