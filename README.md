@@ -18,7 +18,7 @@ https://github.com/blunderful-scripts/geoblocker_bash/releases
 3) Put *all* scripts in this suite into the same folder
 4) Use the check_ip_in_ripe script to make sure that your public ip address is included in the list fetched from RIPE, so you do not get locked out of your server.
 - example: _'bash check_ip_in_ripe.sh -c DE -i <your_public_ip_address>' (for Germany)_
-5) Once verified that your public ip address is included in the list, run 'sudo bash geoblocker_bash-install -c "<country_code [country_code] ... [country_code]>"'
+5) Once verified that your public ip address is included in the list, run 'sudo bash geoblocker_bash-install -c "<country_code> [country_code] ... [country_code]"'
 - example: _'sudo bash geoblocker_bash-install -c DE' (for Germany)_
 - example: _'sudo bash geoblocker_bash-install -c "DE NL"' (for Germany and Netherlands)_
  (when specifying multiple countries, put the list in double quotes)
