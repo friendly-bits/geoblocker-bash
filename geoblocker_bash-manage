@@ -2,12 +2,23 @@
 
 # geoblocker_bash-manage
 
-# Allows to add or remove a whitelist for specified countries to/from geoblocking rules
-#       and creates or updates associated cron jobs
+# Provides an interface for the user (and for the -install script) to set up geoblocking.
+
+# Supported actions: add, remove, schedule.
+
+# 'geoblocker_bash-manage -a add|remove -c <country_code>' :
+#     Adds or removes the specified country codes (tld's) to/from the config file.
+#     Calls the -run script to fetch and apply the whitelists.
+#     Creates a periodic cron job and a reboot job, unless ran with the -n (no persistence) option.
+#     Cron jobs implement persistence and automatic list updates.
+#     Accepts an optional custom cron schedule expression as an argument.
+#     If schedule is not specified, uses schedule from the config file.
+
+# 'geoblocker_bash-manage -a schedule -s <schedule_expression>' : changes the schedule for the periodic cron job.
 
 me=$(basename "$0")
 parent_script="$(ps -o args= $PPID | awk -v RS='/| ' '/^geoblocker/')"
-args="$@"
+args="$*"
 
 #### USAGE
 
@@ -15,27 +26,27 @@ usage() {
     cat <<EOF
 
 $me
-    Allows to add or delete whitelists for specified countries to/from geoblocking rules
-        and creates or updates associated cron jobs.
+    Provides an interface for the user (and for the -install script) to set up geoblocking.
+    Supported actions: add, remove, schedule.
 
 WARNING: if removing a whitelist: Geoblocking will remain active after removal.
          If you remove your country's whitelist, you may lose remote access to your system.
 
 
-    Usage: $me -a <add|remove|schedule> [-c "[tld] [tld] ... [tld]"] [-s "schedule"] [-n] [-p] [-d] [-h]
+    Usage: $me -a <add|remove|schedule> [-c "[tld] [tld] ... [tld]"] [-s "<sch_expression>"] [-n] [-p] [-d] [-h]
 
     Options:
-        -a action       : action to perform: "add" or "remove" associated rules and cron jobs
-                          or "schedule" to change the cron schedule without changing iptables rules
+        -a action               : action to perform: "add" or "remove" associated rules and cron jobs
+                                     or "schedule" to change the cron schedule without changing iptables rules
 
-        -c "tld(s)"     : tld / country codes. if passing multiple country codes, use double quotes
-        -s "schedule"   : schedule expression for the periodic cron job, must be inside double quotes
+        -c "tld(s)"             : tld / country codes. if passing multiple country codes, use double quotes
+        -s "<sch_expression>"   : schedule expression for the periodic cron job, must be inside double quotes
 
-        -n              : No persistence (skip creating cron jobs)
-        -p              : No Drop: applies the config but skips setting INPUT chain default policy to DROP
-                                   (continue to accept all connections)
-        -d              : Debug
-        -h              : This help
+        -n                      : No persistence (skip creating cron jobs)
+        -p                      : No Drop: applies the config but skips setting INPUT chain default policy to DROP
+                                     (continue to accept all connections)
+        -d                      : Debug
+        -h                      : This help
 
 EOF
 }
@@ -60,17 +71,17 @@ shift $((OPTIND -1))
 
 debugprint() {
 # prints a debug message
-	[ "$debug" ] && echo -e "    Debug: $@"
+	[ "$debug" ] && echo -e "    Debug: $*"
 }
 
 echo ""
 debugprint "\033[1;33mStarted *manage with args: '$args'\033[0m"
 
 die() {
-    if [ -n "$@" ]; then
+    if [ -n "$*" ]; then
         echo ""
 		# loop through arguments and print them to stderr and to the syslog
-        for arg in "$@"; do
+        for arg in $@; do
             echo "$arg" 1>&2
             logger -t "$me" "$arg"
         done
