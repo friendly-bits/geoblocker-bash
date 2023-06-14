@@ -137,6 +137,9 @@ conf_file="${conf_dir}/geoblocker_bash.conf"
 # get datadir from the config file
 read -r datadir < <(getconfig "Datadir" "$conf_file")
 
+# get install_dir from the config file
+read -r install_dir < <(getconfig "Installdir" "$conf_file")
+
 preinstall_policies_file="$datadir/preinstall_policies.bak"
 knowngood_file="$datadir/iptables_knowngood.bak"
 whitelist_dir="$datadir/ip_lists"
@@ -145,10 +148,7 @@ tlds_status_file="$datadir/tlds_status"
 # get sleeptime (for reboot) from the config file
 read -r sleeptime < <(getconfig "RebootSleepTime" "$conf_file")
 
-# get the script path
-read -r scriptdir < <(get_script_dir)
-
-run_command="${scriptdir}/geoblocker_bash-run"
+run_command="${install_dir}/geoblocker_bash-run"
 
 
 #### CHECKS
@@ -209,10 +209,6 @@ if [ -n "$cron_schedule" ] && [ -n "$skip_cron" ]; then
 	die "Error: Conflicting arguments. Use either -s or -n but not both."
 fi
 
-# cd into script directory
-# exit in case "cd" fails
-cd "$scriptdir"; rv=$?
-if [ -z "$scriptdir" ] || [ "$rv" -ne 0 ]; then die "Error: could not change directory to '$scriptdir'. Exiting."; fi
 
 if [ ! "$skip_cron" ]; then
 
@@ -261,7 +257,7 @@ case "$action" in
 		# convert to array while removing duplicates
 		tlds_to_change=( $(echo "$tlds_to_change_str" | sort -ibu) )
 		if [ -z "$(echo ${tlds_to_change[@]})" ]; then
-			die "Error: can not add countries '${arg_tlds[@]}' because they have already been added."
+			die "Error: can not add countries '$(echo ${arg_tlds[@]})' because they have already been added."
 		fi
 	;;
 	remove)
@@ -281,7 +277,7 @@ case "$action" in
                           <(printf %s\\n "${arg_tlds[@]}" | sort -u))
 
 		if [ -z "$(echo ${tlds_to_change[@]})" ]; then
-			die "Error: can not remove countries '${arg_tlds[@]}' because they have not been added."
+			die "Error: can not remove countries '$(echo ${arg_tlds[@]})' because they have not been added."
 		fi
 	;;
 esac
