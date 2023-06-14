@@ -92,14 +92,14 @@ The suite currently includes 9 scripts:
 
 Currently supports actions: add, remove, schedule
 
-*manage add|remove -c country_code:
-* Adds or removes whitelists for specified countries to/from the config file
+*manage -a add|remove -c country_code:
+* Adds or removes the specified country codes (tld's) to/from the config file
 * Calls the -run script to fetch and apply the whitelists
 * Creates a periodic cron job and a reboot job, unless ran with the -n (no persistence) option. Cron jobs implement persistence and automatic list updates.
 * Accepts optional custom cron schedule expression as an argument.
 * If schedule is not specified, uses schedule from the config file (set during the installation by the -install script or later by the -manage script)
 
-*manage schedule: changes the schedule for the periodic cron job
+*manage -a schedule: changes the schedule for the periodic cron job
 
 **The run script**
 
@@ -123,18 +123,18 @@ Supports actions: add, remove, update
 - supports actions: add, remove
 
 *apply -a add -c country_code:
-- Loads an existing whitelist file for the specified country into an ipset and sets iptables rules to only allow connections from subnets included in the ipset.
+- Loads an existing ip list file for the specified country into an ipset and sets iptables rules to only allow connections from subnets included in the ipset.
 - Attempts to determine the local ipv4 subnet for the main network interface and creates an iptables rule to allow all traffic from it.
 
  *apply -a remove -c country_code:
-- removes the ipset and iptables rules for specified country.
+- removes the ipset and iptables rules for the specified country.
 
 **The backup script**
 
 Supports actions: -b (backup), -r (restore)
 
 *backup -f backup_file -b:
-- Creates a backup of the current iptables states and current ipsets
+- Creates a backup of the current iptables state and current geoblocker-associated ipsets
 
 *backup -f backup_file -r: used for automatic recovery from fault conditions
 - Restores ipsets and iptables state from backup
