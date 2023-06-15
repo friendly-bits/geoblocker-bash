@@ -115,7 +115,7 @@ restore_from_file() {
 	# count lines in the corresponding portion of the backup file
 	case "$restoretarget" in
 		iptables) line_cnt=$(sed -e '/\[IPSET\].*/Q' "$restorefile" | wc -l) ;;
-		ipset) line_cnt=$(sed -n "/create geoblocker_bash/,\$p" "$restorefile" | grep "add $geoblocker_bash" | wc -l) ;;
+		ipset) line_cnt=$(sed -n "/create geoblocker_bash/,\$p" "$restorefile" | grep "add geoblocker_bash" | wc -l) ;;
 	esac
 	debugprint "$restoretarget lines number in backup: $line_cnt"
 
