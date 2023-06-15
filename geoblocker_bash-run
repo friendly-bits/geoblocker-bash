@@ -246,7 +246,6 @@ if [ ! "$skipfetch" ] && [ "$action" != "remove" ]; then
 		else
 			ok_cnt=$(( ok_cnt + 1 ))
 			ok_tlds="$ok_tlds $tld"
-			debugprint "Successfully retrieved ip list for country '$tld'."
 		fi
 	done
 
