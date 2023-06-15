@@ -59,6 +59,20 @@ debugprint() {
 
 debugprint "\033[1;33mStarted validate_cron_schedule with args: '$args'\033[0m"
 
+die() {
+    if [ -n "$*" ]; then
+        echo "" 1>&2
+		# loop through arguments and print them to stderr and to the syslog
+        for arg in "$@"; do
+            echo "$arg" 1>&2
+            logger -t "$me" "$arg"
+        done
+    fi
+    [ -n "$parent_script" ] && debugprint "\033[1;33mBack to $parent_script...\033[0m"
+    echo "" 1>&2
+    exit 1
+}
+
 validateNum() {
 # returns 0 if valid, 1 if not. Specify number, minvalue and maxvalue as args
 	num="$1"; min="$2"; max="$3"
@@ -200,7 +214,6 @@ read -r min hour dom mon dow extra <<< "$sourceline"
 
 # if $extra is not empty then too many arguments have been passed
 if [ -n "$extra" ]; then
-	usage
 	echo "" >&2
 	echo "Error: Too many fields in schedule expression! I don't know what to do with \"$extra\"!" >&2
 	echo "Use double braces around your expression!" >&2
@@ -212,7 +225,6 @@ fi
 
 # if some arguments are missing
 if [ -z "$min" ] || [ -z "$hour" ] || [ -z "$dom" ] || [ -z "$mon" ] || [ -z "$dow" ]; then
-	usage
 	echo "" >&2
 	echo "Not enough fields in schedule expression!" >&2
 	echo "This script requires crontab schedule line as an argument!" >&2
@@ -225,6 +237,8 @@ fi
 
 
 #### Main
+
+exitstatus=1
 
 # minute check
 validateField "minute" "$min" "0" "60"
@@ -246,6 +260,8 @@ if [ "$errors" -gt 0 ] ; then
 	echo "" >&2
 	echo "You entered: \"$sourceline\"" >&2
 	echo "Valid example: \"0 4 * * 6\"" >&2
+else
+	exitstatus=0
 fi
 
 # output sourceline
