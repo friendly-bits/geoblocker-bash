@@ -17,7 +17,22 @@
 
 me=$(basename "$0")
 parent_script="$(ps -o args= $PPID | awk -v RS='/| ' '/^geoblocker/')"
-args="$*"
+
+# arguments sanitization
+arguments=()
+for arg in "$@"; do
+	# trim single-quotes if any
+	arg="${arg//\'}";
+	# trim double-quotes if any
+	arg="${arg//\"}"
+	# trim leading and trailing whitespaces
+	arg="$(awk '{$1=$1};1' <<< "$arg")"
+	# add to array while discarding empty arguments
+	[ -n "$arg" ] && arguments+=("$arg")
+done
+# replace arguments with sanitized ones
+set -- "${arguments[@]}"
+
 
 #### USAGE
 
@@ -29,10 +44,9 @@ $me
 - or restores the above from backup
 - if restore from backup fails, calls the uninstall script to perform a partial uninstall
 
-    Usage: $me -f <file> <-b|-r> [-d] [-h]
+    Usage: $me <-b|-r> [-d] [-h]
 
     Options:
-        -f <file>   : file to use for backup of restore operation
         -b          : action: create backup
         -r          : action: restore from backup
 
@@ -43,9 +57,8 @@ EOF
 }
 
 #### PARSE ARGUMENTS
-while getopts "f:brdh" opt; do
+while getopts "brdh" opt; do
 	case $opt in
-		f) knowngood_file="$OPTARG";;
 		b) act_backup="true";;
 		r) act_restore="true";;
 		d) debug="-d";;
@@ -63,8 +76,8 @@ debugprint() {
 	[ "$debug" ] && echo -e "    Debug: $*"
 }
 
-echo ""
-debugprint "\033[1;33mStarted *backup with args: '$args'\033[0m"
+argsmsg="Started *backup with args: $(for arg in "${arguments[@]}"; do echo -n "'$arg'  "; done; echo)"
+debugprint "\033[1;33m${argsmsg}\033[0m"
 
 die() {
 # echo out the error passed in 1st argument and write it to syslog
@@ -210,11 +223,36 @@ restoreknowngood() {
 	logger -t geoblocker_bash-backup  "$msg1"
 }
 
+getconfig() {
+# reads a field named $1 from the config file $2
+# outputs the resulting field
+# returns 0 if successful, 1 if not
+	fieldname="$1"
+	configfile="$2"
+	if [ -z "$fieldname" ] || [ -z "$configfile" ]; then return 1; fi
+	field="$(grep "$fieldname=" "$configfile" | sed "s/.*$fieldname=//")"; rv=$?
+	if [ -z "$field" ]; then
+		echo ""
+		rv=$((rv + 1))
+	else
+		echo "$field"
+	fi
+	return $rv
+}
+
 
 #### VARIABLES
 
 iptables_comment="geoblocker_bash"
 ipset_tag="geoblocker_bash"
+conf_dir="/etc/geoblocker_bash"
+conf_file="${conf_dir}/geoblocker_bash.conf"
+
+# get datadir from the config file
+datadir="$(getconfig "Datadir" "$conf_file")"
+
+conf_file_backup="$datadir/geoblocker_bash.conf.bak"
+knowngood_file="$datadir/iptables_knowngood.bak"
 
 
 #### CHECKS
@@ -227,8 +265,7 @@ if [ ! "$act_backup" ] && [ ! "$act_restore" ]; then usage; die "Use \"-b\" or \
 
 # check for knowngood file path
 if [ -z "$knowngood_file" ]; then
-	usage
-	die "Error: backup file path can not be empty. Exiting."
+	die "Error: Could not read the backup file path from config. Exiting."
 fi
 
 # check for root
@@ -261,9 +298,7 @@ if [ "$act_backup" ]; then
 	touch "${knowngood_file}.new"
 
 	iptables-save > "${knowngood_file}.new"; rv=$?
-	if [ $rv -ne 0 ]; then
-		die "Error creating backup of iptables state with command: \"iptables-save > ${knowngood_file}.new\". Exiting."
-	fi
+	[ "$rv" -ne 0 ] && die "Error creating backup of iptables state with command: \"iptables-save > ${knowngood_file}.new\"."
 	echo "Ok."
 
 		# we use the same file for iptables and ipset backup
@@ -273,25 +308,26 @@ if [ "$act_backup" ]; then
 	for curr_ipset in $(ipset list -n | grep "$ipset_tag"); do
 		echo -n "Creating backup of ipset \"$curr_ipset\"... "
 		ipset save "$curr_ipset" >> "${knowngood_file}.new"; rv=$?
-		if [ $rv -ne 0 ]; then
-			die "Error creating backup of ipset \"$curr_ipset\". Exiting."
-		fi
+		[ "$rv" -ne 0 ] && die "Error creating backup of ipset \"$curr_ipset\"."
 		echo "Ok."
 	done
 
+	cp "$conf_file" "$conf_file_backup"; rv=$?
+	[ "$rv" -ne 0 ] && die "Error creating a backup copy of the config file."
+
 	mv "$knowngood_file.new" "$knowngood_file"; rv=$?
-	if [ $rv -ne 0 ]; then
-		die "Error overwriting backup file for ipset and iptables state. Exiting."
-	fi
+	[ "$rv" -ne 0 ] && die "Error overwriting the backup file."
 
 	echo ""
-	echo "Successfully created backup of ipsets and iptables rules."
+	echo "Successfully created backup of config, ipsets and iptables rules."
 	echo "Backup file: \"$knowngood_file\""
 fi
 
 if [ "$act_restore" ]; then
 ### Restore iptables and ipsets to known-good state from backup file
 	restoreknowngood "$knowngood_file"
+	cp "$conf_file_backup" "$conf_file"; rv=$?
+	[ "$rv" -ne 0 ] && msg1="Error restoring the config file from backup."
 fi
 
 echo ""
