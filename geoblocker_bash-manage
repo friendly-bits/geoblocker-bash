@@ -55,8 +55,8 @@ EOF
 while getopts "a:c:s:npdh" opt; do
 	case $opt in
 		a) action=$OPTARG;;
-		c) tlds=$OPTARG;;
-		s) cron_schedule=$OPTARG;;
+		c) tlds_arg=$OPTARG;;
+		s) cron_schedule_orig=$OPTARG;;
 		n) skip_cron=true;;
 		p) nodrop="-p";;
 		d) debug="-d";;
@@ -79,28 +79,16 @@ debugprint "\033[1;33mStarted *manage with args: '$args'\033[0m"
 
 die() {
     if [ -n "$*" ]; then
-        echo ""
+        echo "" 1>&2
 		# loop through arguments and print them to stderr and to the syslog
-        for arg in $@; do
+        for arg in "$@"; do
             echo "$arg" 1>&2
             logger -t "$me" "$arg"
         done
     fi
     [ -n "$parent_script" ] && debugprint "\033[1;33mBack to $parent_script...\033[0m"
-    echo ""
+    echo "" 1>&2
     exit 1
-}
-
-get_script_dir() {
-	SOURCE=${BASH_SOURCE[0]}
-	while [ -L "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symlink
-		DIR=$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )
-		SOURCE=$(readlink "$SOURCE")
-		[[ $SOURCE != /* ]] && SOURCE=$DIR/$SOURCE
-		# if $SOURCE was a relative symlink, we need to resolve it relative to the path where the symlink file was located
-	done
-	DIR=$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )
-	echo "$DIR"
 }
 
 getconfig() {
@@ -129,7 +117,7 @@ setconfig() {
 	if [ -z "$fieldname" ] || [ -z "$configfile" ]; then return 1; fi
 
 	# remove corresponding config line
-	cat "$configfile" | grep -v "$fieldname=" > "${configfile}.temp"
+	grep -v "$fieldname=" "$configfile" > "${configfile}.temp"
 	mv "${configfile}.temp" "$configfile"
 
 	# add updated config line
@@ -137,10 +125,30 @@ setconfig() {
 	return $rv
 }
 
+find_lists_intersection() {
+# finds duplicates-free intersection between fields in input strings $1 and $2,
+#      and outputs the intersection as a string
+
+	str1="$1"; str2="$2"
+	read -r result_str < <(comm -12 <(echo "$str1" | tr ' ' '\n' | sort -u) \
+                        <(echo "$str2" | tr ' ' '\n' | sort -u) | tr '\n' ' ')
+	echo "$result_str"
+}
+
+remove_a_from_b() {
+# removes all fields found in string $1 from string $2, outputs the result as a string
+
+	str1="$1"; str2="$2"
+	while read -r field_str; do
+		str2="${str2//$field_str/}"
+	done < <(echo "$str1" | tr ' ' '\n' )
+	echo "$str2"
+}
+
 #### VARIABLES
 
 #convert country codes to lower case
-tlds="$(echo ${tlds,,})"
+tlds_arg="${tlds_arg,,}"
 
 conf_dir="/etc/geoblocker_bash"
 conf_file="${conf_dir}/geoblocker_bash.conf"
@@ -151,9 +159,6 @@ read -r datadir < <(getconfig "Datadir" "$conf_file")
 # get install_dir from the config file
 read -r install_dir < <(getconfig "Installdir" "$conf_file")
 
-preinstall_policies_file="$datadir/preinstall_policies.bak"
-knowngood_file="$datadir/iptables_knowngood.bak"
-whitelist_dir="$datadir/ip_lists"
 tlds_status_file="$datadir/tlds_status"
 
 # get sleeptime (for reboot) from the config file
@@ -183,11 +188,11 @@ if [ -z "$action" ]; then
 	die "Specify action with '-a <action>'!"
 fi
 
-if [ "$action" != "schedule" ] && [ -z "$tlds" ]; then
+if [ "$action" != "schedule" ] && [ -z "$tlds_arg" ]; then
 	die "Error: action '$action' requires to specify countries with '-c <tlds>'!"
 fi
 
-if [ "$action" = "schedule" ] && [ -n "$tlds" ]; then
+if [ "$action" = "schedule" ] && [ -n "$tlds_arg" ]; then
 	die "Error: action '$action' only supports changing the cron schedule! Do not use it with the '-c' option!"
 fi
 
@@ -195,7 +200,7 @@ if [ "$action" = "schedule" ] && [ -n "$skip_cron" ]; then
 	die "Error: action '$action' is incompatible with option '-n'!"
 fi
 
-if [ "$action" = "schedule" ] && [ -z "$cron_schedule" ]; then
+if [ "$action" = "schedule" ] && [ -z "$cron_schedule_orig" ]; then
 	die "Error: action '$action' requires to provide cron schedule with option '-s'!"
 fi
 
@@ -207,7 +212,7 @@ case "$action" in
 	add) ;;
 	remove) ;;
 	schedule) ;;
-	\?) usage; die "Error: unsupported action '$action'.";;
+	\?) die "Error: unsupported action '$action'.";;
 esac
 
 if [[ "$crondisabled" ]] && [ "$action" != "remove" ] && [ -z "$skip_cron" ]; then
@@ -216,25 +221,28 @@ if [[ "$crondisabled" ]] && [ "$action" != "remove" ] && [ -z "$skip_cron" ]; th
 	die "$err1" "$err2"
 fi
 
-if [ -n "$cron_schedule" ] && [ -n "$skip_cron" ]; then
+if [ -n "$cron_schedule_orig" ] && [ -n "$skip_cron" ]; then
 	die "Error: Conflicting arguments. Use either -s or -n but not both."
 fi
 
 
 if [ ! "$skip_cron" ]; then
 
-	# if cron_schedule wasn't provided in args, use the schedule from the config file
-	if [ -z "$cron_schedule" ]; then
-		read -r cron_schedule < <(getconfig "Cron_schedule" "$conf_file")
+	# if cron_schedule_orig wasn't provided in args, use the schedule from the config file
+	if [ -z "$cron_schedule_orig" ]; then
+		debugprint "Reading cron schedule from the config..."
+		read -r cron_schedule_orig < <(getconfig "Cron_schedule" "$conf_file")
+		debugprint "Read cron schedule: $cron_schedule_orig"
 	fi
 
+
 	# validate cron schedule
-	debugprint "Validating cron schedule: '$cron_schedule'."
-	read -r cron_schedule < <(validate_cron_schedule.sh $debug -x "$cron_schedule"); rv=$?
-	if [ $rv -ne 0 ]; then
-		die "Error validating cron schedule '$cron_schedule'. Exiting."
+	debugprint "Validating cron schedule: '$cron_schedule_orig'."
+	read -r cron_schedule < <(validate_cron_schedule.sh -x "$cron_schedule_orig" "$debug"); rv=$?
+	if [ "$rv" -ne 0 ]; then
+		die "Error validating cron schedule '$cron_schedule_orig'. Exiting."
 	else
-		debugprint "Successfully validated cron schedule: '$cron_schedule'."
+		debugprint "Successfully validated cron schedule: '$cron_schedule_orig'."
 	fi
 else
 	debugprint "Skipping cron schedule validation."
@@ -243,62 +251,49 @@ fi
 
 #### MAIN
 
-### Read current set of countries from the the config file into array config_tlds
-config_tlds=( $(getconfig "Countries" "$conf_file") )
-debugprint "Countries in initial config: ${config_tlds[@]}"
+### Read current set of countries from the the config file into config_tlds
+read -r config_tlds < <(getconfig "Countries" "$conf_file")
 
-# Get new set of countries from the argument into array arg_tlds
-arg_tlds=( $(echo "$tlds") )
+debugprint "Countries in initial config: $config_tlds"
 
 case "$action" in
-# some fairly ugly array-to-string-and-back conversions but appears to be the most straightforward way to do this
 
 	add)
-		# merge config_tlds and arg_tlds arrays into new_tlds array while removing duplicates
-		new_tlds=( $(printf '%s\n'  "${config_tlds[@]}" "${arg_tlds[@]}" | sort -ibu) )
+		# merge $config_tlds with $tlds_arg while removing duplicates
+		read -r new_tlds < <(echo "$config_tlds $tlds_arg" | tr " " "\n" | sort -ibu |  tr "\n" " ")
 
-		# convert to string
-		tlds_to_change_str="${arg_tlds[@]}"
+		tlds_to_change="$tlds_arg"
 
 		# tlds_to_change should contain countries that are not already in config_tlds
-		# compare $item with every element of tlds_to_change and remove exact matches in tlds_to_change
-		for item in "${config_tlds[@]}"; do
-			tlds_to_change_str="${tlds_to_change_str//$item/}"
-		done
-		# convert to array while removing duplicates
-		tlds_to_change=( $(echo "$tlds_to_change_str" | sort -ibu) )
-		if [ -z "$(echo ${tlds_to_change[@]})" ]; then
-			die "Error: can not add countries '$(echo ${arg_tlds[@]})' because they have already been added."
+		# remove any entries found in config_tlds from tlds_to_change
+		read -r tlds_to_change < <(remove_a_from_b "$config_tlds" "$tlds_to_change")
+		if [ -z "$tlds_to_change" ]; then
+			die "Error: can not add countries '$tlds_arg' because they have already been added."
 		fi
 	;;
 	remove)
-		# convert to string
-		new_tlds_str="${config_tlds[@]}"
+		new_tlds="$config_tlds"
 
-		# compare $item with every element of new_tlds_str and remove exact matches in new_tlds_str
-		for item in "${arg_tlds[@]}"; do
-			new_tlds_str="${new_tlds_str//$item/}"
-		done
+		# remove any entries found in tlds_arg from new_tlds
+		read -r new_tlds < <(remove_a_from_b "$tlds_arg" "$new_tlds")
 
-		# convert to array while removing duplicates
-		new_tlds=( $(echo "$new_tlds_str" | sort -ibu) )
+		# find duplicate-free intersection between config_tlds and tlds_arg
+		read -r tlds_to_change < <(find_lists_intersection "$config_tlds" "$tlds_arg")
 
-		# find duplicate-free intersection between {config_tlds[@]} and {arg_tlds[@]} so later we know what countries to remove
-		read -r -d '' -a tlds_to_change < <(join <(printf %s\\n "${config_tlds[@]}" | sort -u) \
-                          <(printf %s\\n "${arg_tlds[@]}" | sort -u))
-
-		if [ -z "$(echo ${tlds_to_change[@]})" ]; then
-			die "Error: can not remove countries '$(echo ${arg_tlds[@]})' because they have not been added."
+		if [ -z "$tlds_to_change" ]; then
+			die "Error: can not remove countries '$tlds_arg' because they have not been added."
 		fi
 	;;
 esac
 
+# TODO: Add checks for discrepancy between the config and actual existing ipsets and iptables rules
+
 if [ "$action" = "schedule" ]; then
 	debugprint "Note: Skipping the *run script call because specified action was 'schedule'."
 else
-	setconfig "Countries" "$conf_file" "$(echo ${new_tlds[@]})"; rv=$?
+	setconfig "Countries" "$conf_file" "$new_tlds"; rv=$?
 	if [ $rv -ne 0 ]; then
-		die "Error writing new config for countries '${new_tlds[@]}' to file '$conf_file'."
+		die "Error writing new config for countries '$new_tlds' to file '$conf_file'."
 	fi
 
 	# re-create tlds_status_file
@@ -306,25 +301,25 @@ else
 
 	### Call the *run script
 
-	$run_command $debug $nodrop -a "$action" -c "$(echo ${tlds_to_change[@]})"; rv=$?
+	$run_command $debug $nodrop -a "$action" -c "$tlds_to_change"; rv=$?
 
 	# 254 return code means fetch failure
 	if [ $rv -eq 254 ]; then
 		# read failed tlds from file into array failed_tlds
-		failed_tlds=( $(getconfig "FailedTLDs" "$tlds_status_file") )
-		echo "Error performing action '$action' for countries '${failed_tlds[@]}'."
+		read -r failed_tlds < <(getconfig "FailedTLDs" "$tlds_status_file")
+		echo "Error performing action '$action' for countries '$failed_tlds'."
 
 	# positive return code means apply failure or another permanent error, except for 254
 	elif [ $rv -gt 0 ] && [ $rv -ne 254 ]; then
-		echo "Error performing action '$action' for countries '${tlds_to_change[@]}'."
+		echo "Error performing action '$action' for countries '$tlds_to_change'."
 
-		if [ -z "$(echo ${config_tlds[@]})" ]; then
+		if [ -z "$config_tlds" ]; then
 			die "Can not restore previous countries set because it is not found in the config file."
 		fi
 
 		# restore old countries set in the config file
-		echo -n "Restoring previous countries set: '${config_tlds[@]}'..."
-		setconfig "Countries" "$conf_file" "${config_tlds[@]}"
+		echo -n "Restoring previous countries set: '$config_tlds'... "
+		setconfig "Countries" "$conf_file" "$config_tlds"
 		$run_command $debug $nodrop -a "update"; rv=$?
 		if [ $rv -eq 0 ]; then
 			echo "Ok."
@@ -338,13 +333,16 @@ else
 
 	if [ "$action" = "add" ]; then
 		# store successfully fetched and applied tlds in array ok_tlds
-		ok_tlds=( $(getconfig "OkTLDs" "$tlds_status_file") )
-		new_tlds_str="$(echo ${config_tlds[@]}) $(echo ${ok_tlds[@]})"
+		read -r ok_tlds < <(getconfig "OkTLDs" "$tlds_status_file")
+		new_tlds="$config_tlds $ok_tlds"
 
 		# add successfully fetched and applied tlds list to config file, effectively removing failed tlds (if any) from config
-		setconfig "Countries" "$conf_file" "$new_tlds_str"; rv=$?
+		setconfig "Countries" "$conf_file" "$new_tlds"; rv=$?
 	fi
+	read -r config_tlds < <(getconfig "Countries" "$conf_file")
+	echo "Countries in final config: '$config_tlds'."
 fi
+
 
 ### Cron jobs management
 
@@ -373,7 +371,6 @@ if [ ! "$skip_cron" ]; then
 	if [ -z "$config_tlds" ]; then
 		die "Error: Countries list in the config file is empty! No point in creating cron jobs."
 	else
-		echo "Countries in final config: '$config_tlds'."
 
 		### Create cron jobs
 
