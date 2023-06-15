@@ -207,7 +207,7 @@ exitstatus=0
 #### Basic sanity check for input arguments
 
 # trim single-quotes if any
-sourceline=$(echo "${sourceline//\'}")
+sourceline="${sourceline//\'}"
 
 # separate the input by spaces and store results in variables
 read -r min hour dom mon dow extra <<< "$sourceline"
@@ -220,7 +220,7 @@ if [ -n "$extra" ]; then
 	echo "You entered: \"$sourceline\"" >&2
 	echo "Valid example: \"0 4 * * 6\"" >&2
 	echo "" >&2
-	die
+	die ""
 fi
 
 # if some arguments are missing
@@ -232,7 +232,7 @@ if [ -z "$min" ] || [ -z "$hour" ] || [ -z "$dom" ] || [ -z "$mon" ] || [ -z "$d
 	echo "You entered: \"$sourceline\"" >&2
 	echo "Valid example: \"0 4 * * 6\"" >&2
 	echo "" >&2
-	die
+	die ""
 fi
 
 
