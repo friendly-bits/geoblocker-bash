@@ -12,7 +12,22 @@
 
 me=$(basename "$0")
 parent_script="$(ps -o args= $PPID | awk -v RS='/| ' '/^geoblocker/')"
-args="$*"
+
+# arguments sanitization
+arguments=()
+for arg in "$@"; do
+	# trim single-quotes if any
+	arg="${arg//\'}";
+	# trim double-quotes if any
+	arg="${arg//\"}"
+	# trim leading, trailing, and extra in-between whitespaces
+	arg="$(awk '{$1=$1};1' <<< "$arg")"
+	# add to array while discarding empty arguments
+	[ -n "$arg" ] && arguments+=("$arg")
+done
+# replace arguments with sanitized ones
+set -- "${arguments[@]}"
+
 
 #### USAGE
 
@@ -54,10 +69,11 @@ shift $((OPTIND -1))
 
 # prints a debug message
 debugprint() {
-	[ "$debug" ] && echo -e "    Debug: $*" >&2
+	[ "$debug" ] &&	echo -e "    Debug: $*" >&2
 }
 
-debugprint "\033[1;33mStarted validate_cron_schedule with args: '$args'\033[0m"
+argsmsg="Started validate_cron_schedule with args: $(for arg in "${arguments[@]}"; do echo -n "'$arg'  "; done; echo)"
+debugprint "\033[1;33m${argsmsg}\033[0m"
 
 die() {
     if [ -n "$*" ]; then
@@ -263,9 +279,6 @@ if [ "$errors" -gt 0 ] ; then
 else
 	exitstatus=0
 fi
-
-# output sourceline
-echo "$sourceline"
 
 [ -n "$parent_script" ] && debugprint "\033[1;33mBack to $parent_script...\033[0m"
 
