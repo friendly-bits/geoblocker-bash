@@ -59,6 +59,8 @@ WARNING: if removing a whitelist: Geoblocking will remain active after removal.
         -n                      : No persistence (skip creating cron jobs)
         -p                      : No Drop: applies the config but skips setting INPUT chain default policy to DROP
                                      (continue to accept all connections)
+        -f                      : Force the 'add' action even if specified country had been already added
+
         -d                      : Debug
         -h                      : This help
 
@@ -66,13 +68,14 @@ EOF
 }
 
 #### PARSE ARGUMENTS
-while getopts "a:c:s:npdh" opt; do
+while getopts "a:c:s:fnpdh" opt; do
 	case $opt in
 		a) action=$OPTARG;;
 		c) tlds_arg=$OPTARG;;
 		s) cron_schedule=$OPTARG;;
 		n) skip_cron=true;;
 		p) nodrop="-p";;
+		f) forceadd="true";;
 		d) debug="-d";;
 		h) usage; exit 0;;
 		\?) usage; exit 1;;
@@ -94,6 +97,8 @@ argsmsg="Started *manage with args: $(for arg in "${arguments[@]}"; do echo -n "
 debugprint "\033[1;33m${argsmsg}\033[0m"
 
 die() {
+	# if first arg is a number, assume it's the exit code
+	if [[ "$1" =~ ^[0-9]+$ ]]; then rv="$1"; shift; else rv="1"; fi
     if [ -n "$*" ]; then
         echo "" 1>&2
 		# loop through arguments and print them to stderr and to the syslog
@@ -104,7 +109,7 @@ die() {
     fi
     [ -n "$parent_script" ] && debugprint "\033[1;33mBack to $parent_script...\033[0m"
     echo "" 1>&2
-    exit 1
+    exit "$rv"
 }
 
 getconfig() {
@@ -204,7 +209,7 @@ run_command="${install_dir}/geoblocker_bash-run"
 
 # check for root
 if [ "$EUID" -ne 0 ]; then
-  die "This needs to be run as root."
+  die 1 "This needs to be run as root."
 fi
 
 # check if cron service is enabled
@@ -216,44 +221,44 @@ if [ $rv -ne 0 ]; then crondisabled="true"; fi
 
 if [ -z "$action" ]; then
 	usage
-	die "Specify action with '-a <action>'!"
+	die 1 "Specify action with '-a <action>'!"
 fi
 
 if [ "$action" != "schedule" ] && [ -z "$tlds_arg" ]; then
-	die "Error: action '$action' requires to specify countries with '-c <tlds>'!"
+	die 1 "Error: action '$action' requires to specify countries with '-c <tlds>'!"
 fi
 
 if [ "$action" = "schedule" ] && [ -n "$tlds_arg" ]; then
-	die "Error: action '$action' only supports changing the cron schedule! Do not use it with the '-c' option!"
+	die 1 "Error: action '$action' only supports changing the cron schedule! Do not use it with the '-c' option!"
 fi
 
 if [ "$action" = "schedule" ] && [ -n "$skip_cron" ]; then
-	die "Error: action '$action' is incompatible with option '-n'!"
+	die 1 "Error: action '$action' is incompatible with option '-n'!"
 fi
 
 if [ "$action" = "schedule" ] && [ -z "$cron_schedule" ]; then
-	die "Error: action '$action' requires to provide cron schedule with option '-s'!"
+	die 1 "Error: action '$action' requires to provide cron schedule with option '-s'!"
 fi
 
 if [ "$action" = "schedule" ] && [ -n "$nodrop" ]; then
-	die "Error: action '$action' is for setting the cron schedule only, don't use it with '-p'!"
+	die 1 "Error: action '$action' is for setting the cron schedule only, don't use it with '-p'!"
 fi
 
 case "$action" in
 	add) ;;
 	remove) ;;
 	schedule) ;;
-	\?) die "Error: unsupported action '$action'.";;
+	\?) die 1 "Error: unsupported action '$action'.";;
 esac
 
 if [[ "$crondisabled" ]] && [ "$action" != "remove" ] && [ -z "$skip_cron" ]; then
 	err1="Error: cron service seems to be disabled. Can not perform action '$action'"
 	err2="On Debian and derivatives, enable the cron service with 'systemctl enable cron.service'. Exiting."
-	die "$err1" "$err2"
+	die 1 "$err1" "$err2"
 fi
 
 if [ -n "$cron_schedule" ] && [ -n "$skip_cron" ]; then
-	die "Error: Conflicting arguments. Use either -s or -n but not both."
+	die 1 "Error: Conflicting arguments. Use either -s or -n but not both."
 fi
 
 
@@ -271,7 +276,7 @@ if [ ! "$skip_cron" ]; then
 	debugprint "Validating cron schedule: '$cron_schedule'."
 	validate_cron_schedule.sh -x "$cron_schedule" "$debug"; rv=$?
 	if [ "$rv" -ne 0 ]; then
-		die "Error validating cron schedule '$cron_schedule'. Exiting."
+		die 1 "Error validating cron schedule '$cron_schedule'. Exiting."
 	else
 		debugprint "Successfully validated cron schedule: '$cron_schedule'."
 	fi
@@ -298,12 +303,16 @@ case "$action" in
 		# trim leading, trailing, and extra in-between whitespaces
 		new_tlds="$(awk '{$1=$1};1' <<< "$new_tlds")"
 
-		# remove any entries already found in config_tlds from tlds_arg and assign to tlds_to_change
-		tlds_to_change="$(remove_a_from_b "$config_tlds" "$tlds_arg")"
-		# find which tlds were specified for removal but don't exist
+		if [ -z "$forceadd" ]; then
+			# remove any entries already found in config_tlds from tlds_arg and assign to tlds_to_change
+			tlds_to_change="$(remove_a_from_b "$config_tlds" "$tlds_arg")"
+			# find which tlds were specified for removal but don't exist
 
-		wrong_tlds="$(find_lists_difference "$tlds_to_change" "$tlds_arg")"
-		[ -n "$wrong_tlds" ] && echo "NOTE: countries '$wrong_tlds' have already been added." >&2
+			wrong_tlds="$(find_lists_difference "$tlds_to_change" "$tlds_arg")"
+			[ -n "$wrong_tlds" ] && echo "NOTE: countries '$wrong_tlds' have already been added." >&2
+		else
+			tlds_to_change="$tlds_arg"
+		fi
 	;;
 	remove)
 		# find duplicate-free intersection between config_tlds and tlds_arg
@@ -327,15 +336,17 @@ if [ "$action" = "schedule" ]; then
 	debugprint "Note: Skipping the *run script call because specified action was 'schedule'."
 else
 
-	if [ -z "$tlds_to_change" ]; then
-		die "Nothing to do, exiting."
+	if [ -z "$tlds_to_change" ] && [ -z "$forceadd" ]; then
+		config_tlds="$(getconfig "Countries" "$conf_file")"
+		echo "Countries in final config: '$config_tlds'."
+		die 254 "Nothing to do, exiting."
 	fi
 
 	debugprint "planned tlds before '$action': '$new_tlds'"
 
 	# if new_tlds list is empty
 	if [ -z "$new_tlds" ]; then
-		die "Planned final countries list is empty! If you really want to block evrything, do this manually. Exiting."
+		die 1 "Planned final countries list is empty! If you really want to block evrything, do this manually. Exiting."
 	fi
 
 
@@ -354,7 +365,7 @@ else
 		echo "Error performing action '$action' for countries '$tlds_to_change'." >&2
 
 		if [ -z "$config_tlds" ]; then
-			die "Can not restore previous countries set because it is not found in the config file."
+			die 1 "Can not restore previous countries set because it is not found in the config file."
 		fi
 
 		# restore old countries set in the config file
@@ -362,29 +373,34 @@ else
 		$run_command "$debug" "$nodrop" -a "update"; rv=$?
 		if [ $rv -eq 0 ]; then
 			msg="Successfully re-applied previous countries set."
-			die "$msg"
+			die 1 "$msg"
 		else
 			echo "Failed to re-apply previous countries set." >&2
 			# call the *backup script to initiate recovery from fault
 			geoblocker_bash-backup -r "$debug"
-			die ""
+			die 1 ""
 		fi
 	fi
 
 	if [ "$action" = "add" ]; then
-			# read successfully applied tlds from the status file
+			# read action results from the status file
 			ok_tlds="$(getconfig "OkTLDs" "$tlds_status_file")"
-			# merge the 2 lists while trimming leading, trailing, and extra in-between whitespaces
-			new_tlds="$(awk '{$1=$1};1' <<< "$config_tlds $ok_tlds")"
+			failed_tlds="$(getconfig "FailedTLDs" "$tlds_status_file")"
+			new_tlds="$config_tlds $ok_tlds"
 	fi
 
-	# if all actions failed
-	if [ -z "$(find_lists_difference "$config_tlds" "$new_tlds")" ]; then
-		die "All actions failed."
+	# remove duplicates and trim leading, trailing, and extra in-between whitespaces
+	new_tlds="$(echo "$new_tlds" | tr " " "\n" | sort -ibu |  tr "\n" " " | awk '{$1=$1};1' )"
+
+	# if all 'add' actions failed
+	if [ -z "$(find_lists_difference "$tlds_to_change" "$failed_tlds")" ]; then
+		debugprint "tlds_arg: '$tlds_arg'"
+		debugprint "failed_tlds: '$failed_tlds'"
+		die 1 "All actions failed."
 	fi
 
 	setconfig "Countries" "$conf_file" "$new_tlds"; rv=$?
-	[ "$rv" -ne 0 ] && die "Failed to write new set of tlds '$new_tlds' to config file '$conf_file'."
+	[ "$rv" -ne 0 ] && die 1 "Failed to write new set of tlds '$new_tlds' to config file '$conf_file'."
 
 	config_tlds="$(getconfig "Countries" "$conf_file")"
 	echo "Countries in final config: '$config_tlds'."
@@ -416,7 +432,7 @@ if [ ! "$skip_cron" ]; then
 	config_tlds="$(getconfig "Countries" "$conf_file")"
 
 	if [ -z "$config_tlds" ]; then
-		die "Error: Countries list in the config file is empty! No point in creating cron jobs."
+		die 1 "Error: Countries list in the config file is empty! No point in creating cron jobs."
 	else
 
 		### Create cron jobs
@@ -427,7 +443,7 @@ if [ ! "$skip_cron" ]; then
 		rv=$?
 
 		if [ $rv -ne 0 ]; then
-			die "Error running the crontab command."
+			die 1 "Error running the crontab command."
 		else
 			echo "Ok."
 			cron_line_result=$(crontab -u root -l 2>/dev/null |  grep  "\"$run_command\"")
@@ -443,7 +459,7 @@ if [ ! "$skip_cron" ]; then
                 	sudo crontab -u root -; rv=$?
 
 		if [ $rv -ne 0 ]; then
-			die "Error running the crontab command."
+			die 1 "Error running the crontab command."
 		else
 			echo "Ok."
 			cron_line_result="$(crontab -u root -l 2>/dev/null |  grep "reboot sleep .* && \"$run_command\"")"
