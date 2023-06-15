@@ -25,9 +25,9 @@ https://github.com/blunderful-scripts/geoblocker_bash/releases
  
 **To manage:**
 - run 'sudo geoblocker_bash-manage -a <add|remove|schedule> [-c "country_code country_code ... country_code"]'
-- example (to add whitelists for Germany and Netherlands): _'sudo geoblocker-manage -a add -c "DE NL"'_
-- example (to remove whitelist for Germany): _'sudo geoblocker-manage -a remove -c DE'_
-- example (to change periodic cron job schedule): _'sudo geoblocker-manage -a schedule -s "1 4 * * *"_
+- example (to add whitelists for Germany and Netherlands): _'sudo geoblocker_bash-manage -a add -c "DE NL"'_
+- example (to remove whitelist for Germany): _'sudo geoblocker_bash-manage -a remove -c DE'_
+- example (to change periodic cron job schedule): _'sudo geoblocker_bash-manage -a schedule -s "1 4 * * *"_
  
 **To uninstall:**
 - run 'sudo geoblocker_bash-uninstall'
@@ -92,14 +92,14 @@ The suite currently includes 9 scripts:
 
 Supported actions: add, remove, schedule
 
-*manage -a add|remove -c country_code :
+*manage -a <add|remove> -c <country_code> :
 * Adds or removes the specified country codes (tld's) to/from the config file
 * Calls the -run script to fetch and apply the whitelists
 * Creates a periodic cron job and a reboot job, unless ran with the -n (no persistence) option. Cron jobs implement persistence and automatic list updates.
 * Accepts an optional custom cron schedule expression as an argument.
 * If schedule is not specified, uses schedule from the config file (set during the installation by the -install script or later by the -manage script)
 
-*manage -a schedule -s <schedule_expression> : changes the schedule for the periodic cron job
+*manage -a schedule -s <"schedule_expression"> : changes the schedule for the periodic cron job
 
 **The run script**: Serves as a proxy to call the -fetch, -apply and -backup scripts with arguments required for each action.
 
