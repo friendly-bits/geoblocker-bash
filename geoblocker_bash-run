@@ -217,7 +217,7 @@ ok_cnt="0"
 failed_tlds=""
 ok_tlds=""
 if [ ! "$skipfetch" ] && [ "$action" != "remove" ]; then
-	for tld in $(echo "${tlds}"); do
+	for tld in "$tlds"; do
 		geoblocker_bash-fetch $debug -c "$tld" -p "$whitelist_dir"; rv=$?
 		if [ $rv -gt 0 ] && [ $rv -ne 254 ]; then
 			# positive return value from fetch means fatal code error rather than fetch error, except for 254
@@ -225,11 +225,11 @@ if [ ! "$skipfetch" ] && [ "$action" != "remove" ]; then
 		fi
 		if [ $rv -eq 254 ]; then
 			errcnt=$(( errcnt + 1 ))
-			failed_tlds="$(echo $failed_tlds) $tld"
+			failed_tlds="$failed_tlds $tld"
 			debugprint "Failed to retrieve ip list for country '$tld'."
 		else
 			ok_cnt=$(( ok_cnt + 1 ))
-			ok_tlds="$(echo $ok_tlds) $tld"
+			ok_tlds="$ok_tlds $tld"
 			debugprint "Successfully retrieved ip list for country '$tld'."
 		fi
 	done
@@ -259,7 +259,7 @@ fi
 
 ### Apply ip lists
 
-for tld in $(echo "${tlds}"); do
+for tld in "$tlds"; do
 	geoblocker_bash-apply $debug $nodrop -a "$apply_action" -c "$tld"; rv=$?
 	if [ $rv -eq 254 ]; then
 		echo ""
