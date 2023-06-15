@@ -245,21 +245,21 @@ if [ "$action" = "add" ]; then
 
 	# count lines in the whitelist file
 	ip_cnt=$(wc -l < "$whitelist_file")
-	debugprint "ip count in the whitelist file '$whitelist_file': $ip_cnt"
+#	debugprint "ip count in the whitelist file '$whitelist_file': $ip_cnt"
 
 	# calculate necessary ipset size = (next high power of 2 > $ip_cnt)
 	ipset_maxelem=$(round_up_to_power2 "$ip_cnt")
-	debugprint "calculated maxelem for ipset: $ipset_maxelem"
+#	debugprint "calculated maxelem for ipset: $ipset_maxelem"
 
 	# calculate hashsize = (512) or (ipset_maxelem / 32), whichever is larger
 	testhashsize=$(echo "scale=0 ; $ipset_maxelem / 4" | bc)
-	debugprint "calculated hashsize: $testhashsize"
+#	debugprint "calculated hashsize: $testhashsize"
 	if [ "$testhashsize" -lt 512 ]; then
 		ipset_hashsize=512
 	else
 		ipset_hashsize="$testhashsize"
 	fi
-	debugprint "final hashsize for the new ipset: $ipset_hashsize"
+#	debugprint "final hashsize for the new ipset: $ipset_hashsize"
 
 	# create new temporary ipset
 	debugprint "Creating new ipset '$temp_ipset'... "
@@ -396,8 +396,6 @@ if [ "$action" = "add" ]; then
 		else
 			debugprint "Ok."
 		fi
-	else
-		debugprint "$perm_ipset already exists."
 	fi
 
 	## append the whitelist rule to the INPUT chain
