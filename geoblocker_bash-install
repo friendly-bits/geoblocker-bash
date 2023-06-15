@@ -152,11 +152,6 @@ default_schedule="0 4 * * *"
 cron_schedule="${cron_schedule:-$default_schedule}"
 sleeptime="30"
 
-run_command="${install_dir}/geoblocker_bash-run"
-run_args="-c \"$tlds\" -w \"$whitelist_dir\" -b \"$knowngood_file\""
-run_args_reboot="${run_args} -s"
-
-
 #### CHECKS
 
 if [ -z "$tlds" ]; then
@@ -251,9 +246,6 @@ check_file_exists "check_ip_in_ripe.sh"
 # Create the directory for config and, if required, parent directories
 mkdir -p "$conf_dir"
 
-# delete config file if it exists
-rm "$conf_file" &> /dev/null
-
 # write some config to the config file
 echo -n "Setting initial config... "
 setconfig "Installdir" "$conf_file" "$install_dir"; rv=$(( rv + $?))
@@ -327,9 +319,8 @@ else
 	echo "INPUT $preinstall_input_policy" >> "$preinstall_policies_file"
 	echo "FORWARD $preinstall_forward_policy" >> "$preinstall_policies_file"
 	echo "Ok."
-	[ $debug ] && echo ""
-	[ $debug ] && echo "Current policies:"
-	[ $debug ] && echo "INPUT: $preinstall_input_policy, FORWARD: $preinstall_forward_policy"
+	debugprint "Current policies:"
+	debugprint "INPUT: $preinstall_input_policy, FORWARD: $preinstall_forward_policy"
 fi
 
 # cd into the install directory
@@ -337,12 +328,12 @@ fi
 cd "$install_dir"; rv=$?
 if [ -z "$install_dir" ] || [ "$rv" -ne 0 ]; then echo "Error: could not change directory to \"$install_dir\". Exiting."; install_failed; fi
 
-manage_opts=( "$debug" "$no_persistence" "$nodrop" -a "add" )
 ### Add whitelist(s) for $tlds to managed whitelists, then fetch and apply the whitelist(s)
 # have to use array to prevent getopts errors. have to provide cron schedule separately to prevent * expansion
-geoblocker_bash-manage ${manage_opts[*]} -c "$tlds" -s "$cron_schedule"; rv=$?
+geoblocker_bash-manage "$debug" "$no_persistence" "$nodrop" -f -a "add" -c "$tlds" -s "$cron_schedule"; rv=$?
 
-if [ $rv -ne 0 ]; then
+# the *manage script exits with return value 254 if requested country is already included in the config
+if [ $rv -ne 0 ] && [ $rv -ne 254 ]; then
 	echo "Failed to create and apply the whitelist."
 	install_failed
 fi
