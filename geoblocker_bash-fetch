@@ -16,7 +16,7 @@
 
 me=$(basename "$0")
 parent_script="$(ps -o args= $PPID | awk -v RS='/| ' '/^geoblocker/')"
-args="$@"
+args="$*"
 
 #### USAGE
 
@@ -59,7 +59,7 @@ shift $((OPTIND -1))
 
 # prints a debug message
 debugprint() {
-	[ "$debug" ] && echo -e "    Debug: $@"
+	[ "$debug" ] && echo -e "    Debug: $*"
 }
 
 echo ""
