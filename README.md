@@ -132,10 +132,10 @@ Supported actions: add, remove, update.
 
 Supported actions: -b (backup), -r (restore)
 
-*backup -f <backup_file> -b :
+*backup -b :
 - Creates a backup of the current iptables state and current geoblocker-associated ipsets
 
-*backup -f <backup_file> -r : used for automatic recovery from fault conditions
+*backup -r : used for automatic recovery from fault conditions
 - Restores ipsets and iptables state from backup
 - If restore from backup fails, assumes a fundamental issue and calls the uninstall script to perform a partial uninstall (removes associated ipsets and iptables rules, restores pre-install policies for INPUT and FORWARD iptables chains, does not remove installed files, config and data).
 
