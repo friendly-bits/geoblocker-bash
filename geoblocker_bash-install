@@ -340,7 +340,7 @@ if [ -z "$install_dir" ] || [ "$rv" -ne 0 ]; then echo "Error: could not change 
 manage_opts=( "$debug" "$no_persistence" "$nodrop" -a "add" )
 ### Add whitelist(s) for $tlds to managed whitelists, then fetch and apply the whitelist(s)
 # have to use array to prevent getopts errors. have to provide cron schedule separately to prevent * expansion
-geoblocker_bash-manage ${manage_opts[@]} -c "$tlds" -s "$cron_schedule"; rv=$?
+geoblocker_bash-manage ${manage_opts[*]} -c "$tlds" -s "$cron_schedule"; rv=$?
 
 if [ $rv -ne 0 ]; then
 	echo "Failed to create and apply the whitelist."
