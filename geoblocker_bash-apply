@@ -2,17 +2,17 @@
 
 # geoblocker_bash-apply
 
-# Loads or removes ipsets and iptables rules for the specified country code.
+# Loads or removes ipsets and iptables rules for specified country codes.
 
 # Supported actions (specified by the -a option): add, remove
 
-# 'geoblocker_bash-apply -a add -c <country_code>' :
-#     Loads an ip list file for the specified country into an ipset
+# 'geoblocker_bash-apply -a add -c <"country_codes">' :
+#     Loads an ip list file for the specified countries into ipsets
 #     and sets iptables rules to only allow connections
-#     from the local subnet and from subnets included in the ipset.
+#     from the local subnet and from subnets included in the ipsets.
 
-# 'geoblocker_bash-apply -a remove -c <country_code>' :
-#     removes the ipset and associated iptables rules for the specified country.
+# 'geoblocker_bash-apply -a remove -c <"country_codes">' :
+#     removes the ipset and associated iptables rules for specified countries.
 
 # Requires the 'ipset' utility. To install it on Debian or derivatives, use the command:
 ## apt install ipset
@@ -34,20 +34,20 @@ usage() {
     cat <<EOF
 
 $me
-    Loads or removes ipsets and iptables rules for the specified country code.
+    Loads or removes ipsets and iptables rules for specified country codes.
     Supported actions (specified by the -a option): add, remove.
 
-    Usage: $me -a <add|remove> -c <country_code> [-p] [-d] [-t] [-h]
+    Usage: $me -a <add|remove> -c <"country_codes"> [-p] [-d] [-t] [-h]
 
     Options:
-        -a <action>       : action to perform: "add" or "remove" ipset and associated iptables rules
-        -c <country_code> : tld / country code
-        -p                : No Drop: applies the config but skips setting INPUT chain default policy to DROP
+        -a <action>          : action to perform: "add" or "remove" associated ipsets and iptables rules
+        -c <"country_codes"> : tlds / country codes (if specifying multiple tlds, put them in double quotes)
+        -p                   : No Drop: applies the config but skips setting INPUT chain default policy to DROP
                                    (continue to accept all connections)
 
-        -d                : Debug
-        -t                : Simulate fault and test recovery
-        -h                : This help
+        -d                   : Debug
+        -t                   : Simulate fault and test recovery
+        -h                   : This help
 
 EOF
 }
@@ -57,7 +57,7 @@ EOF
 while getopts "a:c:pdht" opt; do
 	case $opt in
 		a) action=$OPTARG;;
-		c) tld=$OPTARG;;
+		c) tlds=$OPTARG;;
 		p) nodrop="-p";;
 		d) debug=true;;
 		h) usage; exit 0;;
@@ -95,21 +95,18 @@ round_up_to_power2() {
 datadir="$(getconfig "Datadir" "$conf_file")"
 
 whitelist_dir="${datadir}/ip_lists"
-whitelist_file="${whitelist_dir}/ipv4_${tld}"
-perm_ipset="${suite_name}_${tld}"
-temp_ipset="${perm_ipset}_temp"
-iptables_comment="${suite_name}_${tld}"
 iptables_comment_global="${suite_name}_global"
 family="inet"
-
+ipset_hashsizes=()
+ipset_maxelements=()
 
 #### CHECKS
 
-# check for country tld
-[ -z "$tld" ] && { usage; die 254 "tld (country code) variable is empty!"; }
+# check for country tlds
+[ -z "$tlds" ] && { usage; die 254 "tlds (country codes) variable is empty!"; }
 
-# check for whitelist file path
-[ -z "$whitelist_file" ] && { usage; die 254 "Error: whitelist file path is empty."; }
+# check for datadir path
+[ -z "$datadir" ] && { usage; die 254 "Error: failed to read the 'datadir' variable from the config file."; }
 
 # check for root
 [ "$EUID" -ne 0 ] && die 254 "This needs to be run as root."
@@ -123,11 +120,6 @@ family="inet"
 # Check for bc utility
 ! command -v "bc" &> /dev/null && die 254 "Error: Can not find 'bc'."
 
-## check that we have the name for permanent ipset
-[ -z "$perm_ipset" ] && die 254 "Error: ipset name is empty."
-
-# check that the whitelist file exists
-[ ! -f "$whitelist_file" ] && die 254 "Error: Can not find the whitelist file in path: '$whitelist_file'."
 
 case "$action" in
 	add) ;;
@@ -138,105 +130,135 @@ esac
 
 #### MAIN
 
+### create temporary ipsets and load ip lists into them
 if [ "$action" = "add" ]; then
-	### Create a temporary ipset and load subnets from file into it
+	for tld in $tlds; do
+		whitelist_file="${whitelist_dir}/ipv4_${tld}"
+		temp_ipset="${suite_name}_${tld}_temp"
 
-	# destroy temporary ipset in case it exists
-	ipset destroy "$temp_ipset" &>/dev/null
+		# check that the whitelist file exists
+		[ ! -f "$whitelist_file" ] && die 254 "Error: Can not find the whitelist file in path: '$whitelist_file'."
 
-	# count lines in the whitelist file
-	ip_cnt=$(wc -l < "$whitelist_file")
-#	debugprint "ip count in the whitelist file '$whitelist_file': $ip_cnt"
+		### Create a temporary ipset and load subnets from file into it
 
-	# calculate necessary ipset size = (next high power of 2 > $ip_cnt)
-	ipset_maxelem=$(round_up_to_power2 "$ip_cnt")
-#	debugprint "calculated maxelem for ipset: $ipset_maxelem"
+		# destroy temporary ipset in case it exists
+		ipset destroy "$temp_ipset" &>/dev/null
 
-	# set hashsize to (512) or (ipset_maxelem / 32), whichever is larger
-	testhashsize=$(echo "scale=0 ; $ipset_maxelem / 4" | bc)
-#	debugprint "calculated hashsize: $testhashsize"
-	if [ "$testhashsize" -lt 512 ]; then
-		ipset_hashsize=512
-	else
-		ipset_hashsize="$testhashsize"
-	fi
-#	debugprint "final hashsize for the new ipset: $ipset_hashsize"
+		# count lines in the whitelist file
+		ip_cnt=$(wc -l < "$whitelist_file")
+	#	debugprint "ip count in the whitelist file '$whitelist_file': $ip_cnt"
 
-	# create new temporary ipset
-	debugprint "Creating new ipset '$temp_ipset'... "
-	ipset create "$temp_ipset" hash:net family "$family" hashsize "$ipset_hashsize" maxelem "$ipset_maxelem"; rv=$?
-	[ $rv -ne 0 ] && die 254 "Error creating ipset '$temp_ipset' with hashsize $ipset_hashsize and maxelem $ipset_maxelem."
-	debugprint "Ok."
+		# calculate necessary ipset size = (next high power of 2 > $ip_cnt)
+		ipset_maxelem=$(round_up_to_power2 "$ip_cnt")
+	#	debugprint "calculated maxelem for ipset: $ipset_maxelem"
 
-	# import the whitelist into temporary ipset from file
-	echo -n "Importing the whitelist for country '$tld' into temporary ipset... "
+		# set hashsize to (512) or (ipset_maxelements / 4), whichever is larger
+		prelim_hashsize=$(echo "scale=0 ; $ipset_maxelem / 4" | bc)
+	#	debugprint "calculated hashsize: $prelim_hashsize"
+		if [ "$prelim_hashsize" -lt 512 ]; then
+			ipset_hash=512
+		else
+			ipset_hash="$prelim_hashsize"
+		fi
+	#	debugprint "final hashsize for the new ipset: $ipset_hashsizes"
 
-	# reads $whitelist_file, transforms each line into 'ipset add' command and redirects the result into "ipset restore"
-	# this is about 50x faster than issuing discrete "ipset add" commands in a loop
-	# the '-exist' option prevents the restore command from getting stuck when encountering duplicates
-	while read -r network; do \
-		echo "add $temp_ipset $network"; \
-	done < "$whitelist_file" |\
-		ipset restore -exist; rv=$?
+		# create new temporary ipset
+		debugprint "Creating new ipset '$temp_ipset'... "
+		ipset create "$temp_ipset" hash:net family "$family" hashsize "$ipset_hash" maxelem "$ipset_maxelem"; rv=$?
+		if [ $rv -ne 0 ]; then
+			debugprint "Failed. Destroying the temporary ipset."
+			ipset destroy "$temp_ipset" &>/dev/null
+			die "Error creating ipset '$temp_ipset' with hashsize '$ipset_hash' and maxelements '$ipset_maxelem'."
+		fi
+		debugprint "Ok."
 
-	if [ $rv -ne 0 ]; then
-		echo ""
-		ipset destroy "$temp_ipset"
-		die 254 "Error when importing the list from '$whitelist_file' into ipset '$temp_ipset'."
-	fi
+		# import the whitelist into temporary ipset from file
+		echo -n "Importing the whitelist for country '$tld' into temporary ipset... "
 
-	echo "Ok."
+		# reads $whitelist_file, transforms each line into 'ipset add' command and redirects the result into "ipset restore"
+		# this is about 50x faster than issuing discrete "ipset add" commands in a loop
+		# the '-exist' option prevents the restore command from getting stuck when encountering duplicates
+		while read -r subnet; do
+			echo "add \"$temp_ipset\" $subnet";
+		done < "$whitelist_file" |\
+			ipset restore -exist; rv=$?
 
-	[ "$debug" ] && ipset_lines_cnt="$(ipset save "$temp_ipset" | grep "add $temp_ipset" | wc -l)"
-	debugprint "subnets in the temporary ipset: $ipset_lines_cnt"
+		if [ $rv -ne 0 ]; then
+			echo "Failed. Destroying the temporary ipset."
+			ipset destroy "$temp_ipset"
+			die 254 "Error when importing the list from '$whitelist_file' into ipset '$temp_ipset'."
+		fi
+
+		echo "Ok."
+
+		[ "$debug" ] && ipset_lines_cnt="$(ipset save "$temp_ipset" | grep "add $temp_ipset" | wc -l)"
+		debugprint "subnets in the temporary ipset: $ipset_lines_cnt"
+
+		ipset_hashsizes["$tld"]="$ipset_hash"
+		ipset_maxelements["$tld"]="$ipset_maxelem"
+	done
+	echo
 fi
+
 
 ### Remove existing geoblocker rules for iptables
 
 ## Temporarily set the policy for the INPUT chain to ACCEPT, in order to prevent user lock out in case of an error
 echo -n "Setting INPUT chain policy to ACCEPT... "
 iptables -P INPUT ACCEPT; rv=$?
-[ $rv -ne 0 ] && die 254 "Error trying to change iptables policy with command 'iptables -P INPUT ACCEPT'."
+[ $rv -ne 0 ] && die "Error trying to change iptables policy with command 'iptables -P INPUT ACCEPT'."
 echo "Ok."
+echo
 
-## delete existing iptables rules matching comment "$iptables_comment" and "$iptables_comment_global" which we use to mark our rules
+## delete existing iptables rules matching comment "$iptables_comment"
+for tld in $tlds; do
+	iptables_comment="${suite_name}_${tld}"
+	echo -n "Removing existing iptables rules for country '$tld'... "
 
-echo -n "Removing existing iptables rules for country '$tld'... "
-
-# sed looks for rules with the comment which we use to stamp our rules
-# sed executes iptables -D (delete) command on matching rules. execution is promtped by the switch /e (only available in GNU sed)
-iptables-save | sed -r "/INPUT.*comment.*${iptables_comment}/s/-A/iptables -D/e" &>/dev/null; rv=$?
-if [ $rv -ne 0 ]; then
-	echo "Failure."
-	die "Error removing existing rules with command: iptables-save | sed -r \"/INPUT.*comment.*$iptables_comment/s/-A/iptables -D/e\"."
-fi
-echo "Ok."
-
-echo -n "Removing existing global iptables rules for '${suite_name}'... "
-iptables-save | sed -r "/INPUT.*comment.*${iptables_comment_global}/s/-A/iptables -D/e" &>/dev/null; rv=$?
-if [ $rv -ne 0 ]; then
-	echo "Failure."
-	die "Error removing existing rules with command: iptables-save | sed -r \"/INPUT.*comment.*${iptables_comment_global}/s/-A/iptables -D/e\"."
-fi
-echo "Ok."
-
-if [ "$action" = "remove" ]; then
-	echo -n "Destroying ipset for country '$tld'... "
-	ipset destroy "$perm_ipset"; rv=$?
+	# sed looks for rules with the comment which we use to stamp our rules
+	# sed executes iptables -D (delete) command on matching rules. execution is promtped by the switch /e (only available in GNU sed)
+	iptables-save | sed -r "/INPUT.*comment.*${iptables_comment}/s/-A/iptables -D/e" &>/dev/null; rv="${PIPESTATUS[0]}"
 	if [ $rv -ne 0 ]; then
 		echo "Failure."
-		die "Error destroying ipset $perm_ipset."
-	else
-		echo "Ok."
+		die "Error removing existing rules with command: 'iptables-save | sed -r \"/INPUT.*comment.*$iptables_comment/s/-A/iptables -D/e\" '."
 	fi
+	echo "Ok."
+done
+echo
+
+
+## delete existing iptables rules matching comment "$iptables_comment_global"
+echo -n "Removing existing global iptables rules for '${suite_name}'... "
+iptables-save | sed -r "/INPUT.*comment.*${iptables_comment_global}/s/-A/iptables -D/e" &>/dev/null; rv="${PIPESTATUS[0]}"
+if [ $rv -ne 0 ]; then
+	echo "Failed."
+	die "Error removing existing rules with command: 'iptables-save | sed -r \"/INPUT.*comment.*${iptables_comment_global}/s/-A/iptables -D/e\" '."
+fi
+echo "Ok."
+echo
+
+
+### Apply the "remove" action
+if [ "$action" = "remove" ]; then
+	for tld in $tlds; do
+		perm_ipset="${suite_name}_${tld}"
+		echo -n "Destroying ipset for country '$tld'... "
+		ipset destroy "$perm_ipset"; rv=$?
+		if [ $rv -ne 0 ]; then
+			echo "Failed."
+			die "Error destroying ipset '$perm_ipset'."
+		else
+			echo "Ok."
+		fi
+	done
+	echo
 fi
 
 
-
-### Create new iptables rules
+### Set global iptables rules
 
 # Add rule to allow connections from the local subnet
-localsubnet="$(getlocalsubnet)";
+localsubnet="$(getlocalsubnet)"
 if [ -z "$localsubnet" ]; then
 	die "Error: couldn't determine local subnet."
 else
@@ -247,67 +269,85 @@ else
 	echo "Ok."
 fi
 
+# Add rule to allow connections from the loopback interface
 echo -n "Inserting rule to allow all traffic from the loopback interface... "
 iptables -I INPUT -i lo -j ACCEPT -m comment --comment "${iptables_comment_global}"; rv=$?
 [ $rv -ne 0 ] && die "Failed to insert rule with command 'iptables -A INPUT -i lo -j ACCEPT'."
 echo "Ok."
 
-
+# Add rule to allow established/related connections
 echo -n "Inserting rule to allow established/related connections... "
 iptables -I INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT -m comment --comment "${iptables_comment_global}"; rv=$?
 [ $rv -ne 0 ] && die "Failed to insert rules with command 'iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT'."
 echo "Ok."
+echo
 
+
+### Create permanent ipsets if they don't exist, add iptables rules for them, then swap them with temp ipsets
 if [ "$action" = "add" ]; then
-	## check if permanent ipset already exists and is non-empty
+	for tld in $tlds; do
+		perm_ipset="${suite_name}_${tld}"
+		temp_ipset="${suite_name}_${tld}_temp"
+		iptables_comment="${suite_name}_${tld}"
+		ipset_maxelem="${ipset_maxelements[$tld]}"
+		ipset_hash="${ipset_hashsizes[$tld]}"
 
-	ipset_length=$(ipset -L "$perm_ipset" 2>/dev/null |  wc -l)
+		## check if permanent ipset already exists and is non-empty
 
-	if [ "$ipset_length" -ge "7" ]; then
-		perm_ipset_exists="true"
-		debugprint "found existing permanent ipset '$perm_ipset'."
-	else
-		perm_ipset_exists="false"
-	fi
+		ipset_length=$(ipset -L "$perm_ipset" 2>/dev/null |  wc -l)
 
-	if [ "$ipset_length" -eq 0 ]; then
-		debugprint "Ipset '$perm_ipset' doesn't exist yet."
-		# to avoid being dependent on ipset output staying constant down the road,
-		# still trying to destroy the ipset, just in case, but not checking the return value
-		ipset destroy "$perm_ipset" &>/dev/null
-	fi
+		if [ "$ipset_length" -ge "7" ]; then
+			perm_ipset_exists="true"
+			debugprint "found existing permanent ipset '$perm_ipset'."
+		else
+			perm_ipset_exists="false"
+		fi
 
-	## if permanent ipset doesn't exist yet, create it
-	if [ ! "$perm_ipset_exists" = "true" ]; then
-		# create new permanent ipset
-		debugprint "Creating permanent ipset '$perm_ipset'... "
-		ipset create "$perm_ipset" hash:net family "$family" hashsize "$ipset_hashsize" maxelem "$ipset_maxelem"; rv=$?
-		[ $rv -ne 0 ] && die "Failed to create ipset '$perm_ipset' with hashsize $ipset_hashsize and maxelem $ipset_maxelem."
+		if [ "$ipset_length" -eq 0 ]; then
+			debugprint "Ipset '$perm_ipset' doesn't exist yet."
+			# to avoid being dependent on ipset output staying constant down the road,
+			# still trying to destroy the ipset, just in case, but not checking the return value
+			ipset destroy "$perm_ipset" &>/dev/null
+		fi
+
+		## if permanent ipset doesn't exist yet, create it
+		if [ ! "$perm_ipset_exists" = "true" ]; then
+			# create new permanent ipset
+			debugprint "Creating permanent ipset '$perm_ipset'... "
+			ipset create "$perm_ipset" hash:net family "$family" hashsize "$ipset_hash" maxelem "$ipset_maxelem"; rv=$?
+			if [ $rv -ne 0 ]; then
+				echo "Failed. Destroying the permanent ipset."
+				ipset destroy "$perm_ipset"
+				die "Error when creating ipset '$perm_ipset'."
+			fi
+			debugprint "Ok."
+		fi
+
+		## append the whitelist rule to the INPUT chain
+
+		echo -n "Appending the whitelist rule for country '$tld' to the INPUT chain... "
+		iptables -A INPUT -m set --match-set "$perm_ipset" src -j ACCEPT -m comment --comment "$iptables_comment"; rv=$?
+		[ $rv -ne 0 ] && \
+			die "Failed to append ipset rules with command: iptables -I INPUT -m set --match-set \"$perm_ipset\" src -j ACCEPT."
+		echo "Ok."
+
+		## swap the new (temporary) ipset with the old (permanent) ipset
+		echo -n "Making the new ipset for country '$tld' permanent... "
+		ipset swap "$temp_ipset" "$perm_ipset"; rv=$?
+		[ $rv -ne 0 ] && die "Failed to swap temporary and permanent ipsets."
+		echo "Ok."
+
+		## destroy the old ipset (now it's called temporary)
+		debugprint "Destroying the temporary ipset for country '$tld'... "
+		ipset destroy "$temp_ipset"; rv=$?
+		[ $rv -ne 0 ] && die "Failed to destroy ipset '$temp_ipset'. Strange........."
 		debugprint "Ok."
-	fi
-
-	## append the whitelist rule to the INPUT chain
-
-	echo -n "Appending the whitelist rule to the INPUT chain... "
-	iptables -A INPUT -m set --match-set "$perm_ipset" src -j ACCEPT -m comment --comment "$iptables_comment"; rv=$?
-	[ $rv -ne 0 ] && \
-		die "Failed to append ipset rules with command: iptables -I INPUT -m set --match-set \"$perm_ipset\" src -j ACCEPT."
-	echo "Ok."
-
-	## swap new (temporary) ipset with old (permanent) ipset
-	echo -n "Making the new ipset permanent... "
-	ipset swap "$temp_ipset" "$perm_ipset"; rv=$?
-	[ $rv -ne 0 ] && die "Failed to swap temporary and permanent ipsets."
-	echo "Ok."
-
-	## destroy the old ipset (now it's called temporary)
-	debugprint "Destroying temporary ipset... "
-	ipset destroy "$temp_ipset"; rv=$?
-	[ $rv -ne 0 ] && die "Failed to destroy ipset '$temp_ipset'. Strange........."
-	debugprint "Ok."
+	done
 fi
+echo
 
-## configure iptables policies
+
+### Configure iptables policies
 
 if [ -z "$nodrop" ]; then
 	# set policy on INPUT and FORWARD chains to DROP
@@ -326,13 +366,6 @@ fi
 # Activates when running the script with the -t switch
 [ "$test" ] && die "Test test test"
 
-
-echo ""
-case "$action" in
-	add) completed_action="added";;
-	remove) completed_action="removed";;
-esac
-echo "Successfully $completed_action iplist for country '$tld'."
 echo ""
 
 debugexitmsg
