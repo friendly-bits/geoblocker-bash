@@ -23,7 +23,6 @@ die() {
 	# if first arg is a number, assume it's the exit code
 	if [[ "$1" =~ ^[0-9]+$ ]]; then rv="$1"; shift; else rv="1"; fi
 
-	nolog="false"
 	die_args=()
 
 	# check for "-nolog" option in arguments
@@ -36,7 +35,7 @@ die() {
 		# loop through arguments and print them to stderr and to the syslog
 		for arg in "${die_args[@]}"; do
 			echo "$me_short: $arg" 1>&2
-			[ "$nolog" = "false" ] && logger -t "$me" "$arg"
+			[ "$nolog" != "true" ] && logger -t "$me" "$arg"
 		done
 	fi
 	[ -n "$parent_short_cap" ] && debugprint "\033[1;33mBack to $parent_short_cap...\033[0m"
