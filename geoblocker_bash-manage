@@ -16,6 +16,7 @@
 
 # 'geoblocker_bash-manage -a schedule -s <schedule_expression>' : changes the schedule for the periodic cron job.
 
+me=$(basename "$0")
 suite_name="geoblocker_bash"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 [ -n "$script_dir" ] && cd "$script_dir" || { echo "Error: Couldn't cd into '$script_dir'."; exit 1; }
@@ -175,7 +176,13 @@ case "$action" in
 	\?) die 1 "Error: unsupported action '$action'.";;
 esac
 
-if [[ "$crondisabled" ]] && [ "$action" != "remove" ] && [ -z "$skip_cron" ]; then
+if [ "$crondisabled" ] && [ -n "$cron_schedule" ]; then
+	err1="Error: cron service seems to be disabled. Can not create cron jobs!"
+	err2="On Debian and derivatives, enable the cron service with 'systemctl enable cron.service'. Exiting."
+	die 1 "$err1" "$err2"
+fi
+
+if [ "$crondisabled" ] && [ "$action" != "remove" ] && [ -z "$skip_cron" ]; then
 	err1="Error: cron service seems to be disabled. Can not perform action '$action'"
 	err2="On Debian and derivatives, enable the cron service with 'systemctl enable cron.service'. Exiting."
 	die 1 "$err1" "$err2"
@@ -185,7 +192,6 @@ fi
 	die 1 "Error: Conflicting arguments. Use either -s or -n but not both."
 
 if [ ! "$skip_cron" ]; then
-
 	# if cron_schedule wasn't provided in args, use the schedule from the config file
 	if [ -z "$cron_schedule" ]; then
 		debugprint "Reading cron schedule from the config..."
@@ -271,7 +277,6 @@ else
 
 
 	### Call the *run script
-
 	$run_command -o "$debug" "$nodrop" -a "$action" -c "$tlds_to_change"; rv=$?
 
 	# 254 return code means fetch failure
