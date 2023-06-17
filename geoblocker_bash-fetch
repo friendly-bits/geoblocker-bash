@@ -15,22 +15,12 @@
 
 
 me=$(basename "$0")
-parent_script="$(ps -o args= $PPID | awk -v RS='/| ' '/^geoblocker/')"
+suite_name="geoblocker_bash"
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+[ -n "$script_dir" ] && cd "$script_dir" || { echo "Error: Couldn't cd into '$script_dir'. Exiting"; exit 1; }
 
-# arguments sanitization
-arguments=()
-for arg in "$@"; do
-	# trim single-quotes if any
-	arg="${arg//\'}";
-	# trim double-quotes if any
-	arg="${arg//\"}"
-	# trim leading and trailing whitespaces
-	arg="$(awk '{$1=$1};1' <<< "$arg")"
-	# add to array while discarding empty arguments
-	[ -n "$arg" ] && arguments+=("$arg")
-done
-# replace arguments with sanitized ones
-set -- "${arguments[@]}"
+source "${suite_name}-common" || { echo "Error: Can't find ${suite_name}-common. Exiting"; exit 1; }
+# **NOTE** that some functions and variables are sourced from the *common script
 
 
 #### USAGE
@@ -69,29 +59,15 @@ while getopts "c:p:dh" opt; do
 done
 shift $((OPTIND -1))
 
+echo ""
+
+# Print script enter message for debug
+debugentermsg
 
 #### FUNCTIONS
 
-# prints a debug message
-debugprint() {
-	[ "$debug" ] && echo -e "    Debug: $*"
-}
 
-echo ""
-argsmsg="Started *fetch with args: $(for arg in "${arguments[@]}"; do echo -n "'$arg'  "; done; echo)"
-debugprint "\033[1;33m${argsmsg}\033[0m"
-
-die() {
-	echo ""
-	echo "$2" 1>&2
-	echo ""
-	logger -t geoblocker_bash-fetch "$2"
-	[ -n "$parent_script" ] && debugprint "\033[1;33mBack to $parent_script...\033[0m"
-	exit "$1"
-}
-
-
-#### Initialize variables
+#### VARIABLES
 ripe_url="https://stat.ripe.net/data/country-resource-list/data.json?v4_format=prefix&resource="
 url="$ripe_url$country"
 min_subnets_num="100"
@@ -252,5 +228,6 @@ rm "$validated_file" &>/dev/null
 rm "$fetched_file" &>/dev/null
 echo ""
 
-[ -n "$parent_script" ] && debugprint "\033[1;33mBack to $parent_script...\033[0m"
+debugexitmsg
+
 exit 0
