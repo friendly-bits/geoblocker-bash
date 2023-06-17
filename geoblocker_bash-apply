@@ -20,22 +20,12 @@
 # Requires root priviliges
 
 me=$(basename "$0")
-parent_script="$(ps -o args= $PPID | awk -v RS='/| ' '/^geoblocker/')"
+suite_name="geoblocker_bash"
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+[ -n "$script_dir" ] && cd "$script_dir" || { echo "Error: Couldn't cd into '$script_dir'. Exiting"; exit 1; }
 
-# arguments sanitization
-arguments=()
-for arg in "$@"; do
-	# trim single-quotes if any
-	arg="${arg//\'}";
-	# trim double-quotes if any
-	arg="${arg//\"}"
-	# trim leading and trailing whitespaces
-	arg="$(awk '{$1=$1};1' <<< "$arg")"
-	# add to array while discarding empty arguments
-	[ -n "$arg" ] && arguments+=("$arg")
-done
-# replace arguments with sanitized ones
-set -- "${arguments[@]}"
+source "${suite_name}-common" || { echo "Error: Can't find ${suite_name}-common. Exiting"; exit 1; }
+# **NOTE** that some functions and variables are sourced from the *common script
 
 
 #### USAGE
@@ -79,32 +69,10 @@ shift $((OPTIND -1))
 
 echo ""
 
+# Print script enter message for debug
+debugentermsg
 
 #### FUNCTIONS
-
-# prints a debug message
-debugprint() {
-	[ "$debug" ] && echo -e "    Debug: $*"
-}
-
-argsmsg="Started *apply with args: $(for arg in "${arguments[@]}"; do echo -n "'$arg'  "; done; echo)"
-debugprint "\033[1;33m${argsmsg}\033[0m"
-
-die() {
-# echo out the error passed in 1st argument and write it to syslog
-	echo ""
-	echo "$1" 1>&2
-	echo ""
-	logger -t geoblocker_bash-apply "$1"
-
-	# if "nonfatal" wasn't specified in 2nd argument, exit with return code 1 (fatal); otherwise exit with code 254 (non-fatal)
-	if [ "$2" != "nonfatal" ]; then
-		[ -n "$parent_script" ] && debugprint "\033[1;33mBack to $parent_script...\033[0m"
-		exit 1
-	else
-		exit 254
-	fi
-}
 
 round_up_to_power2() {
 # rounds the input number up to the next high power of 2
@@ -120,67 +88,18 @@ round_up_to_power2() {
 	 | bc -l
 }
 
-getconfig() {
-# reads a field named $1 from the config file $2
-# outputs the resulting field
-# returns 0 if successful, 1 if not
-	fieldname="$1"
-	configfile="$2"
-	if [ -z "$fieldname" ] || [ -z "$configfile" ]; then return 1; fi
-	read -r field < <(grep "$fieldname=" "$configfile" | sed "s/.*$fieldname=//"); rv=$?
-	if [ -z "$field" ]; then
-		echo ""
-		rv=$((rv + 1))
-	else
-		echo "$field"
-	fi
-	return $rv
-}
-
-getlocalsubnet() {
-# attempts to find local subnet for the main network interface
-
-	# regex patterns used for ipv4 validation
-	# using Perl regex syntax because grep is faster with it than with native grep syntax
-	# regex compiled from 2 suggestions found here:
-	# https://stackoverflow.com/questions/5284147/validating-ipv4-addresses-with-regexp
-	ip_regex='^((25[0-5]|(2[0-4]|1\d|[1-9]|)\d)\.?\b){4}'
-	mask_regex='(/([01]?\d\d?|2[0-4]\d|25[0-5]))$'
-	subnet_regex="${ip_regex}${mask_regex}"
-
-	# returns local ip with subnet mask
-	localip="$(ip addr | grep 'state UP' -A2 | tail -n1 | awk '{print $2}')"
-
-	# Change last ipv4 octet to 0
-	lsubnet=$(echo "$localip" | sed 's|\([0-9]*\.[0-9]*\.[0-9]*\.\)[0-9]*|\10|')
-
-	# Verifies that the argument is a valid ipv4 subnet
-	echo "$lsubnet" | grep -P "$subnet_regex" &>/dev/null; rv=$?
-
-	if [ $rv -ne 0 ]; then
-		# if validation fails, output empty string
-		echo ""
-	else
-		echo "$lsubnet"
-	fi
-	return $rv
-}
-
 
 #### VARIABLES
 
-conf_dir="/etc/geoblocker_bash"
-conf_file="${conf_dir}/geoblocker_bash.conf"
-
-# read datadir from the config file
-read -r datadir < <(getconfig "Datadir" "$conf_file")
+# get datadir from the config file
+datadir="$(getconfig "Datadir" "$conf_file")"
 
 whitelist_dir="${datadir}/ip_lists"
 whitelist_file="${whitelist_dir}/ipv4_${tld}"
-perm_ipset="geoblocker_bash_${tld}"
+perm_ipset="${suite_name}_${tld}"
 temp_ipset="${perm_ipset}_temp"
-iptables_comment="geoblocker_bash_${tld}"
-iptables_comment_global="geoblocker_bash_global"
+iptables_comment="${suite_name}_${tld}"
+iptables_comment_global="${suite_name}_global"
 family="inet"
 
 
@@ -288,8 +207,8 @@ if [ "$action" = "add" ]; then
 
 	echo "Ok."
 
-	[ $debug ] && read -r ipset_lines < <(ipset save "$temp_ipset" | grep "add $temp_ipset" | wc -l)
-	debugprint "ip's in the temporary ipset: $ipset_lines"
+	[ "$debug" ] && ipset_lines_cnt="$(ipset save "$temp_ipset" | grep "add $temp_ipset" | wc -l)"
+	debugprint "subnets in the temporary ipset: $ipset_lines_cnt"
 fi
 
 ### Remove existing geoblocker rules for iptables
@@ -315,7 +234,7 @@ if [ $rv -ne 0 ]; then
 fi
 echo "Ok."
 
-echo -n "Removing existing global iptables rules for 'geoblocker_bash'... "
+echo -n "Removing existing global iptables rules for '${suite_name}'... "
 iptables-save | sed -r "/INPUT.*comment.*${iptables_comment_global}/s/-A/iptables -D/e" &>/dev/null; rv=$?
 if [ $rv -ne 0 ]; then
 	echo "Failure."
@@ -456,6 +375,6 @@ esac
 echo "Successfully $completed_action iplist for country '$tld'."
 echo ""
 
-[ -n "$parent_script" ] && debugprint "\033[1;33mBack to $parent_script...\033[0m"
+debugexitmsg
 
 exit 0
