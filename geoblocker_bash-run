@@ -191,27 +191,27 @@ fi
 
 ### Apply ip lists
 
-for tld in $tlds; do
-	${suite_name}-apply "$debug" "$nodrop" -a "$apply_action" -c "$tld"; rv=$?
-	if [ $rv -eq 254 ]; then
-		echo ""
-		# if non-fatal errors occur in *apply, exit with an error
-		die 1 ""
-	elif [ $rv -gt 0 ] && [ $rv -ne 254 ]; then
-		echo ""
-		#if fatal errors occur in *apply, attempt to restore last known-good ipsets and iptables state
-		${suite_name}-backup -r "$debug"
-		die 1 ""
-	fi
-done
+${suite_name}-apply "$debug" "$nodrop" -a "$apply_action" -c "$tlds"; rv=$?
+if [ $rv -eq 254 ]; then
+	debugprint "NOTE: *apply exited with error code 254."
+	echo ""
+	# if non-fatal errors occur in *apply, exit with an error
+	die 1 ""
+elif [ $rv -gt 0 ] && [ $rv -ne 254 ]; then
+	debugprint "NOTE: *apply exited with error code $rv."
+	echo ""
+	#if fatal errors occur in *apply, attempt to restore last known-good ipsets and iptables state
+	${suite_name}-backup -r "$debug"; rv="$?"
 
+	# exit with the same exit code as backup-restore operation
+	die "$rv" ""
+fi
+echo
 
 # call the backup script to create a known-good backup of ipsets and iptables state
 [ -z "$nobackup" ] && ${suite_name}-backup "$debug" -b
 
-logger -t ${suite_name}-run "Successfully applied action '$action' for countries '$tlds'."
-
-echo ""
+[ "$nolog" != "true" ] && logger -t ${suite_name}-run "Successfully applied action '$action' for countries '$tlds'."
 
 if [ "$errcnt" -ne 0 ]; then rv=254; else rv=0; fi
 
