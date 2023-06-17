@@ -162,6 +162,9 @@ if [ ! "$skipfetch" ] && [ "$action" != "remove" ]; then
 		fi
 	done
 
+	# trim extra whitespaces
+	ok_tlds="$(awk '{$1=$1};1' <<< "$ok_tlds")"
+
 	if [ "$errcnt" -gt 0 ]; then
 		msg="Failed to fetch the whitelist for countries'$failed_tlds'."
 		echo "$msg"
@@ -170,7 +173,7 @@ if [ ! "$skipfetch" ] && [ "$action" != "remove" ]; then
 	fi
 
 	if [ "$ok_cnt" -gt 0 ]; then
-		msg="Successfully fetched the whitelist for countries'$ok_tlds'."
+		msg="Successfully fetched the whitelist for countries '$ok_tlds'."
 		echo "$msg"
 		logger -t ${suite_name}-run "$msg"
 		echo "OkTLDs=$ok_tlds" >> "$tlds_status_file"
