@@ -16,22 +16,12 @@
 #     does not remove installed files, config and data).
 
 me=$(basename "$0")
-parent_script="$(ps -o args= $PPID | awk -v RS='/| ' '/^geoblocker/')"
+suite_name="geoblocker_bash"
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+[ -n "$script_dir" ] && cd "$script_dir" || { echo "Error: Couldn't cd into '$script_dir'. Exiting"; exit 1; }
 
-# arguments sanitization
-arguments=()
-for arg in "$@"; do
-	# trim single-quotes if any
-	arg="${arg//\'}";
-	# trim double-quotes if any
-	arg="${arg//\"}"
-	# trim leading and trailing whitespaces
-	arg="$(awk '{$1=$1};1' <<< "$arg")"
-	# add to array while discarding empty arguments
-	[ -n "$arg" ] && arguments+=("$arg")
-done
-# replace arguments with sanitized ones
-set -- "${arguments[@]}"
+source "${suite_name}-common" || { echo "Error: Can't find ${suite_name}-common. Exiting"; exit 1; }
+# **NOTE** that some functions and variables are sourced from the *common script
 
 
 #### USAGE
@@ -68,36 +58,21 @@ while getopts "brdh" opt; do
 done
 shift $((OPTIND -1))
 
+echo ""
+
+# Print script enter message for debug
+debugentermsg
+
 
 #### FUNCTIONS
-
-# prints a debug message
-debugprint() {
-	[ "$debug" ] && echo -e "    Debug: $*"
-}
-
-argsmsg="Started *backup with args: $(for arg in "${arguments[@]}"; do echo -n "'$arg'  "; done; echo)"
-debugprint "\033[1;33m${argsmsg}\033[0m"
-
-die() {
-# echo out the error passed in 1st argument and write it to syslog
-	echo ""
-	if [ -n "$1" ]; then
-		echo "$1" 1>&2
-		echo ""
-		logger -t "$me" "$1"
-	fi
-	[ -n "$parent_script" ] && debugprint "\033[1;33mBack to $parent_script...\033[0m"
-	exit 1
-}
 
 knowngood_failed() {
 	err1="$1"; err2="$2"
 	echo ""
 	echo "$err1" >&2; echo "$err2" >&2
 	# print errors to syslog
-	logger -t geoblocker_bash-backup "$err1"; logger -t geoblocker_bash-backup "$err2"
-	geoblocker_bash-uninstall -p
+	logger -t ${suite_name}-backup "$err1"; logger -t ${suite_name}-backup "$err2"
+	${suite_name}-uninstall -p
 	[ -n "$parent_script" ] && debugprint "\033[1;33mBack to $parent_script...\033[0m"
 	exit 1
 }
@@ -128,7 +103,7 @@ restore_from_file() {
 	# count lines in the corresponding portion of the backup file
 	case "$restoretarget" in
 		iptables) line_cnt=$(sed -e '/\[IPSET\].*/Q' "$restorefile" | wc -l) ;;
-		ipset) line_cnt=$(sed -n "/create geoblocker_bash/,\$p" "$restorefile" | grep "add geoblocker_bash" | wc -l) ;;
+		ipset) line_cnt=$(sed -n "/create ${suite_name}/,\$p" "$restorefile" | grep "add ${suite_name}" | wc -l) ;;
 	esac
 	debugprint "$restoretarget lines number in backup: $line_cnt"
 
@@ -139,8 +114,8 @@ restore_from_file() {
 			# reads <$restorefile> from beginning to [IPSET] and pipes the result into iptables-restore
 			iptables) sed -e '/\[IPSET\]/Q' "$restorefile" 2>&1 | iptables-restore; rv="${PIPESTATUS[1]}" ;;
 
-			# reads <$restorefile> from "create geoblocker_bash" to EOF and pipes the result into "ipset restore"
-			ipset) sed -n "/create geoblocker_bash/,\$p" "$restorefile" 2>&1 | ipset restore; rv="${PIPESTATUS[1]}" ;;
+			# reads <$restorefile> from "create ${suite_name}" to EOF and pipes the result into "ipset restore"
+			ipset) sed -n "/create ${suite_name}/,\$p" "$restorefile" 2>&1 | ipset restore; rv="${PIPESTATUS[1]}" ;;
 		esac
 
 		if [ $rv -eq 0 ]; then
@@ -183,9 +158,9 @@ restoreknowngood() {
 	restorefile="$1"
 
 	echo ""; echo ""
-	msg1="NOTE: Resetting iptables rules for geoblocker_bash... "
+	msg1="NOTE: Resetting iptables rules for ${suite_name}... "
 	echo "$msg1" >&2
-	logger -t geoblocker_bash-backup  "$msg1"
+	logger -t ${suite_name}-backup  "$msg1"
 
 	echo "Setting INPUT chain policy to ACCEPT... "
 	iptables -P INPUT ACCEPT
@@ -220,38 +195,19 @@ restoreknowngood() {
 	restore_from_file "iptables" "$restorefile"
 	msg1="Successfully restored known-good ipset and iptables state from backup."
 	echo "$msg1"; echo ""
-	logger -t geoblocker_bash-backup  "$msg1"
-}
-
-getconfig() {
-# reads a field named $1 from the config file $2
-# outputs the resulting field
-# returns 0 if successful, 1 if not
-	fieldname="$1"
-	configfile="$2"
-	if [ -z "$fieldname" ] || [ -z "$configfile" ]; then return 1; fi
-	field="$(grep "$fieldname=" "$configfile" | sed "s/.*$fieldname=//")"; rv=$?
-	if [ -z "$field" ]; then
-		echo ""
-		rv=$((rv + 1))
-	else
-		echo "$field"
-	fi
-	return $rv
+	logger -t ${suite_name}-backup  "$msg1"
 }
 
 
 #### VARIABLES
 
-iptables_comment="geoblocker_bash"
-ipset_tag="geoblocker_bash"
-conf_dir="/etc/geoblocker_bash"
-conf_file="${conf_dir}/geoblocker_bash.conf"
+iptables_comment="$suite_name"
+ipset_tag="$suite_name"
 
 # get datadir from the config file
 datadir="$(getconfig "Datadir" "$conf_file")"
 
-conf_file_backup="$datadir/geoblocker_bash.conf.bak"
+conf_file_backup="$datadir/${suite_name}.conf.bak"
 knowngood_file="$datadir/iptables_knowngood.bak"
 
 
@@ -330,7 +286,6 @@ if [ "$act_restore" ]; then
 	[ "$rv" -ne 0 ] && msg1="Error restoring the config file from backup."
 fi
 
-echo ""
-[ -n "$parent_script" ] && debugprint "\033[1;33mBack to $parent_script...\033[0m"
+debugexitmsg
 
 exit 0
