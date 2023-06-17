@@ -150,8 +150,7 @@ tlds_status_file="$datadir/tlds_status"
 [ $rv -ne 0 ] && crondisabled="true"
 
 
-# Check the passed arguments for sanity
-
+# Check passed arguments for sanity
 [ -z "$action" ] && { usage; die 1 "Specify action with '-a <action>'!"; }
 
 [ "$action" != "schedule" ] && [ -z "$tlds_arg" ] && \
