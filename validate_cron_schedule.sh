@@ -208,7 +208,7 @@ if [ -n "$extra" ]; then
 	echo "You entered: \"$sourceline\"" >&2
 	echo "Valid example: \"0 4 * * 6\"" >&2
 	echo "" >&2
-	die ""
+	die -nolog ""
 fi
 
 # if some arguments are missing
@@ -220,7 +220,7 @@ if [ -z "$min" ] || [ -z "$hour" ] || [ -z "$dom" ] || [ -z "$mon" ] || [ -z "$d
 	echo "You entered: \"$sourceline\"" >&2
 	echo "Valid example: \"0 4 * * 6\"" >&2
 	echo "" >&2
-	die ""
+	die -nolog ""
 fi
 
 
