@@ -4,30 +4,20 @@
 
 #    Checks a cron schedule expression to ensure that it's formatted properly.  Expects standard cron notation of
 #       min hr dom mon dow
-#    where min is 0-59, hr 0-23, dom is 1-31, mon is 1-12 (or names) and dow is 0-7 (or names).  Fields can have ranges (a-e), lists
-#    separated by commas (a,c,z), or an asterisk. Note that the step value notation of Vixie cron is not supported (e.g., 2-6/2).
+#    where min is 0-59, hr 0-23, dom is 1-31, mon is 1-12 (or names) and dow is 0-7 (or names). 
+#    Fields can have ranges (a-e), lists separated by commas (a,c,z),
+#    or an asterisk. Note that the step value notation of Vixie cron is not supported (e.g., 2-6/2).
 #
 #    Based on prior "verifycron" script circulating on the internets
 #    This is a simplified version, adapted to receive one cron schedule expression in an argument.
 
 me=$(basename "$0")
-parent_script="$(ps -o args= $PPID | awk -v RS='/| ' '/^geoblocker/')"
+suite_name="geoblocker_bash"
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+[ -n "$script_dir" ] && cd "$script_dir" || { echo "Error: Couldn't cd into '$script_dir'. Exiting"; exit 1; }
 
-# arguments sanitization
-arguments=()
-for arg in "$@"; do
-	# trim single-quotes if any
-	arg="${arg//\'}";
-	# trim double-quotes if any
-	arg="${arg//\"}"
-	# trim leading, trailing, and extra in-between whitespaces
-	arg="$(awk '{$1=$1};1' <<< "$arg")"
-	# add to array while discarding empty arguments
-	[ -n "$arg" ] && arguments+=("$arg")
-done
-# replace arguments with sanitized ones
-set -- "${arguments[@]}"
-
+source "${suite_name}-common" || { echo "Error: Can't find ${suite_name}-common. Exiting"; exit 1; }
+# **NOTE** that some functions and variables are sourced from the *common script
 
 #### USAGE
 
@@ -64,30 +54,12 @@ while getopts "x:hd" opt; do
 done
 shift $((OPTIND -1))
 
+echo ""
+
+# Print script enter message for debug
+debugentermsg
 
 #### Functions
-
-# prints a debug message
-debugprint() {
-	[ "$debug" ] &&	echo -e "    Debug: $*" >&2
-}
-
-argsmsg="Started validate_cron_schedule with args: $(for arg in "${arguments[@]}"; do echo -n "'$arg'  "; done; echo)"
-debugprint "\033[1;33m${argsmsg}\033[0m"
-
-die() {
-    if [ -n "$*" ]; then
-        echo "" 1>&2
-		# loop through arguments and print them to stderr and to the syslog
-        for arg in "$@"; do
-            echo "$arg" 1>&2
-            logger -t "$me" "$arg"
-        done
-    fi
-    [ -n "$parent_script" ] && debugprint "\033[1;33mBack to $parent_script...\033[0m"
-    echo "" 1>&2
-    exit 1
-}
 
 validateNum() {
 # returns 0 if valid, 1 if not. Specify number, minvalue and maxvalue as args
@@ -280,6 +252,6 @@ else
 	exitstatus=0
 fi
 
-[ -n "$parent_script" ] && debugprint "\033[1;33mBack to $parent_script...\033[0m"
+debugexitmsg
 
 exit $exitstatus
