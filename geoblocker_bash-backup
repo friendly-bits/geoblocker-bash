@@ -71,7 +71,7 @@ knowngood_failed() {
 	echo ""
 	echo "$err1" >&2; echo "$err2" >&2
 	# print errors to syslog
-	logger -t ${suite_name}-backup "$err1"; logger -t ${suite_name}-backup "$err2"
+	[ "$nolog" != "true" ] && { logger -t ${suite_name}-backup "$err1"; logger -t ${suite_name}-backup "$err2"; }
 	${suite_name}-uninstall -p
 	[ -n "$parent_script" ] && debugprint "\033[1;33mBack to $parent_script...\033[0m"
 	exit 1
@@ -160,7 +160,7 @@ restoreknowngood() {
 	echo ""; echo ""
 	msg1="NOTE: Resetting iptables rules for ${suite_name}... "
 	echo "$msg1" >&2
-	logger -t ${suite_name}-backup  "$msg1"
+	[ "$nolog" != "true" ] && logger -t ${suite_name}-backup  "$msg1"
 
 	echo "Setting INPUT chain policy to ACCEPT... "
 	iptables -P INPUT ACCEPT
@@ -193,9 +193,6 @@ restoreknowngood() {
 
 	restore_from_file "ipset" "$restorefile"
 	restore_from_file "iptables" "$restorefile"
-	msg1="Successfully restored known-good ipset and iptables state from backup."
-	echo "$msg1"; echo ""
-	logger -t ${suite_name}-backup  "$msg1"
 }
 
 
@@ -282,8 +279,11 @@ fi
 if [ "$act_restore" ]; then
 ### Restore iptables and ipsets to known-good state from backup file
 	restoreknowngood "$knowngood_file"
+	msg1="Successfully restored known-good ipset and iptables state from backup."
+	echo "$msg1"; echo ""
+	[ "$nolog" != "true" ] && logger -t ${suite_name}-backup  "$msg1"
 	cp "$conf_file_backup" "$conf_file"; rv=$?
-	[ "$rv" -ne 0 ] && msg1="Error restoring the config file from backup."
+	[ "$rv" -ne 0 ] && die "Error restoring the config file from backup."
 fi
 
 debugexitmsg
