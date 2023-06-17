@@ -170,7 +170,7 @@ restoreknowngood() {
 	iptables-save | sed -r "/INPUT.*comment.*${iptables_comment}/s/-A/iptables -D/e" &>/dev/null; rv=$?
 	if [ $rv -ne 0 ]; then
 		echo "Failure."
-		die "Error removing existing rules with command: iptables-save | sed -r \"/INPUT.*comment.*$iptables_comment/s/-A/iptables -D/e\". Exiting."
+		die "Error removing existing rules with command: iptables-save | sed -r \"/INPUT.*comment.*$iptables_comment/s/-A/iptables -D/e\"."
 	else
 		echo "Ok."
 	fi
@@ -221,7 +221,7 @@ if [ ! "$act_backup" ] && [ ! "$act_restore" ]; then usage; die "Use \"-b\" or \
 
 # check for knowngood file path
 if [ -z "$knowngood_file" ]; then
-	die "Error: Could not read the backup file path from config. Exiting."
+	die "Error: Could not read the backup file path from config."
 fi
 
 # check for root
@@ -231,17 +231,17 @@ fi
 
 # Check for ipset utility
 if ! command -v "ipset" &> /dev/null; then
-	die "Error: Cannot find 'ipset'. Install it with 'apt install ipset' or similar. Exiting."
+	die "Error: Can not find 'ipset'. Install it with 'apt install ipset' or similar."
 fi
 
 # Check for iptables-save utility
 if ! command -v "iptables-save" &> /dev/null; then
-	die "Error: Cannot find 'iptables-save'. Exiting."
+	die "Error: Can not find 'iptables-save'."
 fi
 
 # Check for iptables-restore utility
 if ! command -v "iptables-restore" &> /dev/null; then
-	die "Error: Cannot find 'iptables-restore'. Exiting."
+	die "Error: Can not find 'iptables-restore'."
 fi
 
 
