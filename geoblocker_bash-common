@@ -33,6 +33,7 @@ die() {
 	if [ -n "${die_args[*]}" ]; then
 		echo "" 1>&2
 		# loop through arguments and print them to stderr and to the syslog
+		# "$nolog" is set either when calling die() or as environment variable (used in *manage and *install scripts)
 		for arg in "${die_args[@]}"; do
 			echo "$me_short: $arg" 1>&2
 			[ "$nolog" != "true" ] && logger -t "$me" "$arg"
