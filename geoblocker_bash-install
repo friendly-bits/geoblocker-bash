@@ -15,6 +15,7 @@
 # Requires the following additional scripts (included in the distribution):
 # geoblocker_bash-fetch, geoblocker_bash-apply, geoblocker_bash-run, geoblocker_bash-uninstall, validate_cron_schedule.sh, check_ip_in_ripe.sh
 
+me=$(basename "$0")
 suite_name="geoblocker_bash"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 [ -n "$script_dir" ] && cd "$script_dir" || { echo "Error: Couldn't cd into '$script_dir'."; exit 1; }
@@ -78,7 +79,7 @@ debugentermsg
 #### FUNCTIONS
 
 install_failed() {
-	echo "Error: Installation failed." >&2
+	echo "Installation failed." >&2
 	echo "Uninstalling ${suite_name}..."
 	bash ${suite_name}-uninstall
 	exit 1
@@ -86,7 +87,7 @@ install_failed() {
 
 check_file_exists() {
 if [ ! -f "$1" ]; then
-	echo "Error: Cannot find $1" >&2
+	echo "Error: Can not find $1" >&2
 	echo ""
 	exit 1
 fi
@@ -156,48 +157,48 @@ fi
 
 # Check that we have the ipset utility
 if ! command -v "ipset" &> /dev/null; then
-	echo "Error: Cannot find 'ipset'. Install it with 'apt install ipset' or similar. Exiting."
+	echo "Error: Can not find 'ipset'. Install it with 'apt install ipset' or similar. Exiting."
 	echo ""
 	exit 1
 fi
 
 # Check for iptables-save utility
 if ! command -v "iptables-save" &> /dev/null; then
-	echo "Error: Cannot find 'iptables-save'. Exiting."
+	echo "Error: Can not find 'iptables-save'. Exiting."
 	echo ""
 	exit 1
 fi
 
 # Check for iptables-restore utility
 if ! command -v "iptables-restore" &> /dev/null; then
-	echo "Error: Cannot find 'iptables-restore'. Exiting."
+	echo "Error: Can not find 'iptables-restore'. Exiting."
 	echo ""
 	exit 1
 fi
 
 # check for jq
 if ! command -v jq &> /dev/null; then
-	echo "Error: Cannot find the jq Json processor. Install it with 'apt install jq' or similar. Exiting"
+	echo "Error: Can not find the jq Json processor. Install it with 'apt install jq' or similar. Exiting"
 	echo ""
 	exit 1
 fi
 
 # check for grepcidr
 if ! command -v grepcidr &> /dev/null; then
-	echo "Error: Cannot find grepcidr. Install it with 'apt install grepcidr' or similar. Exiting"
+	echo "Error: Can not find grepcidr. Install it with 'apt install grepcidr' or similar. Exiting"
 	echo ""
 	exit 1
 fi
 
 # check for bc
 if ! command -v bc &> /dev/null; then
-	echo "Error: Cannot find bc. Exiting"
+	echo "Error: Can not find bc. Exiting"
 	echo ""
 	exit 1
 fi
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-[ -n "$script_dir" ] && cd "$script_dir" || { echo "Error: Couldn't cd into '$script_dir'. Exiting"; exit 1; }
+[ -n "$script_dir" ] && cd "$script_dir" || { echo "Error: Couldn't cd into '$script_dir'. Exiting."; exit 1; }
 
 check_file_exists "${suite_name}-fetch"
 check_file_exists "${suite_name}-common"
@@ -251,7 +252,7 @@ fi
 ## Copy scripts to $install_dir
 
 # if we are running from $install_dir, assume that all other necessary scripts have already been installed, skip copying
-if [ "$scriptdir" != "$install_dir" ]; then
+if [ "$script_dir" != "$install_dir" ]; then
 	echo -n "Copying scripts to $install_dir... "
 	copyscript "${suite_name}-install" "${install_dir}/"
 	copyscript "${suite_name}-common" "${install_dir}/"
@@ -295,8 +296,7 @@ fi
 
 # cd into the install directory
 # exit in case "cd" fails
-cd "$install_dir"; rv=$?
-if [ -z "$install_dir" ] || [ "$rv" -ne 0 ]; then echo "Error: could not change directory to \"$install_dir\". Exiting."; install_failed; fi
+[ -n "$install_dir" ] && cd "$install_dir" || { echo "Error: Couldn't cd into '$install_dir'. Exiting."; install_failed; }
 
 ### Add whitelist(s) for $tlds to managed whitelists, then fetch and apply the whitelist(s)
 # have to use array to prevent getopts errors. have to provide cron schedule separately to prevent * expansion
