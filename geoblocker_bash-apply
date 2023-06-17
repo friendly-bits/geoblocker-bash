@@ -22,9 +22,9 @@
 me=$(basename "$0")
 suite_name="geoblocker_bash"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-[ -n "$script_dir" ] && cd "$script_dir" || { echo "Error: Couldn't cd into '$script_dir'. Exiting"; exit 1; }
+[ -n "$script_dir" ] && cd "$script_dir" || { echo "Error: Couldn't cd into '$script_dir'."; exit 1; }
 
-source "${suite_name}-common" || { echo "Error: Can't find ${suite_name}-common. Exiting"; exit 1; }
+source "${suite_name}-common" || { echo "Error: Can't find ${suite_name}-common."; exit 1; }
 # **NOTE** that some functions and variables are sourced from the *common script
 
 
@@ -108,49 +108,49 @@ family="inet"
 # check for country tld
 if [ -z "$tld" ]; then
 	usage
-	die "tld (country code) variable can not be empty! Exiting." "nonfatal"
+	die 254 "tld (country code) variable can not be empty!"
 fi
 
 # check for whitelist file path
 if [ -z "$whitelist_file" ]; then
 	usage
-	die "Error: whitelist file path can not be empty. Exiting." "nonfatal"
+	die 254 "Error: whitelist file path can not be empty."
 fi
 
 # check for root
 if [ "$EUID" -ne 0 ]; then
-	die "This needs to be run as root." "nonfatal"
+	die 254 "This needs to be run as root."
 fi
 
 # Check for ipset utility
 if ! command -v "ipset" &> /dev/null; then
-	die "Error: Cannot find 'ipset'. Install it with 'apt install ipset' or similar. Exiting." "nonfatal"
+	die 254 "Error: Cannot find 'ipset'. Install it with 'apt install ipset' or similar."
 fi
 
 # Check for iptables-save utility
 if ! command -v "iptables-save" &> /dev/null; then
-	die "Error: Cannot find 'iptables-save'. Exiting." "nonfatal"
+	die 254"Error: Cannot find 'iptables-save'."
 fi
 
 # Check for bc utility
 if ! command -v "bc" &> /dev/null; then
-	die "Error: Cannot find 'bc'. Exiting." "nonfatal"
+	die 254 "Error: Cannot find 'bc'."
 fi
 
 ## check that we have the name for permanent ipset
 if [ -z "$perm_ipset" ]; then
-	die "Error: ipset name can not be empty. Exiting." "nonfatal"
+	die 254 "Error: ipset name can not be empty."
 fi
 
 # check that the whitelist file exists
 if [ ! -f "$whitelist_file" ]; then
-	die "Error: Cannot find the whitelist file at path: '$whitelist_file'. Exiting." "nonfatal"
+	die 254 "Error: Cannot find the whitelist file at path: '$whitelist_file'."
 fi
 
 case "$action" in
 	add) ;;
 	remove) ;;
-	*) usage; echo "Error: unsupported action '$action'" "nonfatal" ;;
+	*) usage; die 254 "Error: unsupported action '$action'" ;;
 esac
 
 
@@ -184,7 +184,7 @@ if [ "$action" = "add" ]; then
 	debugprint "Creating new ipset '$temp_ipset'... "
 	ipset create "$temp_ipset" hash:net family "$family" hashsize "$ipset_hashsize" maxelem "$ipset_maxelem"; rv=$?
 	if [ $rv -ne 0 ]; then
-		die "Error creating ipset '$temp_ipset' with hashsize $ipset_hashsize and maxelem $ipset_maxelem. Exiting." "nonfatal"
+		die 254 "Error creating ipset '$temp_ipset' with hashsize $ipset_hashsize and maxelem $ipset_maxelem."
 	fi
 	debugprint "Ok."
 
@@ -202,7 +202,7 @@ if [ "$action" = "add" ]; then
 	if [ $rv -ne 0 ]; then
 		echo ""
 		ipset destroy "$temp_ipset"
-		die "Error when importing the list from '$whitelist_file' into '$temp_ipset'. Exiting." "nonfatal"
+		die 254 "Error when importing the list from '$whitelist_file' into '$temp_ipset'."
 	fi
 
 	echo "Ok."
@@ -217,7 +217,7 @@ fi
 echo -n "Setting INPUT chain policy to ACCEPT... "
 iptables -P INPUT ACCEPT; rv=$?
 if [ $rv -ne 0 ]; then
-	die "Error trying to change iptables policy with command 'iptables -P INPUT ACCEPT'. Exiting." "nonfatal"
+	die 254 "Error trying to change iptables policy with command 'iptables -P INPUT ACCEPT'."
 fi
 echo "Ok."
 
@@ -230,7 +230,7 @@ echo -n "Removing existing iptables rules for country '$tld'... "
 iptables-save | sed -r "/INPUT.*comment.*${iptables_comment}/s/-A/iptables -D/e" &>/dev/null; rv=$?
 if [ $rv -ne 0 ]; then
 	echo "Failure."
-	die "Error removing existing rules with command: iptables-save | sed -r \"/INPUT.*comment.*$iptables_comment/s/-A/iptables -D/e\". Exiting."
+	die "Error removing existing rules with command: iptables-save | sed -r \"/INPUT.*comment.*$iptables_comment/s/-A/iptables -D/e\"."
 fi
 echo "Ok."
 
@@ -238,7 +238,7 @@ echo -n "Removing existing global iptables rules for '${suite_name}'... "
 iptables-save | sed -r "/INPUT.*comment.*${iptables_comment_global}/s/-A/iptables -D/e" &>/dev/null; rv=$?
 if [ $rv -ne 0 ]; then
 	echo "Failure."
-	die "Error removing existing rules with command: iptables-save | sed -r \"/INPUT.*comment.*${iptables_comment_global}/s/-A/iptables -D/e\". Exiting."
+	die "Error removing existing rules with command: iptables-save | sed -r \"/INPUT.*comment.*${iptables_comment_global}/s/-A/iptables -D/e\"."
 fi
 echo "Ok."
 
@@ -247,7 +247,7 @@ if [ "$action" = "remove" ]; then
 	ipset destroy "$perm_ipset"; rv=$?
 	if [ $rv -ne 0 ]; then
 		echo "Failure."
-		die "Error destroying ipset $perm_ipset. Exiting."
+		die "Error destroying ipset $perm_ipset."
 	else
 		echo "Ok."
 	fi
@@ -266,7 +266,7 @@ else
 	echo -n "Appending rule to allow all traffic from the local subnet... "
 	iptables -A INPUT -s "$localsubnet" -j ACCEPT -m comment --comment "${iptables_comment_global}"; rv=$?
 	if [ $rv -ne 0 ]; then
-		die "Error $rv trying to append rule with command 'iptables -A INPUT -s \"$localsubnet\" -j ACCEPT'. Exiting."
+		die "Failed to append rule with command 'iptables -A INPUT -s \"$localsubnet\" -j ACCEPT'."
 	fi
 	echo "Ok."
 fi
@@ -274,7 +274,7 @@ fi
 echo -n "Inserting rule to allow all traffic from the loopback interface... "
 iptables -I INPUT -i lo -j ACCEPT -m comment --comment "${iptables_comment_global}"; rv=$?
 if [ $rv -ne 0 ]; then
-	die "Error $rv trying to insert rules with command 'iptables -A INPUT -i lo -j ACCEPT'. Exiting."
+	die "Failed to insert rule with command 'iptables -A INPUT -i lo -j ACCEPT'."
 fi
 echo "Ok."
 
@@ -282,7 +282,7 @@ echo "Ok."
 echo -n "Inserting rule to allow established/related connections... "
 iptables -I INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT -m comment --comment "${iptables_comment_global}"; rv=$?
 if [ $rv -ne 0 ]; then
-	die "Error $rv trying to insert rules with command 'iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT'. Exiting."
+	die "Failed to insert rules with command 'iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT'."
 fi
 echo "Ok."
 
@@ -311,7 +311,7 @@ if [ "$action" = "add" ]; then
 		debugprint "Creating permanent ipset '$perm_ipset'... "
 		ipset create "$perm_ipset" hash:net family "$family" hashsize "$ipset_hashsize" maxelem "$ipset_maxelem"; rv=$?
 		if [ $rv -ne 0 ]; then
-			die "Error creating ipset '$perm_ipset' with hashsize $ipset_hashsize and maxelem $ipset_maxelem. Exiting."
+			die "Failed to create ipset '$perm_ipset' with hashsize $ipset_hashsize and maxelem $ipset_maxelem."
 		else
 			debugprint "Ok."
 		fi
@@ -322,7 +322,7 @@ if [ "$action" = "add" ]; then
 	echo -n "Appending the whitelist rule to the INPUT chain... "
 	iptables -A INPUT -m set --match-set "$perm_ipset" src -j ACCEPT -m comment --comment "$iptables_comment"; rv=$?
 	if [ $rv -ne 0 ]; then
-		die "Error appending ipset rules with command: iptables -I INPUT -m set --match-set \"$perm_ipset\" src -j ACCEPT. Exiting."
+		die "Failed to append ipset rules with command: iptables -I INPUT -m set --match-set \"$perm_ipset\" src -j ACCEPT."
 	fi
 	echo "Ok."
 
@@ -330,7 +330,7 @@ if [ "$action" = "add" ]; then
 	echo -n "Making the new ipset permanent... "
 	ipset swap "$temp_ipset" "$perm_ipset"; rv=$?
 	if [ $rv -ne 0 ]; then
-		die "Error swapping temporary and permanent ipsets. Exiting."
+		die "Failed to swap temporary and permanent ipsets."
 	fi
 	echo "Ok."
 
@@ -338,7 +338,7 @@ if [ "$action" = "add" ]; then
 	debugprint "Destroying temporary ipset... "
 	ipset destroy "$temp_ipset"; rv=$?
 	if [ $rv -ne 0 ]; then
-		die "Error $rv destroying ipset '$temp_ipset'. Strange......... Exiting."
+		die "Failed to destroy ipset '$temp_ipset'. Strange........."
 	fi
 	debugprint "Ok."
 fi
@@ -350,12 +350,12 @@ if [ -z "$nodrop" ]; then
 	echo -n "Setting default iptables policies for INPUT and FORWARD to DROP... "
 	iptables -P INPUT DROP; rv=$?
 	if [ $rv -ne 0 ]; then
-		die "Error $rv changing iptables policy with command 'iptables -P INPUT DROP'. Exiting."
+		die "Failed to change iptables policy with command 'iptables -P INPUT DROP'."
 	fi
 
 	iptables -P FORWARD DROP; rv=$?
 	if [ $rv -ne 0 ]; then
-		die "Error $rv changing iptables policy with command 'iptables -P FORWARD DROP'. Exiting."
+		die "Failed to change iptables policy with command 'iptables -P FORWARD DROP'."
 	fi
 	echo "Ok."
 else
