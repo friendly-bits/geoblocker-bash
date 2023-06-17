@@ -152,7 +152,7 @@ if [ "$action" = "add" ]; then
 	ipset_maxelem=$(round_up_to_power2 "$ip_cnt")
 #	debugprint "calculated maxelem for ipset: $ipset_maxelem"
 
-	# calculate hashsize = (512) or (ipset_maxelem / 32), whichever is larger
+	# set hashsize to (512) or (ipset_maxelem / 32), whichever is larger
 	testhashsize=$(echo "scale=0 ; $ipset_maxelem / 4" | bc)
 #	debugprint "calculated hashsize: $testhashsize"
 	if [ "$testhashsize" -lt 512 ]; then
@@ -171,7 +171,7 @@ if [ "$action" = "add" ]; then
 	# import the whitelist into temporary ipset from file
 	echo -n "Importing the whitelist for country '$tld' into temporary ipset... "
 
-	# reads $whitelist_file, transforms each line into ipset add command and redirects the result into "ipset restore"
+	# reads $whitelist_file, transforms each line into 'ipset add' command and redirects the result into "ipset restore"
 	# this is about 50x faster than issuing discrete "ipset add" commands in a loop
 	# the '-exist' option prevents the restore command from getting stuck when encountering duplicates
 	while read -r network; do \
@@ -182,7 +182,7 @@ if [ "$action" = "add" ]; then
 	if [ $rv -ne 0 ]; then
 		echo ""
 		ipset destroy "$temp_ipset"
-		die 254 "Error when importing the list from '$whitelist_file' into '$temp_ipset'."
+		die 254 "Error when importing the list from '$whitelist_file' into ipset '$temp_ipset'."
 	fi
 
 	echo "Ok."
