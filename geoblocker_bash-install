@@ -15,8 +15,12 @@
 # Requires the following additional scripts (included in the distribution):
 # geoblocker_bash-fetch, geoblocker_bash-apply, geoblocker_bash-run, geoblocker_bash-uninstall, validate_cron_schedule.sh, check_ip_in_ripe.sh
 
-me=$(basename "$0")
-args="$*"
+suite_name="geoblocker_bash"
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+[ -n "$script_dir" ] && cd "$script_dir" || { echo "Error: Couldn't cd into '$script_dir'. Exiting"; exit 1; }
+
+source "${suite_name}-common" || { echo "Error: Can't find ${suite_name}-common. Exiting"; exit 1; }
+# NOTE that some functions and variables are sourced from the *common script
 
 #### USAGE
 
@@ -32,7 +36,7 @@ This script:
 1) Creates system folder structure for scripts, config and data.
 2) Copies all scripts included in the suite to /usr/local/bin.
 3) Creates backup of pre-install policies for INPUT and FORWARD chains.
-4) Calls geoblocker_bash-manage to set up geoblocker and then call the -fetch and -apply scripts.
+4) Calls ${suite_name}-manage to set up geoblocker and then call the -fetch and -apply scripts.
 5) If an error occurs during installation, calls the uninstall script to revert any changes made to the system.
 6) Accepts a custom cron schedule expression as an argument. Default cron schedule is "0 4 * * *" - at 4:00 [am] every day.
 
@@ -65,54 +69,18 @@ while getopts "c:s:npdh" opt; do
 	esac
 done
 
+echo ""
+
+# Print script enter message for debug
+debugentermsg
+
 
 #### FUNCTIONS
 
-debugprint() {
-# prints a debug message
-	[ "$debug" ] && echo -e "    Debug: $*"
-}
-
-echo ""
-debugprint "\033[1;33mStarted *install with args: '$args'\033[0m"
-
-setconfig() {
-# changes a field named $1 in the config file $2 to value $3
-# returns 0 if successful, 1 if not
-	fieldname="$1"
-	configfile="$2"
-	field="$3"
-	if [ -z "$fieldname" ] || [ -z "$configfile" ] || [ -z "$field" ]; then return 1; fi
-
-	# create the config file if it doesn't exist
-	touch "$conf_file"; rv01=$?
-
-	# remove corresponding config line
-	cat "$configfile" | grep -v "$fieldname=" > "${configfile}.temp"
-	mv "${configfile}.temp" "$configfile"; rv02=$?
-
-	# add updated config line
-	echo -e "$fieldname=$field" >> "$configfile"; rv03=$?
-	rv0=$(( rv01 + rv02 + rv03 ))
-	return $rv0
-}
-
-get_script_dir () {
-	SOURCE=${BASH_SOURCE[0]}
-	while [ -L "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symlink
-		DIR=$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )
-		SOURCE=$(readlink "$SOURCE")
-		[[ $SOURCE != /* ]] && SOURCE=$DIR/$SOURCE
-		# if $SOURCE was a relative symlink, we need to resolve it relative to the path where the symlink file was located
-	done
-	DIR=$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )
-	echo "$DIR"
-}
-
 install_failed() {
 	echo "Error: Installation failed." >&2
-	echo "Uninstalling geoblocker_bash..."
-	bash geoblocker_bash-uninstall
+	echo "Uninstalling ${suite_name}..."
+	bash ${suite_name}-uninstall
 	exit 1
 }
 
@@ -139,14 +107,11 @@ copyscript() {
 
 #### VARIABLES
 install_dir="/usr/local/bin"
-datadir="/var/lib/geoblocker_bash"
+datadir="/var/lib/${suite_name}"
 preinstall_policies_file="${datadir}/preinstall_policies.bak"
 knowngood_file="${datadir}/iptables_knowngood.bak"
 whitelist_dir="${datadir}/ip_lists"
-backup_script="${install_dir}/geoblocker_bash-backup"
-
-conf_dir="/etc/geoblocker_bash"
-conf_file="${conf_dir}/geoblocker_bash.conf"
+backup_script="${install_dir}/${suite_name}-backup"
 
 default_schedule="0 4 * * *"
 cron_schedule="${cron_schedule:-$default_schedule}"
@@ -225,18 +190,16 @@ if ! command -v bc &> /dev/null; then
 	exit 1
 fi
 
-scriptdir="$(get_script_dir)"
-# cd into script directory
-# exit in case "cd" fails
-cd "$scriptdir"; rv=$?
-if [ -z "$scriptdir" ] || [ "$rv" -ne 0 ]; then echo "Error: could not change directory to \"$scriptdir\". Exiting."; exit 1; fi
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+[ -n "$script_dir" ] && cd "$script_dir" || { echo "Error: Couldn't cd into '$script_dir'. Exiting"; exit 1; }
 
-check_file_exists "geoblocker_bash-fetch"
-check_file_exists "geoblocker_bash-apply"
-check_file_exists "geoblocker_bash-run"
-check_file_exists "geoblocker_bash-manage"
-check_file_exists "geoblocker_bash-backup"
-check_file_exists "geoblocker_bash-uninstall"
+check_file_exists "${suite_name}-fetch"
+check_file_exists "${suite_name}-common"
+check_file_exists "${suite_name}-apply"
+check_file_exists "${suite_name}-run"
+check_file_exists "${suite_name}-manage"
+check_file_exists "${suite_name}-backup"
+check_file_exists "${suite_name}-uninstall"
 check_file_exists "validate_cron_schedule.sh"
 check_file_exists "check_ip_in_ripe.sh"
 
@@ -284,13 +247,14 @@ fi
 # if we are running from $install_dir, assume that all other necessary scripts have already been installed, skip copying
 if [ "$scriptdir" != "$install_dir" ]; then
 	echo -n "Copying scripts to $install_dir... "
-	copyscript "geoblocker_bash-install" "${install_dir}/"
-	copyscript "geoblocker_bash-fetch" "${install_dir}/"
-	copyscript "geoblocker_bash-apply" "${install_dir}/"
-	copyscript "geoblocker_bash-run" "${install_dir}/"
-	copyscript "geoblocker_bash-manage" "${install_dir}/"
-	copyscript "geoblocker_bash-backup" "${install_dir}/"
-	copyscript "geoblocker_bash-uninstall" "${install_dir}/"
+	copyscript "${suite_name}-install" "${install_dir}/"
+	copyscript "${suite_name}-common" "${install_dir}/"
+	copyscript "${suite_name}-fetch" "${install_dir}/"
+	copyscript "${suite_name}-apply" "${install_dir}/"
+	copyscript "${suite_name}-run" "${install_dir}/"
+	copyscript "${suite_name}-manage" "${install_dir}/"
+	copyscript "${suite_name}-backup" "${install_dir}/"
+	copyscript "${suite_name}-uninstall" "${install_dir}/"
 	copyscript "validate_cron_schedule.sh" "${install_dir}/"
 	copyscript "check_ip_in_ripe.sh" "${install_dir}/"
 	echo "Ok."
@@ -330,7 +294,7 @@ if [ -z "$install_dir" ] || [ "$rv" -ne 0 ]; then echo "Error: could not change 
 
 ### Add whitelist(s) for $tlds to managed whitelists, then fetch and apply the whitelist(s)
 # have to use array to prevent getopts errors. have to provide cron schedule separately to prevent * expansion
-geoblocker_bash-manage "$debug" "$no_persistence" "$nodrop" -f -a "add" -c "$tlds" -s "$cron_schedule"; rv=$?
+${suite_name}-manage "$debug" "$no_persistence" "$nodrop" -f -a "add" -c "$tlds" -s "$cron_schedule"; rv=$?
 
 # the *manage script exits with return value 254 if requested country is already included in the config
 if [ $rv -ne 0 ] && [ $rv -ne 254 ]; then
