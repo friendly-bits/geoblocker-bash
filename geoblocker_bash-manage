@@ -118,6 +118,11 @@ remove_a_from_b() {
 
 #### VARIABLES
 
+# set environment variable "nolog" to avoid daughter scripts writing errors
+#	to syslog when encountering incorrect arguments from the user
+#	nolog variable is checked in the sourced *common script
+export nolog="true"
+
 # get install_dir from the config file
 install_dir="$(getconfig "Installdir" "$conf_file")"
 
@@ -414,5 +419,7 @@ echo "View cron jobs with 'sudo crontab -l'"
 echo
 
 debugexitmsg
+
+unset nolog
 
 exit 0
