@@ -137,8 +137,6 @@ for arg in "$@"; do
 	# add to array while discarding empty arguments
 	[ -n "$arg" ] && arguments+=("$arg")
 done
-# replace arguments with sanitized ones
-set -- "${arguments[@]}"
 }
 
 ### Variables
@@ -160,5 +158,7 @@ conf_file="${conf_dir}/${suite_name}.conf"
 #arguments=()
 # sanitize arguments
 sanitize_args "$@"
+# replace arguments with sanitized ones
+set -- "${arguments[@]}"
 
 return 0
