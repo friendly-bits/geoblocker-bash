@@ -88,15 +88,13 @@ subnet_regex="${ip_regex}${mask_regex}"
 
 if [ -z "$country" ]; then
 	usage
-	err="Specify country with '-c <country>'!"
-	die 1 "$err"
+	die 1 "Specify country with '-c <country>'!"
 fi
 
 # check that we have iplist file path
 if [ -z "$iplist_path" ]; then
 	usage
-	err="Specify iplist file path with '-p <path-to-file>'!"
-	die 1 "$err"
+	die 1 "Specify iplist file path with '-p <path-to-file>'!"
 fi
 
 # use curl or wget, depending on which one we find
@@ -108,14 +106,12 @@ fi
 
 # check that we have jq
 if ! command -v jq &> /dev/null; then
-	err="Error: Cannot find 'jq' - Json processor. Install it with 'apt install jq' or similar. Exiting"
-	die 1 "$err"
+	die 1 "Error: Cannot find 'jq' - Json processor. Install it with 'apt install jq' or similar. Exiting"
 fi
 
 # check that iplist directory exists
 if [ ! -d "$iplist_path" ]; then
-	err="Directory '$iplist_path' doesn't exist!"
-	die 1 "$err"
+	die 1 "Directory '$iplist_path' doesn't exist!"
 fi
 
 #### Main
@@ -130,9 +126,8 @@ rv=$?
 
 if [ $rv -ne 0 ]; then
 	echo "Failed."
-	err="Error $rv trying to run $curl_or_wget $url. Exiting."
 	rm "$fetched_file" &>/dev/null
-	die 254 "$err"
+	die 254 "Failed to run $curl_or_wget $url."
 fi
 
 
@@ -142,9 +137,8 @@ if [ ! "$status" = "ok" ]; then
 	echo "Failed."
 	echo "RIPE message: '$ripe_msg'."
 	echo "Requested url was: '$url'"
-	err="Error: could not fetch ip list from RIPE. Exiting"
 	rm "$fetched_file" &>/dev/null
-	die 254 "$err"
+	die 254 "Failed to fetch ip list from RIPE."
 fi
 
 echo "Ok."
@@ -176,11 +170,10 @@ else
 	if [ "$parsed_subnet_cnt" -ge "$min_subnets_num" ]; then
 		echo "Ok."
 	else
-		err="Error: parsed subnets count is less than $min_subnets_num. Probably a download error. Exiting."
 		rm "$parsed_file" &>/dev/null
 		rm "$validated_file" &>/dev/null
 		rm "$fetched_file"
-		die 254 "$err"
+		die 254 "Error: parsed subnets count is less than $min_subnets_num. Probably a download error."
 	fi
 
 	echo -n "Validating downloaded subnets... "
@@ -198,11 +191,10 @@ else
 		if [ "$validated_subnet_cnt" -ge "$min_subnets_num" ]; then
 			echo "Ok."
 		else
-			err="Error: validated subnets count is less than $min_subnets_num. Probably a download error. Exiting." >&2
 			rm "$parsed_file" &>/dev/null
 			rm "$validated_file" &>/dev/null
 			rm "$fetched_file"
-			die 254 "$err"
+			die 254 "Error: validated subnets count is less than $min_subnets_num. Probably a download error."
 		fi
 	fi
 
@@ -213,11 +205,10 @@ else
 	mv "$validated_file" "$out_list"; rv=$?
 	if [ $rv -ne 0 ]; then
 		echo "Failed."
-		err="Error while attempting to overwrite the file $out_list"
 		rm "$parsed_file" &>/dev/null
 		rm "$validated_file" &>/dev/null
 		rm "$fetched_file" &>/dev/null
-		die 1 "$err"
+		die 1 "Failed to overwrite the file $out_list"
 	fi
 	echo "Ok."
 	touch -d "$ripe_db_time" "$out_list"
