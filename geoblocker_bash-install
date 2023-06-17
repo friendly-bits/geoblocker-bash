@@ -106,6 +106,12 @@ copyscript() {
 
 
 #### VARIABLES
+
+# set environment variable "nolog" to avoid daughter scripts writing errors
+#	to syslog when encountering incorrect arguments from the user
+#	nolog variable is checked in the sourced *common script
+export nolog="true"
+
 install_dir="/usr/local/bin"
 datadir="/var/lib/${suite_name}"
 preinstall_policies_file="${datadir}/preinstall_policies.bak"
@@ -305,3 +311,7 @@ fi
 echo "Install done."
 
 echo ""
+
+unset nolog
+
+exit 0
