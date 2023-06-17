@@ -8,7 +8,7 @@
 
 debugprint() {
 # prints a debug message
-	[ "$debug" ] && echo -e "    Debug: ${me_short}: $*"
+	[ "$debug" ] && echo -e "	Debug: ${me_short}: $*"
 }
 
 debugentermsg() {
@@ -22,17 +22,26 @@ debugexitmsg() {
 die() {
 	# if first arg is a number, assume it's the exit code
 	if [[ "$1" =~ ^[0-9]+$ ]]; then rv="$1"; shift; else rv="1"; fi
-    if [ -n "$*" ]; then
-        echo "" 1>&2
+
+	nolog="false"
+	die_args=()
+
+	# check for "-nolog" option in arguments
+	for die_arg in "$@"; do
+		[ "$die_arg" = "-nolog" ] && nolog="true" || die_args+=( "$die_arg" )
+	done
+
+	if [ -n "${die_args[*]}" ]; then
+		echo "" 1>&2
 		# loop through arguments and print them to stderr and to the syslog
-        for arg in "$@"; do
-            echo "$arg" 1>&2
-            logger -t "$me" "$arg"
-        done
-    fi
-    [ -n "$parent_short_cap" ] && debugprint "\033[1;33mBack to $parent_short_cap...\033[0m"
-    echo "" 1>&2
-    exit "$rv"
+		for arg in "${die_args[@]}"; do
+			echo "$me_short: $arg" 1>&2
+			[ "$nolog" = "false" ] && logger -t "$me" "$arg"
+		done
+	fi
+	[ -n "$parent_short_cap" ] && debugprint "\033[1;33mBack to $parent_short_cap...\033[0m"
+	echo "" 1>&2
+	exit "$rv"
 }
 
 getconfig() {
@@ -115,25 +124,8 @@ getlocalsubnet() {
 	return $rv
 }
 
-
-### Variables
-me=$(basename "$0")
-me_short="${me//${suite_name}-/}"
-me_short_cap="${me_short^^}"
-
-parent="$(basename "$(ps -o args= $PPID)" 2>/dev/null | awk -v RS='/| ' '/^.*'$suite_name'/ {a=$0} END{print a}')"
-
-#[ "$parent" = "$me" ] && parent=""
-parent_short="${parent//${suite_name}-/}"
-parent_short_cap="${parent_short^^}"
-
-conf_dir="/etc/${suite_name}"
-conf_file="${conf_dir}/${suite_name}.conf"
-
-
-### Main
-
-# sanitize arguments
+sanitize_args() {
+# trims single- and double-quotes, trims extra whitespaces, discards empty arguments
 arguments=()
 for arg in "$@"; do
 	# trim single-quotes if any
@@ -147,6 +139,26 @@ for arg in "$@"; do
 done
 # replace arguments with sanitized ones
 set -- "${arguments[@]}"
+}
 
+### Variables
+me=$(basename "$0")
+me_short="${me//${suite_name}-/}"
+me_short_cap="${me_short^^}"
+
+parent="$(basename "$(ps -o args= $PPID)" 2>/dev/null | awk -v RS='/| ' '/^.*'$suite_name'/ {a=$0} END{print a}')"
+
+[ "$parent" = "$me" ] && parent=""
+parent_short="${parent//${suite_name}-/}"
+parent_short_cap="${parent_short^^}"
+
+conf_dir="/etc/${suite_name}"
+conf_file="${conf_dir}/${suite_name}.conf"
+
+
+### Main
+#arguments=()
+# sanitize arguments
+sanitize_args "$@"
 
 return 0
