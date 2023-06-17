@@ -1,0 +1,152 @@
+#!/bin/bash
+
+# geoblocker_bash-common
+	
+# common functions and variables for geoblocker_bash suite
+
+### Functions
+
+debugprint() {
+# prints a debug message
+	[ "$debug" ] && echo -e "    Debug: ${me_short}: $*"
+}
+
+debugentermsg() {
+	args="$(for arg in "${arguments[@]}"; do echo -n "'$arg' "; done)"
+	debugprint "\033[1;33mStarted *${me_short_cap}* with args: ${args}\033[0m"
+}
+debugexitmsg() {
+	[ -n "$parent_short_cap" ] && debugprint "\033[1;33mBack to *$parent_short_cap*...\033[0m"
+}
+
+die() {
+	# if first arg is a number, assume it's the exit code
+	if [[ "$1" =~ ^[0-9]+$ ]]; then rv="$1"; shift; else rv="1"; fi
+    if [ -n "$*" ]; then
+        echo "" 1>&2
+		# loop through arguments and print them to stderr and to the syslog
+        for arg in "$@"; do
+            echo "$arg" 1>&2
+            logger -t "$me" "$arg"
+        done
+    fi
+    [ -n "$parent_short_cap" ] && debugprint "\033[1;33mBack to $parent_short_cap...\033[0m"
+    echo "" 1>&2
+    exit "$rv"
+}
+
+getconfig() {
+# reads a field named $1 from the config file $2
+# outputs the resulting field
+# returns 0 if successful, 1 if not
+	fieldname="$1"
+	configfile="$2"
+	[ -z "$fieldname" ] || [ -z "$configfile" ] && return 1
+
+	entry="$(grep "$fieldname=" "$configfile")"; rv=$?
+	[ "$rv" -ne 0 ] && return 1
+
+	field="${entry//$fieldname=}"
+	echo "$field"
+
+	return $rv
+}
+
+setconfig() {
+# changes a field named $1 in the config file $2 to value $3
+# returns 0 if successful, 1 if not
+	fieldname="$1"
+	configfile="$2"
+	field="$3"
+	if [ -z "$fieldname" ] || [ -z "$configfile" ]; then return 1; fi
+
+	# create the config file if it doesn't exist
+	touch "$conf_file"; rv01=$?
+
+	# remove corresponding config line
+	grep -v "$fieldname=" "$configfile" > "${configfile}.temp"
+	mv "${configfile}.temp" "$configfile"; rv02=$?
+
+	# add updated config line
+	echo -e "$fieldname=$field" >> "$configfile"; rv03=$?
+
+	rv0=$(( rv01 + rv02 + rv03 ))
+	return $rv0
+}
+
+get_script_dir () {
+	SOURCE=${BASH_SOURCE[0]}
+	while [ -L "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symlink
+		DIR=$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )
+		SOURCE=$(readlink "$SOURCE")
+		[[ $SOURCE != /* ]] && SOURCE=$DIR/$SOURCE
+		# if $SOURCE was a relative symlink, we need to resolve it relative to the path where the symlink file was located
+	done
+	DIR=$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )
+	echo "$DIR"
+}
+
+getlocalsubnet() {
+# attempts to find local subnet for the main network interface
+
+	# regex patterns used for ipv4 validation
+	# using Perl regex syntax because grep is faster with it than with native grep syntax
+	# regex compiled from 2 suggestions found here:
+	# https://stackoverflow.com/questions/5284147/validating-ipv4-addresses-with-regexp
+	ip_regex='^((25[0-5]|(2[0-4]|1\d|[1-9]|)\d)\.?\b){4}'
+	mask_regex='(/([01]?\d\d?|2[0-4]\d|25[0-5]))$'
+	subnet_regex="${ip_regex}${mask_regex}"
+
+	# returns local ip with subnet mask
+	localip="$(ip addr | grep 'state UP' -A2 | tail -n1 | awk '{print $2}')"
+
+	# Change last ipv4 octet to 0
+	lsubnet=$(echo "$localip" | sed 's|\([0-9]*\.[0-9]*\.[0-9]*\.\)[0-9]*|\10|')
+
+	# Verifies that the argument is a valid ipv4 subnet
+	echo "$lsubnet" | grep -P "$subnet_regex" &>/dev/null; rv=$?
+
+	if [ $rv -ne 0 ]; then
+		# if validation fails, output empty string
+		echo ""
+	else
+		echo "$lsubnet"
+	fi
+	return $rv
+}
+
+
+### Variables
+me=$(basename "$0")
+me_short="${me//${suite_name}-/}"
+me_short_cap="${me_short^^}"
+
+parent="$(basename "$(ps -o args= $PPID)" 2>/dev/null | awk -v RS='/| ' '/^.*'$suite_name'/ {a=$0} END{print a}')"
+
+#[ "$parent" = "$me" ] && parent=""
+parent_short="${parent//${suite_name}-/}"
+parent_short_cap="${parent_short^^}"
+
+conf_dir="/etc/${suite_name}"
+conf_file="${conf_dir}/${suite_name}.conf"
+
+
+### Main
+
+# sanitize arguments
+arguments=()
+for arg in "$@"; do
+	# trim single-quotes if any
+	arg="${arg//\'}";
+	# trim double-quotes if any
+	arg="${arg//\"}"
+	# trim leading and trailing whitespaces
+	arg="$(awk '{$1=$1};1' <<< "$arg")"
+	# add to array while discarding empty arguments
+	[ -n "$arg" ] && arguments+=("$arg")
+done
+# replace arguments with sanitized ones
+set -- "${arguments[@]}"
+
+
+return 0
