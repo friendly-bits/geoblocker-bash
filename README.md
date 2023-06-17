@@ -48,13 +48,13 @@ additional mandatory prerequisites: to install, run 'sudo apt install ipset wget
 
 1) Changes applied to iptables are made persistent via cron jobs: a periodic job running at a daily schedule (which you can optionally change when running the install script), and a job that runs at system reboot (after 30 seconds delay).
 
-2) You can specify a custom schedule for the periodic cron job by passing an argument to the install script. Run it with the '-h' switch for more info.
+2) You can specify a custom schedule for the periodic cron job by passing an argument to the install script. Run it with the '-h' option for more info.
 
 3) **Note** that cron jobs **will be run as root**.
 
-4) To test before deployment, you can run the install script with the "-p" option switch to apply all actions except actually blocking incoming connections (will NOT set INPUT chain policy to DROP). This way, you can make sure no errors are encountered, and check resulting iptables config before commiting to actual blocking. To enable blocking later, install again without the "-p" switch (or manually change iptables policies).
+4) To test before deployment, you can run the install script with the "-p" option to apply all actions except actually blocking incoming connections (will NOT set INPUT chain policy to DROP). This way, you can make sure no errors are encountered, and check resulting iptables config before commiting to actual blocking. To enable blocking later, install again without the "-p" option (or manually change iptables policies).
 
-5) To test before deployment, you can run the install script with the "-n" switch to skip creating cron jobs. This way, a simple server restart will undo all changes made to the firewall. To enable persistence later, install again without the "-n" switch.
+5) To test before deployment, you can run the install script with the "-n" option to skip creating cron jobs. This way, a simple server restart will undo all changes made to the firewall. To enable persistence later, install again without the "-n" option.
 
 6) The run, fetch and apply scripts write to syslog in case an error occurs. The run script also writes to syslog upon success. To verify that cron jobs ran successfully, on Debian and derivatives run 'sudo cat /var/log/syslog | grep geoblocker_bash'
 
@@ -99,15 +99,17 @@ Supported actions: add, remove, schedule
 * Accepts an optional custom cron schedule expression as an argument.
 * If schedule is not specified, uses schedule from the config file (set during the installation by the -install script or later by the -manage script)
 
+If an error is encountered in one of the actions, classifies it as temporary or permanent. For permanent errors, attempts to restore previous configuration. If that fails, runs the -backup script with the -r option to attempt automatic restore of last known-good ipset and iptables states.
+
 *manage -a schedule -s <"schedule_expression"> : changes the schedule for the periodic cron job
 
 **The run script**: Serves as a proxy to call the -fetch, -apply and -backup scripts with arguments required for each action.
 
 Supported actions: add, remove, update.
 
-*run -a add -c <country_code> : Calls the fetch script, then calls the apply script, passing required arguments to fetch and apply ipset and iptables rules for the specified country. If multiple countries are specified, repeats the operation for each country's ip list.
+*run -a add -c <"country_codes"> : Calls the fetch script, then calls the apply script, passing required arguments required to fetch and apply ipset and iptables rules for specified countries.
 
- *run -a remove -c <country_code> : Calls the apply script, passing required arguments to remove the ipset and iptables rules for the specified country. If multiple countries are specified, repeats the operation for each country's ip list.
+ *run -a remove -c <"country_codes"> : Calls the apply script, passing required arguments to remove the ipset and iptables rules for specified countries.
 
  *run -a update : used for triggering from the cron jobs. Calls the fetch script (unless called with the -s - Skip fetch option), then calls the apply script, passing required arguments to fetch and apply ipset and iptables rules for countries listed in the config file. Used to update the ip lists at a periodic schedule, and to activate the rules on reboot.
  
@@ -119,14 +121,14 @@ Supported actions: add, remove, update.
 - Fetches ipv4 subnets list for a given country from RIPE.
 - Parses, validates and compiles the downloaded list into a plain list, and saves to a file.
 
-**The apply script**:  Loads or removes ipsets and iptables rules for the specified country code.
+**The apply script**:  Creates or removes ipsets and iptables rules for specified country codes.
 - supported actions: add, remove
 
-*apply -a add -c <country_code> :
-- Loads an ip list file for the specified country into an ipset and sets iptables rules to only allow connections from the local subnet and from subnets included in the ipset.
+*apply -a add -c <"country_codes"> :
+- Loads an ip list file for specified countries into ipsets and sets iptables rules to only allow connections from the local subnet and from subnets included in the ipsets.
 
- *apply -a remove -c <country_code> :
-- removes the ipset and associated iptables rules for the specified country.
+*apply -a remove -c <"country_codes"> :
+- removes ipsets and associated iptables rules for specified countries.
 
 **The backup script**: Creates a backup of the current iptables state and current geoblocker-associated ipsets, or restores the above from backup.
 
@@ -144,8 +146,9 @@ Supported actions: -b (backup), -r (restore)
 **The check_ip_in_ripe.sh script** can be used to verify that a certain ip address belongs to a subnet found in RIPE's records for a given country. It is not called from other scripts.
 
 **Additional comments**
-- All scripts display "usage" when called with the "-h" switch
-- Most scripts accept the "-d" switch for debug
+- All scripts display "usage" when called with the "-h" option
+- Most scripts accept the "-d" option for debug
+- There are additional options specific for each script which you can find by running it with the "-h" option
 - The fetch script can be easily modified to get the lists from another source instead of RIPE, for example from ipdeny.com
 - If you live in a small or undeveloped country, the fetched list may be shorter than 100 subnets. If that's the case, the fetch and check_ip_in_ripe scripts will assume that the download failed and refuse to work. You can change the value of the "min_subnets_num" variable in both scripts to work around that.
 - If you remove your country's whitelist using the -manage script, you will probably get locked out of your remote server.
