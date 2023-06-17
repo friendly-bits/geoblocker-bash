@@ -297,12 +297,14 @@ else
 		echo "Re-applying previous countries set: '$config_tlds'... "
 		$run_command "$debug" "$nodrop" -a "update"; rv=$?
 		if [ $rv -eq 0 ]; then
-			die 1 "Successfully re-applied previous countries set."
+			die 0 "Successfully re-applied previous countries set."
 		else
 			echo "Failed to re-apply previous countries set." >&2
 			# call the *backup script to initiate recovery from fault
-			${suite_name}-backup -r "$debug"
-			die 1 ""
+			${suite_name}-backup -r "$debug"; rv=$?
+
+			# exit with the same exit code as backup-restore operation
+			die "$?" ""
 		fi
 	fi
 
