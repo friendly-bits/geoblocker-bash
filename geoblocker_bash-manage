@@ -143,41 +143,31 @@ tlds_status_file="$datadir/tlds_status"
 #### CHECKS
 
 # check for root
-if [ "$EUID" -ne 0 ]; then
-  die 1 "This needs to be run as root."
-fi
+[ "$EUID" -ne 0 ] && die 1 "This needs to be run as root."
 
 # check if cron service is enabled
 (systemctl is-enabled cron.service) > /dev/null; rv=$?
-if [ $rv -ne 0 ]; then crondisabled="true"; fi
+[ $rv -ne 0 ] && crondisabled="true"
 
 
 # Check the passed arguments for sanity
 
-if [ -z "$action" ]; then
-	usage
-	die 1 "Specify action with '-a <action>'!"
-fi
+[ -z "$action" ] && { usage; die 1 "Specify action with '-a <action>'!"; }
 
-if [ "$action" != "schedule" ] && [ -z "$tlds_arg" ]; then
+[ "$action" != "schedule" ] && [ -z "$tlds_arg" ] && \
 	die 1 "Error: action '$action' requires to specify countries with '-c <tlds>'!"
-fi
 
-if [ "$action" = "schedule" ] && [ -n "$tlds_arg" ]; then
+[ "$action" = "schedule" ] && [ -n "$tlds_arg" ] && \
 	die 1 "Error: action '$action' only supports changing the cron schedule! Do not use it with the '-c' option!"
-fi
 
-if [ "$action" = "schedule" ] && [ -n "$skip_cron" ]; then
+[ "$action" = "schedule" ] && [ -n "$skip_cron" ] && \
 	die 1 "Error: action '$action' is incompatible with option '-n'!"
-fi
 
-if [ "$action" = "schedule" ] && [ -z "$cron_schedule" ]; then
+[ "$action" = "schedule" ] && [ -z "$cron_schedule" ] && \
 	die 1 "Error: action '$action' requires to provide cron schedule with option '-s'!"
-fi
 
-if [ "$action" = "schedule" ] && [ -n "$nodrop" ]; then
+[ "$action" = "schedule" ] && [ -n "$nodrop" ] && \
 	die 1 "Error: action '$action' is for setting the cron schedule only, don't use it with '-p'!"
-fi
 
 case "$action" in
 	add) ;;
@@ -192,10 +182,8 @@ if [[ "$crondisabled" ]] && [ "$action" != "remove" ] && [ -z "$skip_cron" ]; th
 	die 1 "$err1" "$err2"
 fi
 
-if [ -n "$cron_schedule" ] && [ -n "$skip_cron" ]; then
+[ -n "$cron_schedule" ] && [ -n "$skip_cron" ] && \
 	die 1 "Error: Conflicting arguments. Use either -s or -n but not both."
-fi
-
 
 if [ ! "$skip_cron" ]; then
 
@@ -205,7 +193,6 @@ if [ ! "$skip_cron" ]; then
 		cron_schedule="$(getconfig "Cron_schedule" "$conf_file")"
 		debugprint "Read cron schedule: $cron_schedule"
 	fi
-
 
 	# validate cron schedule
 	debugprint "Validating cron schedule: '$cron_schedule'."
@@ -280,9 +267,8 @@ else
 	debugprint "planned tlds before '$action': '$new_tlds'"
 
 	# if new_tlds list is empty
-	if [ -z "$new_tlds" ]; then
+	[ -z "$new_tlds" ] && \
 		die 1 "Planned final countries list is empty! If you really want to block evrything, do this manually. Exiting."
-	fi
 
 
 	### Call the *run script
@@ -307,8 +293,7 @@ else
 		echo "Re-applying previous countries set: '$config_tlds'... "
 		$run_command "$debug" "$nodrop" -a "update"; rv=$?
 		if [ $rv -eq 0 ]; then
-			msg="Successfully re-applied previous countries set."
-			die 1 "$msg"
+			die 1 "Successfully re-applied previous countries set."
 		else
 			echo "Failed to re-apply previous countries set." >&2
 			# call the *backup script to initiate recovery from fault
@@ -356,10 +341,7 @@ crontab -u root -l 2>/dev/null | grep -v "\"$run_command\"" | sudo crontab -u ro
 
 # If action is "remove", don't assume that persistence is required
 # Only create new cron jobs if prior cron jobs exist
-if [ "$action" = "remove" ] && [ -z "$curr_cron_jobs" ]; then
-	skip_cron="true"
-fi
-
+[ "$action" = "remove" ] && [ -z "$curr_cron_jobs" ] && skip_cron="true"
 
 if [ ! "$skip_cron" ]; then
 
