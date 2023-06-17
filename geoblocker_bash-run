@@ -26,22 +26,13 @@
 #     For permanent errors, calls the -backup script to restore last known-good ipsets and iptables state.
 
 me=$(basename "$0")
-parent_script="$(ps -o args= $PPID | awk -v RS='/| ' '/^geoblocker/')"
+suite_name="geoblocker_bash"
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+[ -n "$script_dir" ] && cd "$script_dir" || { echo "Error: Couldn't cd into '$script_dir'. Exiting"; exit 1; }
 
-# arguments sanitization
-arguments=()
-for arg in "$@"; do
-	# trim single-quotes if any
-	arg="${arg//\'}";
-	# trim double-quotes if any
-	arg="${arg//\"}"
-	# trim leading and trailing whitespaces
-	arg="$(awk '{$1=$1};1' <<< "$arg")"
-	# add to array while discarding empty arguments
-	[ -n "$arg" ] && arguments+=("$arg")
-done
-# replace arguments with sanitized ones
-set -- "${arguments[@]}"
+source "${suite_name}-common" || { echo "Error: Can't find ${suite_name}-common. Exiting"; exit 1; }
+# NOTE that some functions and variables are sourced from the *common script
+
 
 #### USAGE
 
@@ -84,69 +75,18 @@ while getopts "a:c:ospdh" opt; do
 done
 shift $((OPTIND -1))
 
-
-#### FUNCTIONS
-
-debugprint() {
-# prints a debug message
-	[ "$debug" ] && echo -e "    Debug: $*"
-}
-
 echo ""
 
-argsmsg="Started *run with args: $(for arg in "${arguments[@]}"; do echo -n "'$arg'  "; done; echo)"
-debugprint "\033[1;33m${argsmsg}\033[0m"
+# Print script enter message for debug
+debugentermsg
 
-die() {
-	echo ""
-	echo "$2" 1>&2
-	echo ""
-	logger -t geoblocker_bash-run "$2"
-	[ -n "$parent_script" ] && debugprint "\033[1;33mBack to $parent_script...\033[0m"
-	exit "$1"
-}
-
-get_script_dir () {
-	SOURCE=${BASH_SOURCE[0]}
-	while [ -L "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symlink
-		DIR=$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )
-		SOURCE=$(readlink "$SOURCE")
-		[[ $SOURCE != /* ]] && SOURCE=$DIR/$SOURCE
-		# if $SOURCE was a relative symlink, we need to resolve it relative to the path where the symlink file was located
-	done
-	DIR=$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )
-	echo "$DIR"
-}
-
-getconfig() {
-# reads a field named $1 from the config file $2
-# outputs the resulting field
-# returns 0 if successful, 1 if not
-	fieldname="$1"
-	configfile="$2"
-	if [ -z "$fieldname" ] || [ -z "$configfile" ]; then return 1; fi
-	read -r field < <(grep "$fieldname=" "$configfile" | sed "s/.*$fieldname=//"); rv=$?
-	if [ -z "$field" ]; then
-		echo ""
-		rv=$((rv + 1))
-	else
-		echo "$field"
-	fi
-	return $rv
-}
+#### FUNCTIONS
 
 
 #### VARIABLES
 
-conf_dir="/etc/geoblocker_bash"
-conf_file="${conf_dir}/geoblocker_bash.conf"
-
-# read datadir from the config file
-read -r datadir < <(getconfig "Datadir" "$conf_file")
-
-# read the path to backup_script from the config file
-read -r backup_script < <(getconfig "Backup_script" "$conf_file")
-
+# get datadir from the config file
+datadir="$(getconfig "Datadir" "$conf_file")"
 knowngood_file="$datadir/iptables_knowngood.bak"
 whitelist_dir="$datadir/ip_lists"
 tlds_status_file="$datadir/tlds_status"
@@ -154,7 +94,7 @@ tlds_status_file="$datadir/tlds_status"
 if [ -z "$arg_tlds" ] || [ "$action" = "update" ]; then
 	# read tlds from the config file
 	debugprint "Loading tlds from file..."
-	read -r tlds < <(getconfig "Countries" "$conf_file")
+	tlds="$(getconfig "Countries" "$conf_file")"
 else
 	tlds="$arg_tlds"
 fi
@@ -162,28 +102,22 @@ fi
 # trim single-quotes if any
 tlds="${tlds//\'}"
 
-# get the script path
-read -r scriptdir < <(get_script_dir)
-
 
 #### CHECKS
 
-# check for geoblocker_bash-fetch
-[ ! "$skipfetch" ] && if ! command -v geoblocker_bash-fetch &> /dev/null; then
-	err="Error: Cannot find 'geoblocker_bash-fetch'. Did you run setup? Exiting."
-	die 1 "$err"
+# check for *fetch
+[ ! "$skipfetch" ] && if ! command -v ${suite_name}-fetch &> /dev/null; then
+	die 1 "Error: Cannot find '${suite_name}-fetch'. Did you run setup? Exiting."
 fi
 
-# check for geoblocker_bash-apply
-if ! command -v geoblocker_bash-apply &> /dev/null; then
-	err="Error: Cannot find 'geoblocker_bash-apply'. Did you run setup? Exiting."
-	die 1 "$err"
+# check for *apply
+if ! command -v ${suite_name}-apply &> /dev/null; then
+	die 1 "Error: Cannot find '${suite_name}-apply'. Did you run setup? Exiting."
 fi
 
-# check for geoblocker_bash-backup
-if ! command -v geoblocker_bash-backup &> /dev/null; then
-	err="Error: Cannot find 'geoblocker_bash-apply'. Did you run setup? Exiting."
-	die 1 "$err"
+# check for *backup
+if ! command -v ${suite_name}-backup &> /dev/null; then
+	die 1 "Error: Cannot find '${suite_name}-backup'. Did you run setup? Exiting."
 fi
 
 case "$action" in
@@ -194,39 +128,18 @@ case "$action" in
 esac
 
 # check for country tlds
-if [ -z "$tlds" ]; then
-	err="tlds variable can not be empty! Exiting."
-	usage
-	die 1 "$err"
-fi
+[ -z "$tlds" ] && { err="tlds variable can not be empty! Exiting."; usage; die 1 "$err"; }
 
-if [ -z "$knowngood_file" ]; then
-	err="Error: Known-good file path can not be empty! Exiting."
-	usage
-	die 1 "$err"
-fi
+[ -z "$knowngood_file" ] && die 1 "Error: Known-good file path can not be empty! Exiting."
 
-if [ -z "$whitelist_dir" ]; then
-	err="Error: Whitelist file path can not be empty! Exiting."
-	usage
-	die 1 "$err"
-fi
+[ -z "$whitelist_dir" ] && die 1 "Error: Whitelist file path can not be empty! Exiting."
 
 # check for root
-if [ "$EUID" -ne 0 ]; then
-	err="This needs to be run as root."
-	die 1 "$err"
-fi
+[ "$EUID" -ne 0 ] && die 1 "This needs to be run as root."
 
 
 #### MAIN
 debugprint "tlds to process: $tlds"
-
-# cd into script directory
-# exit in case "cd" fails
-cd "$scriptdir"; rv=$?
-if [ -z "$scriptdir" ] || [ "$rv" -ne 0 ]; then die 1 "Error: could not change directory to '$scriptdir'. Exiting."; fi
-
 
 ### Fetch ip lists
 errcnt="0"
@@ -235,7 +148,7 @@ failed_tlds=""
 ok_tlds=""
 if [ ! "$skipfetch" ] && [ "$action" != "remove" ]; then
 	for tld in $tlds; do
-		geoblocker_bash-fetch $debug -c "$tld" -p "$whitelist_dir"; rv=$?
+		${suite_name}-fetch $debug -c "$tld" -p "$whitelist_dir"; rv=$?
 		if [ $rv -gt 0 ] && [ $rv -ne 254 ]; then
 			# positive return value from fetch means fatal code error rather than fetch error, except for 254
 			die 1 "Error in *fetch script, something is broken."
@@ -252,14 +165,14 @@ if [ ! "$skipfetch" ] && [ "$action" != "remove" ]; then
 	if [ "$errcnt" -gt 0 ]; then
 		msg="Failed to fetch the whitelist for countries'$failed_tlds'."
 		echo "$msg"
-		logger -t geoblocker_bash-run "$msg"
+		logger -t ${suite_name}-run "$msg"
 		echo "FailedTLDs=$failed_tlds" >> "$tlds_status_file"
 	fi
 
 	if [ "$ok_cnt" -gt 0 ]; then
 		msg="Successfully fetched the whitelist for countries'$ok_tlds'."
 		echo "$msg"
-		logger -t geoblocker_bash-run "$msg"
+		logger -t ${suite_name}-run "$msg"
 		echo "OkTLDs=$ok_tlds" >> "$tlds_status_file"
 	else
 		err="All fetch attempts failed."
@@ -275,7 +188,7 @@ fi
 ### Apply ip lists
 
 for tld in $tlds; do
-	geoblocker_bash-apply "$debug" "$nodrop" -a "$apply_action" -c "$tld"; rv=$?
+	${suite_name}-apply "$debug" "$nodrop" -a "$apply_action" -c "$tld"; rv=$?
 	if [ $rv -eq 254 ]; then
 		echo ""
 		# if non-fatal errors occur in *apply, exit with an error
@@ -283,21 +196,21 @@ for tld in $tlds; do
 	elif [ $rv -gt 0 ] && [ $rv -ne 254 ]; then
 		echo ""
 		#if fatal errors occur in *apply, attempt to restore last known-good ipsets and iptables state
-		$backup_script -r "$debug"
+		${suite_name}-backup -r "$debug"
 		die 1 ""
 	fi
 done
 
 
 # call the backup script to create a known-good backup of ipsets and iptables state
-[ -z "$nobackup" ] && $backup_script "$debug" -b
+[ -z "$nobackup" ] && ${suite_name}-backup "$debug" -b
 
-logger -t geoblocker_bash-run "Successfully applied action '$action' for countries '$tlds'."
+logger -t ${suite_name}-run "Successfully applied action '$action' for countries '$tlds'."
 
 echo ""
 
 if [ "$errcnt" -ne 0 ]; then rv=254; else rv=0; fi
 
-[ -n "$parent_script" ] && debugprint "\033[1;33mBack to $parent_script...\033[0m"
+debugexitmsg
 
 exit "$rv"
