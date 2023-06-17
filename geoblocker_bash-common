@@ -83,17 +83,19 @@ setconfig() {
 	return $rv0
 }
 
-get_script_dir () {
-	SOURCE=${BASH_SOURCE[0]}
-	while [ -L "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symlink
-		DIR=$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )
-		SOURCE=$(readlink "$SOURCE")
-		[[ $SOURCE != /* ]] && SOURCE=$DIR/$SOURCE
-		# if $SOURCE was a relative symlink, we need to resolve it relative to the path where the symlink file was located
-	done
-	DIR=$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )
-	echo "$DIR"
-}
+# this can't be used from a sourced script because it'll return the path to the sourced script and not to the caller
+# leaving it in for reference
+#get_script_dir () {
+#	SOURCE=${BASH_SOURCE[0]}
+#	while [ -L "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symlink
+#		DIR=$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )
+#		SOURCE=$(readlink "$SOURCE")
+#		[[ $SOURCE != /* ]] && SOURCE=$DIR/$SOURCE
+#		# if $SOURCE was a relative symlink, we need to resolve it relative to the path where the symlink file was located
+#	done
+#	DIR=$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )
+#	echo "$DIR"
+#}
 
 getlocalsubnet() {
 # attempts to find local subnet for the main network interface
