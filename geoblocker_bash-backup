@@ -147,7 +147,7 @@ restore_from_file() {
 		if [ "$restoretarget" = "iptables" ]; then
 # not needed anymore
 #			restart_fail2ban
-			die 1
+			die 1 -nolog
 		fi
 	fi
 	echo ""; echo ""
