@@ -9,6 +9,10 @@
 # Deletes the scripts from /usr/local/bin
 
 me=$(basename "$0")
+suite_name="geoblocker_bash"
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+[ -n "$script_dir" ] && cd "$script_dir" || { echo "Error: Couldn't cd into '$script_dir'. Exiting"; exit 1; }
+source "${suite_name}-common" || { echo "Error: Can't find ${suite_name}-common. Exiting"; exit 1; }
 
 #### USAGE
 
@@ -47,32 +51,10 @@ shift $((OPTIND -1))
 
 echo ""
 
+# Print script enter message for debug
+debugentermsg
+
 ####Functions
-
-debugprint() {
-# prints a debug message
-	[ "$debug" ] && echo -e "    Debug: $*"
-}
-
-echo ""
-debugprint "\033[1;33mStarted *uninstall\033[0m"
-
-getconfig() {
-# reads a field named $1 from the config file $2
-# outputs the resulting field
-# returns 0 if successful, 1 if not
-	fieldname="$1"
-	configfile="$2"
-	if [ -z "$fieldname" ] || [ -z "$configfile" ]; then return 1; fi
-	read -r field < <(grep "$fieldname=" "$configfile" | sed "s/.*$fieldname=//"); rv=$?
-	if [ -z "$field" ]; then
-		echo ""
-		rv=$((rv + 1))
-	else
-		echo "$field"
-	fi
-	return $rv
-}
 
 
 #### Checks
@@ -85,17 +67,15 @@ fi
 
 ### Initialize variables
 install_dir="/usr/local/bin"
-conf_dir="/etc/geoblocker_bash"
-conf_file="${conf_dir}/geoblocker_bash.conf"
 
-read -r datadir < <(getconfig "Datadir" "$conf_file"); rv=$?
-if [ "$rv" -ne 0 ] || [ -z "$datadir" ]; then datadir="/var/lib/geoblocker_bash"; fi
+datadir="$(getconfig "Datadir" "$conf_file")"; rv=$?
+if [ "$rv" -ne 0 ] || [ -z "$datadir" ]; then datadir="/var/lib/${suite_name}"; fi
 preinstall_policies_file="$datadir/preinstall_policies.bak"
-iptables_comment="geoblocker_bash"
+iptables_comment="$suite_name"
 
 ### Delete associated cron jobs
-echo "Deleting cron jobs for geoblocker_bash..."
-crontab -u root -l 2>/dev/null |  grep -v 'geoblocker_bash-run' | sudo crontab -u root -
+echo "Deleting cron jobs for ${suite_name}..."
+crontab -u root -l 2>/dev/null |  grep -v '${suite_name}-run' | sudo crontab -u root -
 
 ### Restore pre-install state of default policies for INPUT and FORWARD chains
 
@@ -126,8 +106,8 @@ iptables-save | sed -r "/INPUT.*comment.*$iptables_comment/s/-A/iptables -D/e" &
 
 
 ### Destroy associated ipsets
-echo "Destroying ipsets for geoblocker_bash..."
-for ipset_name in $(ipset list -n | grep "geoblocker_bash"); do
+echo "Destroying ipsets for ${suite_name}..."
+for ipset_name in $(ipset list -n | grep "${suite_name}"); do
 	echo "Found ipset \"$ipset_name\", destroying..."
 	ipset destroy "$ipset_name"
 done
@@ -139,15 +119,16 @@ if [ ! "$partial_uninstall" ]; then
 
 	### Delete scripts
 	echo "Deleting scripts from $install_dir..."
-	rm "$install_dir/geoblocker_bash-fetch"
-	rm "$install_dir/geoblocker_bash-apply"
-	rm "$install_dir/geoblocker_bash-manage"
-	rm "$install_dir/geoblocker_bash-run"
-	rm "$install_dir/geoblocker_bash-install"
+	rm "$install_dir/${suite_name}-fetch"
+	rm "$install_dir/${suite_name}-apply"
+	rm "$install_dir/${suite_name}-manage"
+	rm "$install_dir/${suite_name}-run"
+	rm "$install_dir/${suite_name}-install"
+	rm "$install_dir/${suite_name}-common"
 	rm "$install_dir/validate_cron_schedule.sh"
 	rm "$install_dir/check_ip_in_ripe.sh"
-	rm "$install_dir/geoblocker_bash-uninstall"
-	rm "$install_dir/geoblocker_bash-backup"
+	rm "$install_dir/${suite_name}-uninstall"
+	rm "$install_dir/${suite_name}-backup"
 
 	### Delete the config file
 	echo "Deleting config..."
