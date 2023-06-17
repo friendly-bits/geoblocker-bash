@@ -107,17 +107,17 @@ tlds="${tlds//\'}"
 
 # check for *fetch
 [ ! "$skipfetch" ] && if ! command -v ${suite_name}-fetch &> /dev/null; then
-	die 1 "Error: Cannot find '${suite_name}-fetch'. Did you run setup? Exiting."
+	die 1 "Error: Can not find '${suite_name}-fetch'. Did you run setup? Exiting."
 fi
 
 # check for *apply
 if ! command -v ${suite_name}-apply &> /dev/null; then
-	die 1 "Error: Cannot find '${suite_name}-apply'. Did you run setup? Exiting."
+	die 1 "Error: Can not find '${suite_name}-apply'. Did you run setup? Exiting."
 fi
 
 # check for *backup
 if ! command -v ${suite_name}-backup &> /dev/null; then
-	die 1 "Error: Cannot find '${suite_name}-backup'. Did you run setup? Exiting."
+	die 1 "Error: Can not find '${suite_name}-backup'. Did you run setup? Exiting."
 fi
 
 case "$action" in
@@ -169,14 +169,14 @@ if [ ! "$skipfetch" ] && [ "$action" != "remove" ]; then
 	if [ "$errcnt" -gt 0 ]; then
 		msg="Failed to fetch the whitelist for countries '$failed_tlds'."
 		echo "$msg"
-		logger -t ${suite_name}-run "$msg"
+		[ "$nolog" != "true" ] && logger -t ${suite_name}-run "$msg"
 		echo "FailedTLDs=$failed_tlds" >> "$tlds_status_file"
 	fi
 
 	if [ "$ok_cnt" -gt 0 ]; then
 		msg="Successfully fetched the whitelist for countries '$ok_tlds'."
 		echo "$msg"
-		logger -t ${suite_name}-run "$msg"
+		[ "$nolog" != "true" ] && logger -t ${suite_name}-run "$msg"
 		echo "OkTLDs=$ok_tlds" >> "$tlds_status_file"
 	else
 		err="All fetch attempts failed."
