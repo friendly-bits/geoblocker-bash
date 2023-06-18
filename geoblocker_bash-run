@@ -103,6 +103,12 @@ tlds="${tlds//\'}"
 
 #### CHECKS
 
+# check for root
+[ "$EUID" -ne 0 ] && die 1 "This needs to be run as root."
+
+# check that the config file exists
+[ ! -f "$conf_file" ] && die "Config file '$conf_file' doesn't exist! Run the installation script again."
+
 # check for *fetch
 [ ! "$skipfetch" ] && if ! command -v ${suite_name}-fetch &> /dev/null; then
 	die 1 "Error: Can not find '${suite_name}-fetch'. Did you run setup? Exiting."
@@ -131,9 +137,6 @@ esac
 [ -z "$knowngood_file" ] && die 1 "Error: Known-good file path can not be empty! Exiting."
 
 [ -z "$whitelist_dir" ] && die 1 "Error: Whitelist file path can not be empty! Exiting."
-
-# check for root
-[ "$EUID" -ne 0 ] && die 1 "This needs to be run as root."
 
 
 #### MAIN
