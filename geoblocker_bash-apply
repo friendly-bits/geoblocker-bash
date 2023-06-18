@@ -102,14 +102,17 @@ ipset_maxelements=()
 
 #### CHECKS
 
+# check for root
+[ "$EUID" -ne 0 ] && die 254 "This needs to be run as root."
+
+# check that the config file exists
+[ ! -f "$conf_file" ] && die "Config file '$conf_file' doesn't exist! Run the installation script again."
+
 # check for country tlds
 [ -z "$tlds" ] && { usage; die 254 "tlds (country codes) variable is empty!"; }
 
 # check for datadir path
 [ -z "$datadir" ] && { usage; die 254 "Error: failed to read the 'datadir' variable from the config file."; }
-
-# check for root
-[ "$EUID" -ne 0 ] && die 254 "This needs to be run as root."
 
 # Check for ipset utility
 ! command -v "ipset" &> /dev/null && die 254 "Error: Can not find 'ipset'. Install it with 'apt install ipset' or similar."
