@@ -210,6 +210,14 @@ knowngood_file="$datadir/iptables_knowngood.bak"
 
 #### CHECKS
 
+# check for root
+if [ "$EUID" -ne 0 ]; then
+	die "This needs to be run as root."
+fi
+
+# check that the config file exists
+[ ! -f "$conf_file" ] && die "Config file '$conf_file' doesn't exist! Run the installation script again."
+
 # check that conflicting actions were not requested
 if [ "$act_backup" ] && [ "$act_restore" ]; then usage; die "Conflicting actions requested: -b and -r can not be used together."; fi
 
@@ -219,11 +227,6 @@ if [ ! "$act_backup" ] && [ ! "$act_restore" ]; then usage; die "Use \"-b\" or \
 # check for knowngood file path
 if [ -z "$knowngood_file" ]; then
 	die "Error: Could not read the backup file path from config."
-fi
-
-# check for root
-if [ "$EUID" -ne 0 ]; then
-	die "This needs to be run as root."
 fi
 
 # Check for ipset utility
