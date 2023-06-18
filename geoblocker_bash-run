@@ -7,12 +7,10 @@
 # Supported actions: add, remove, update
 
 # 'geoblocker_bash-run -a add -c <country_code>' : Calls the fetch script, then calls the apply script,
-#    passing required arguments to fetch and apply ipset and iptables rules for the specified country.
-#    If multiple countries are specified, repeats the operation for each country's ip list.
+#    passing required arguments to fetch and apply ipset and iptables rules for specified countries.
 
 # 'geoblocker_bash-run -a remove -c <country_code>' : Calls the apply script,
-#     passing required arguments to remove the ipset and iptables rules for the specified country.
-#     If multiple countries are specified, repeats the operation for each country's ip list.
+#     passing required arguments to remove the ipset and iptables rules for specified countries.
 
 # 'geoblocker_bash-run -a update' : used for triggering from cron jobs.
 #     Calls the fetch script (unless called with the -s - Skip fetch option), then calls the apply script,
@@ -46,7 +44,7 @@ Serves as a proxy to call the -fetch, -apply and -backup scripts with arguments 
     Usage: $me -a <update|add|remove> [-c <"tld [tld] ... [tld]">] [-s] [-p] [-d] [-h]
 
     Options:
-        -a <action>          : action to perform: "update", "add" or "remove" associated iptables rules
+        -a <action>          : Action to perform: "update", "add" or "remove" associated iptables rules
         -c <"country_codes"> : tld's (country codes). if passing multiple country codes, use double quotes
         -s                   : Skip fetching (only run the apply script)
         -p                   : No Drop: applies the config but skips setting INPUT chain default policy to DROP
