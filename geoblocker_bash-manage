@@ -150,11 +150,22 @@ tlds_status_file="$datadir/tlds_status"
 (systemctl is-enabled cron.service) > /dev/null; rv=$?
 [ $rv -ne 0 ] && crondisabled="true"
 
+# check that the config file exists
+[ ! -f "$conf_file" ] && die "Config file '$conf_file' doesn't exist! Run the installation script again."
+
 
 # Check passed arguments for sanity
+
 [ -z "$action" ] && { usage; die 1 "Specify action with '-a <action>'!"; }
 
-[ "$action" != "schedule" ] && [ -z "$tlds_arg" ] && \
+case "$action" in
+	add) ;;
+	remove) ;;
+	schedule) ;;
+	*) die 1 "Error: unsupported action '$action'.";;
+esac
+
+[[ ("$action" == "add" || "$action" == "remove") && -z "$tlds_arg" ]] && \
 	die 1 "Error: action '$action' requires to specify countries with '-c <tlds>'!"
 
 [ "$action" = "schedule" ] && [ -n "$tlds_arg" ] && \
@@ -169,27 +180,20 @@ tlds_status_file="$datadir/tlds_status"
 [ "$action" = "schedule" ] && [ -n "$nodrop" ] && \
 	die 1 "Error: action '$action' is for setting the cron schedule only, don't use it with '-p'!"
 
-case "$action" in
-	add) ;;
-	remove) ;;
-	schedule) ;;
-	\?) die 1 "Error: unsupported action '$action'.";;
-esac
-
 if [ "$crondisabled" ] && [ -n "$cron_schedule" ]; then
 	err1="Error: cron service seems to be disabled. Can not create cron jobs!"
 	err2="On Debian and derivatives, enable the cron service with 'systemctl enable cron.service'. Exiting."
 	die 1 "$err1" "$err2"
 fi
 
-if [ "$crondisabled" ] && [ "$action" != "remove" ] && [ -z "$skip_cron" ]; then
+if [[ "$crondisabled" && -z "$skip_cron" && ("$action" == "add" || "$action" == "schedule") ]]; then
 	err1="Error: cron service seems to be disabled. Can not perform action '$action'"
-	err2="On Debian and derivatives, enable the cron service with 'systemctl enable cron.service'. Exiting."
+	err2="Either use the '-n' option to skip cron jobs creation, or enable the cron service."
 	die 1 "$err1" "$err2"
 fi
 
 [ -n "$cron_schedule" ] && [ -n "$skip_cron" ] && \
-	die 1 "Error: Conflicting arguments. Use either -s or -n but not both."
+	die 1 "Error: Conflicting arguments. Use either '-s' or '-n' but not both."
 
 if [ ! "$skip_cron" ]; then
 	# if cron_schedule wasn't provided in args, use the schedule from the config file
@@ -312,6 +316,8 @@ else
 			# read action results from the status file
 			ok_tlds="$(getconfig "OkTLDs" "$tlds_status_file")"
 			failed_tlds="$(getconfig "FailedTLDs" "$tlds_status_file")"
+
+			# get actual new tld's from old + successfully fetched&applied tlds
 			new_tlds="$config_tlds $ok_tlds"
 	fi
 
