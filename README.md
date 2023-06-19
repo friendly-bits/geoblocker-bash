@@ -52,9 +52,9 @@ additional mandatory prerequisites: to install, run 'sudo apt install ipset wget
 
 3) **Note** that cron jobs **will be run as root**.
 
-4) To test before deployment, you can run the install script with the "-p" option to apply all actions except actually blocking incoming connections (will NOT set INPUT chain policy to DROP). This way, you can make sure no errors are encountered, and check resulting iptables config before commiting to actual blocking. To enable blocking later, install again without the "-p" option (or manually change iptables policies).
+4) To test before deployment, you can run the install script with the "-n" option to apply all actions except actually blocking incoming connections (will NOT set INPUT chain policy to DROP). This way, you can make sure no errors are encountered, and check resulting iptables config before commiting to actual blocking. To enable blocking later, reinstall without the "-n" option.
 
-5) To test before deployment, you can run the install script with the "-n" option to skip creating cron jobs. This way, a simple server restart will undo all changes made to the firewall. To enable persistence later, install again without the "-n" option.
+5) To test before deployment, you can run the install script with the "-s disable" option to skip creating cron jobs. This way, a simple server restart will undo all changes made to the firewall. To enable persistence later, install again without the "-s disable" option or run 'geoblocker_bash-manage -a schedule -s <"your_cron_schedule">'.
 
 6) The run, fetch and apply scripts write to syslog in case an error occurs. The run script also writes to syslog upon success. To verify that cron jobs ran successfully, on Debian and derivatives run 'sudo cat /var/log/syslog | grep geoblocker_bash'
 
@@ -62,18 +62,20 @@ additional mandatory prerequisites: to install, run 'sudo apt install ipset wget
 
 **Detailed description**
 
-The suite currently includes 9 scripts:
+The suite currently includes 11 scripts:
 1. geoblocker_bash-install
 2. geoblocker_bash-uninstall
 3. geoblocker_bash-fetch
 4. geoblocker_bash-apply
 5. geoblocker_bash-run
 6. geoblocker_bash-manage
-7. geoblocker_bash-backup
-8. validate_cron_schedule.sh
-9. check_ip_in_ripe.sh
+7. geoblocker_bash-cronsetup
+8. geoblocker_bash-backup
+9. geoblocker_bash-common
+10. validate_cron_schedule.sh
+11. check_ip_in_ripe.sh
 
-**The install script**
+**The -install script**
 - Creates system folder structure for scripts, config and data.
 - Copies all scripts included in this suite to /usr/local/bin
 - Creates backup of pre-install policies for INPUT and FORWARD chains
@@ -81,74 +83,63 @@ The suite currently includes 9 scripts:
 - If an error occurs during the installation, calls the uninstall script to revert any changes made to the system.
 - Accepts optional custom cron schedule expression as an argument. Default cron schedule is "0 4 * * *" - at 4:00 [am] every day.
 
-**The uninstall script**
+**The -uninstall script**
 - Deletes associated cron jobs
 - Restores pre-install state of default policies for INPUT and FORWARD chains
 - Deletes associated iptables rules and removes the whitelist ipset
 - Deletes scripts' data folder /var/lib/geoblocker_bash
 - Deletes the scripts from /usr/local/bin
 
-**The manage script**: provides an interface for the user (and for the -install script) to set up geoblocking.
+**The -manage script**: provides an interface to configure geoblocking.
 
 Supported actions: add, remove, schedule
 
-*manage -a <add|remove> -c <country_code> :
+'geoblocker_bash-manage -a add|remove -c <country_code>' :
 * Adds or removes the specified country codes (tld's) to/from the config file
-* Calls the -run script to fetch and apply the whitelists
-* Creates a periodic cron job and a reboot job, unless ran with the -n (no persistence) option. Cron jobs implement persistence and automatic list updates.
-* Accepts an optional custom cron schedule expression as an argument.
-* If schedule is not specified, uses schedule from the config file (set during the installation by the -install script or later by the -manage script)
+* Calls the -run script to fetch and apply the ip lists
+* Calls the -backup script to create a backup of current config, ipsets and iptables state.
 
-If an error is encountered in one of the actions, classifies it as temporary or permanent. For permanent errors, attempts to restore previous configuration. If that fails, runs the -backup script with the -r option to attempt automatic restore of last known-good ipset and iptables states.
+'geoblocker_bash-manage -a schedule -s <"schedule_expression">' : enables persistence and configures the schedule for the periodic cron job.
 
-*manage -a schedule -s <"schedule_expression"> : changes the schedule for the periodic cron job
+'geoblocker_bash-manage -a schedule -s disable' : disables persistence.
 
-**The run script**: Serves as a proxy to call the -fetch, -apply and -backup scripts with arguments required for each action.
+**The -run script**: Serves as a proxy to call the -fetch, -apply and -backup scripts with arguments required for each action.
 
-Supported actions: add, remove, update.
+'geoblocker_bash-run -a add -c <"country_codes">' : Fetches iplist and applies ipset and iptables rules for specified countries.
 
-*run -a add -c <"country_codes"> : Calls the fetch script, then calls the apply script, passing required arguments required to fetch and apply ipset and iptables rules for specified countries.
+'geoblocker_bash-run -a remove -c <"country_codes">' : Removes iplist, ipset and iptables rules for specified countries.
 
- *run -a remove -c <"country_codes"> : Calls the apply script, passing required arguments to remove the ipset and iptables rules for specified countries.
+ 'geoblocker_bash-run -a update' : intended for triggering from periodic jobs. Updates the ipsets for all country codes that had been previously configured. Also used by the reboot cron job to implement persistence.
 
- *run -a update : used for triggering from the cron jobs. Calls the fetch script (unless called with the -s - Skip fetch option), then calls the apply script, passing required arguments to fetch and apply ipset and iptables rules for countries listed in the config file. Used to update the ip lists at a periodic schedule, and to activate the rules on reboot.
- 
- all actions:
-- If successful, calls the backup script to create backup of the current (known-good) iptables state and current ipset.
-- If an error is enountered, classifies it as a permanent or a temporary error. Permanent errors mean that something is fundamentally broken. Temporary errors are transient (for example a download error). For permanent errors, calls the -backup script to restore last known-good ipsets and iptables state.
+**The -fetch script**
+- Fetches ipv4 subnets list for a given country code from RIPE.
+- Parses, validates, compiles the downloaded list, and saves to a file.
 
-**The fetch script**
-- Fetches ipv4 subnets list for a given country from RIPE.
-- Parses, validates and compiles the downloaded list into a plain list, and saves to a file.
+**The -apply script**:  Creates or removes ipsets and iptables rules for specified country codes.
 
-**The apply script**:  Creates or removes ipsets and iptables rules for specified country codes.
-- supported actions: add, remove
-
-*apply -a add -c <"country_codes"> :
+'geoblocker_bash-apply -a add -c <"country_codes">' :
 - Loads an ip list file for specified countries into ipsets and sets iptables rules to only allow connections from the local subnet and from subnets included in the ipsets.
 
-*apply -a remove -c <"country_codes"> :
+'geoblocker_bash-apply -a remove -c <"country_codes">' :
 - removes ipsets and associated iptables rules for specified countries.
 
-**The backup script**: Creates a backup of the current iptables state and current geoblocker-associated ipsets, or restores the above from backup.
+**The -backup script**: Creates a backup of the current iptables state and geoblocker-associated ipsets, or restores them from backup.
 
-Supported actions: -b (backup), -r (restore)
+'geoblocker_bash-backup -a backup' : Creates a backup of the current iptables state and geoblocker-associated ipsets.
 
-*backup -b :
-- Creates a backup of the current iptables state and current geoblocker-associated ipsets
-
-*backup -r : used for automatic recovery from fault conditions
+'geoblocker_bash-backup -a restore' : Used for automatic recovery from fault conditions (should not happen but implemented just in case)
 - Restores ipsets and iptables state from backup
-- If restore from backup fails, assumes a fundamental issue and calls the uninstall script to perform a partial uninstall (removes associated ipsets and iptables rules, restores pre-install policies for INPUT and FORWARD iptables chains, does not remove installed files, config and data).
+- If restore from backup fails, assumes a fundamental issue and disables geoblocking entirely
+
+**The -common script:** : Stores common functions and variables for geoblocker_bash suite. Does nothing if called directly.
 
 **The validate_cron_schedule.sh script** is used by the -manage script. It accepts cron schedule expression and attempts to make sure that it complies with the format that cron expects. Used to validate optionally user-specified cron schedule expression.
 
 **The check_ip_in_ripe.sh script** can be used to verify that a certain ip address belongs to a subnet found in RIPE's records for a given country. It is not called from other scripts.
 
 **Additional comments**
-- All scripts display "usage" when called with the "-h" option
-- Most scripts accept the "-d" option for debug
-- There are additional options specific for each script which you can find by running it with the "-h" option
+- All scripts (except -common) display "usage" when called with the "-h" option. You can find out about some additional options specific for each script by running it with the "-h" option.
+- All scripts accept the "-d" option for debug
 - The fetch script can be easily modified to get the lists from another source instead of RIPE, for example from ipdeny.com
-- If you live in a small or undeveloped country, the fetched list may be shorter than 100 subnets. If that's the case, the fetch and check_ip_in_ripe scripts will assume that the download failed and refuse to work. You can change the value of the "min_subnets_num" variable in both scripts to work around that.
+- If you live in a small country, the fetched list may be shorter than 100 subnets. If that's the case, the fetch and check_ip_in_ripe scripts will assume that the download failed and refuse to work. You can change the value of the "min_subnets_num" variable in both scripts to work around that.
 - If you remove your country's whitelist using the -manage script, you will probably get locked out of your remote server.
