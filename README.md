@@ -107,11 +107,11 @@ Supported actions: add, remove, schedule
 
 **The -run script**: Serves as a proxy to call the -fetch, -apply and -backup scripts with arguments required for each action.
 
-'geoblocker_bash-run -a add -c <"country_codes">' : Fetches iplist and applies ipset and iptables rules for specified countries.
+'geoblocker_bash-run -a add -c <"country_codes">' : Fetches iplists and loads ipsets and iptables rules for specified countries.
 
-'geoblocker_bash-run -a remove -c <"country_codes">' : Removes iplist, ipset and iptables rules for specified countries.
+'geoblocker_bash-run -a remove -c <"country_codes">' : Removes iplists, ipsets and iptables rules for specified countries.
 
- 'geoblocker_bash-run -a update' : intended for triggering from periodic jobs. Updates the ipsets for all country codes that had been previously configured. Also used by the reboot cron job to implement persistence.
+ 'geoblocker_bash-run -a update' : intended for triggering from periodic cron jobs. Updates the ipsets for all country codes that had been previously configured. Also used by the reboot cron job to implement persistence.
 
 **The -fetch script**
 - Fetches ipv4 subnets list for a given country code from RIPE.
