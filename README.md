@@ -21,7 +21,8 @@ https://github.com/blunderful-scripts/geoblocker_bash/releases
 5) Once verified that your public ip address is included in the list, run 'sudo bash geoblocker_bash-install -c "<country_code> [country_code] ... [country_code]"'
 - example: _'sudo bash geoblocker_bash-install -c DE' (for Germany)_
 - example: _'sudo bash geoblocker_bash-install -c "DE NL"' (for Germany and Netherlands)_
- (when specifying multiple countries, put the list in double quotes)
+
+(when specifying multiple countries, put the list in double quotes)
  
 **To manage:**
 - run 'sudo geoblocker_bash-manage -a <add|remove|schedule> [-c "country_code country_code ... country_code"]'
