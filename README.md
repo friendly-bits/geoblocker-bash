@@ -64,7 +64,7 @@ additional mandatory prerequisites: to install, run 'sudo apt install ipset wget
 
 7) In the near'ish future support for blacklists may get implemented as well.
 
-8) Currently only support ipv4. If you want support for ipv6, please let me know using the Issues tab, and I may consider implementing it.
+8) If you want support for ipv6, please let me know using the Issues tab, and I may consider implementing it.
 
 9) I will appreciate a report of whether it works or doesn't work on your system (please specify which), or if you find a bug. If you have a suggestion for code improvement, please let me know as well. You can use the "Discussions" and "Issues" tabs for that.
 
