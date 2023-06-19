@@ -70,7 +70,7 @@ additional mandatory prerequisites: to install, run 'sudo apt install ipset wget
 
 10) I will appreciate a report of whether it works or doesn't work on your system (please specify which), or if you find a bug. If you have a suggestion for code improvement, please let me know as well. You can use the "Discussions" and "Issues" tabs for that.
 
-**Detailed description**
+ **IN DETAIL**
 
 The suite currently includes 11 scripts:
 1. geoblocker_bash-install
