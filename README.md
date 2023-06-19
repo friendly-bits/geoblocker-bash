@@ -138,9 +138,8 @@ Supported actions: add, remove, schedule
 **The check_ip_in_ripe.sh script** can be used to verify that a certain ip address belongs to a subnet found in RIPE's records for a given country. It is not called from other scripts.
 
 **Additional comments**
-- All scripts display "usage" when called with the "-h" option
-- Most scripts accept the "-d" option for debug
-- There are additional options specific for each script which you can find by running it with the "-h" option
+- All scripts (except -common) display "usage" when called with the "-h" option. You can find out about some additional options specific for each script by running it with the "-h" option.
+- All scripts accept the "-d" option for debug
 - The fetch script can be easily modified to get the lists from another source instead of RIPE, for example from ipdeny.com
-- If you live in a small or undeveloped country, the fetched list may be shorter than 100 subnets. If that's the case, the fetch and check_ip_in_ripe scripts will assume that the download failed and refuse to work. You can change the value of the "min_subnets_num" variable in both scripts to work around that.
+- If you live in a small country, the fetched list may be shorter than 100 subnets. If that's the case, the fetch and check_ip_in_ripe scripts will assume that the download failed and refuse to work. You can change the value of the "min_subnets_num" variable in both scripts to work around that.
 - If you remove your country's whitelist using the -manage script, you will probably get locked out of your remote server.
