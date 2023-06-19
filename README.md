@@ -83,7 +83,7 @@ The suite currently includes 11 scripts:
 10. validate_cron_schedule.sh
 11. check_ip_in_ripe.sh
 
-The scripts intended as user interface are the -install, -uninstall, -manage and check-ip-in-ripe scripts. All the other scripts are intended as a back-end, although they can be run by the user as well. If you just want to install and move on, you only need to run the -install script and specify your country with the "-c <country>" option. Provided you are not missing any prerequisites, it should be as easy as that.
+The scripts intended as user interface are **-install**, **-uninstall**, **-manage** and **check-ip-in-ripe.sh**. All the other scripts are intended as a back-end, although they can be run by the user as well. If you just want to install and move on, you only need to run the -install script and specify your country with the "-c <country>" option. Provided you are not missing any prerequisites, it should be as easy as that.
 
 **The -install script**
 - Creates system folder structure for scripts, config and data.
