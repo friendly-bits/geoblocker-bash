@@ -25,10 +25,13 @@ https://github.com/blunderful-scripts/geoblocker_bash/releases
 (when specifying multiple countries, put the list in double quotes)
  
 **To manage:**
-- run 'sudo geoblocker_bash-manage -a <add|remove|schedule> [-c "country_code country_code ... country_code"]'
+- run 'sudo geoblocker_bash-manage -a add|remove [-c "country_code country_code ... country_code"]'
 - example (to add whitelists for Germany and Netherlands): _'sudo geoblocker_bash-manage -a add -c "DE NL"'_
 - example (to remove whitelist for Germany): _'sudo geoblocker_bash-manage -a remove -c DE'_
-- example (to change periodic cron job schedule): _'sudo geoblocker_bash-manage -a schedule -s "1 4 * * *"_
+
+ To disable/enable/change the schedule, run 'sudo geoblocker_bash-manage -a schedule -s <cron_schdedule_expression>|disable'
+- example (to enable or change periodic cron job schedule): _'sudo geoblocker_bash-manage -a schedule -s "1 4 * * *"_
+- example (to disable cron jobs entirely, meaning there will be no persistence): _'sudo geoblocker_bash-manage -a schedule -s disable'_
  
 **To uninstall:**
 - run 'sudo geoblocker_bash-uninstall'
