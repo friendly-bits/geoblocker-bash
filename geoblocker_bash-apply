@@ -7,9 +7,9 @@
 # Supported actions (specified by the -a option): add, remove
 
 # 'geoblocker_bash-apply -a add -c <"country_codes">' :
-#     Loads an ip list file for the specified countries into ipsets
-#     and sets iptables rules to only allow connections
-#     from the local subnet and from subnets included in the ipsets.
+#     Loads ip lists for the specified countries into ipsets
+#         and sets iptables rules to only allow connections
+#         from the local subnet and from subnets included in the ipsets.
 
 # 'geoblocker_bash-apply -a remove -c <"country_codes">' :
 #     removes the ipset and associated iptables rules for specified countries.
@@ -19,13 +19,21 @@
 #
 # Requires root priviliges
 
+
+#### Initial setup
+
 me=$(basename "$0")
 suite_name="geoblocker_bash"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 [ -n "$script_dir" ] && cd "$script_dir" || { echo "Error: Couldn't cd into '$script_dir'."; exit 1; }
 
-source "${suite_name}-common" || { echo "Error: Can't find ${suite_name}-common."; exit 1; }
+source "$script_dir/${suite_name}-common" || { echo "Error: Can't find ${suite_name}-common."; exit 1; }
 # **NOTE** that some functions and variables are sourced from the *common script
+
+# sanitize arguments
+sanitize_args "$@"
+# replace arguments with sanitized ones
+set -- "${arguments[@]}"
 
 
 #### USAGE
@@ -36,18 +44,18 @@ usage() {
 $me
     Loads or removes ipsets and iptables rules for specified country codes.
     Supported actions (specified by the -a option): add, remove.
+	If 'NoDrop' option is set to "true" in the config file, will perform all actions,
+        except setting default iptables policies to DROP, which effectively leaves geoblocking disabled.
 
-    Usage: $me -a <add|remove> -c <"country_codes"> [-p] [-d] [-t] [-h]
+Usage: $me -a <action> -c <"country_codes"> [-d] [-t] [-h]
 
-    Options:
-        -a <action>          : action to perform: "add" or "remove" associated ipsets and iptables rules
-        -c <"country_codes"> : tlds / country codes (if specifying multiple tlds, put them in double quotes)
-        -p                   : No Drop: applies the config but skips setting INPUT chain default policy to DROP
-                                   (continue to accept all connections)
+Options:
+    -a add|remove        : action to perform: "add" or "remove" associated ipsets and iptables rules
+    -c <"country_codes"> : tlds / country codes (if specifying multiple tlds, put them in double quotes)
 
-        -d                   : Debug
-        -t                   : Simulate fault and test recovery
-        -h                   : This help
+    -d                   : Debug
+    -t                   : Simulate fault and test recovery
+    -h                   : This help
 
 EOF
 }
@@ -58,8 +66,7 @@ while getopts "a:c:pdht" opt; do
 	case $opt in
 		a) action=$OPTARG;;
 		c) tlds=$OPTARG;;
-		p) nodrop="-p";;
-		d) debug=true;;
+		d) debugmode_args="true";;
 		h) usage; exit 0;;
 		t) test=true;;
 		\?) usage; exit 1;;
@@ -67,7 +74,12 @@ while getopts "a:c:pdht" opt; do
 done
 shift $((OPTIND -1))
 
-echo ""
+echo
+
+# get debugmode variable from either the args or environment variable, depending on what's set
+debugmode="${debugmode_args:-$debugmode}"
+# set env var to match the result
+export debugmode="$debugmode"
 
 # Print script enter message for debug
 debugentermsg
@@ -92,13 +104,15 @@ round_up_to_power2() {
 #### VARIABLES
 
 # get datadir from the config file
-datadir="$(getconfig "Datadir" "$conf_file")"
+datadir="$(getconfig "Datadir")"
 
+nodrop="$(getconfig "NoDrop")"
 whitelist_dir="${datadir}/ip_lists"
 iptables_comment_global="${suite_name}_global"
 family="inet"
 ipset_hashsizes=()
 ipset_maxelements=()
+
 
 #### CHECKS
 
@@ -123,6 +137,10 @@ ipset_maxelements=()
 # Check for bc utility
 ! command -v "bc" &> /dev/null && die 254 "Error: Can not find 'bc'."
 
+
+# check for valid action
+
+[ -z "$action" ] && { usage; die 1 "Specify action with '-a <action>'!"; }
 
 case "$action" in
 	add) ;;
@@ -194,7 +212,7 @@ if [ "$action" = "add" ]; then
 
 		echo "Ok."
 
-		[ "$debug" ] && ipset_lines_cnt="$(ipset save "$temp_ipset" | grep "add $temp_ipset" | wc -l)"
+		[ "$debugmode" ] && ipset_lines_cnt="$(ipset save "$temp_ipset" | grep "add $temp_ipset" | wc -l)"
 		debugprint "subnets in the temporary ipset: $ipset_lines_cnt"
 
 		ipset_hashsizes["$tld"]="$ipset_hash"
@@ -352,9 +370,9 @@ echo
 
 ### Configure iptables policies
 
-if [ -z "$nodrop" ]; then
+if [ "$nodrop" != "true" ]; then
 	# set policy on INPUT and FORWARD chains to DROP
-	echo -n "Setting default iptables policies for INPUT and FORWARD to DROP... "
+	echo -n "Setting default iptables policies for INPUT and FORWARD chains to DROP... "
 	iptables -P INPUT DROP; rv=$?
 	[ $rv -ne 0 ] && die "Failed to change iptables policy with command 'iptables -P INPUT DROP'."
 
