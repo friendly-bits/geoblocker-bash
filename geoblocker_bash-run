@@ -2,34 +2,42 @@
 
 # geoblocker_bash-run
 
-# Serves as a proxy to call the -fetch, -apply and -backup scripts with arguments required for the action.
-#
+# Serves as a proxy to call the -fetch and -apply scripts with arguments required for the action.
+# Intended for easy triggering from the -manage script and from cron jobs.
+
 # Supported actions: add, remove, update
 
-# 'geoblocker_bash-run -a add -c <country_code>' : Calls the fetch script, then calls the apply script,
-#    passing required arguments to fetch and apply ipset and iptables rules for specified countries.
+# 'geoblocker_bash-run -a add -c <country_code>' :
+#        Fetches iplist and applies ipset and iptables rules for specified countries.
 
-# 'geoblocker_bash-run -a remove -c <country_code>' : Calls the apply script,
-#     passing required arguments to remove the ipset and iptables rules for specified countries.
+# 'geoblocker_bash-run -a remove -c <country_code>' :
+#        Removes iplist, ipset and iptables rules for specified countries.
 
 # 'geoblocker_bash-run -a update' : used for triggering from cron jobs.
-#     Calls the fetch script (unless called with the -s - Skip fetch option), then calls the apply script,
-#     passing required arguments to fetch and apply ipset and iptables rules for countries listed in the config file.
-#     Used to update the ip lists at a periodic schedule, and to activate the rules on reboot.
+#        Used to update the ip lists at a periodic schedule, and to activate the rules on reboot.
 
 # all actions:
-#     If successful, calls the backup script to create backup of the current (known-good) iptables state and current ipset.
+#     If successful, calls the backup script to create backup of the current iptables state and current ipset.
 #     If an error is enountered, classifies it as a temporary or a permanent error.
-#     Permanent errors mean that something is fundamentally broken. Temporary errors are transient (for example a download error).
+#     Permanent errors mean that something is fundamentally broken.
+#     Temporary errors are transient (for example a download error).
 #     For permanent errors, calls the -backup script to restore last known-good ipsets and iptables state.
+
+
+#### Initial setup
 
 me=$(basename "$0")
 suite_name="geoblocker_bash"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 [ -n "$script_dir" ] && cd "$script_dir" || { echo "Error: Couldn't cd into '$script_dir'."; exit 1; }
 
-source "${suite_name}-common" || { echo "Error: Can't find ${suite_name}-common."; exit 1; }
+source "$script_dir/${suite_name}-common" || { echo "Error: Can't find ${suite_name}-common."; exit 1; }
 # NOTE that some functions and variables are sourced from the *common script
+
+# sanitize arguments
+sanitize_args "$@"
+# replace arguments with sanitized ones
+set -- "${arguments[@]}"
 
 
 #### USAGE
@@ -38,42 +46,43 @@ usage() {
     cat <<EOF
 
 $me
-Supported actions: add, remove, update.
 Serves as a proxy to call the -fetch, -apply and -backup scripts with arguments required for each action.
 
-    Usage: $me -a <update|add|remove> [-c <"tld [tld] ... [tld]">] [-s] [-p] [-d] [-h]
+Usage: $me -a <action> [-c <"tld [tld] ... [tld]">] [-s] [-d] [-h]
 
-    Options:
-        -a <action>          : Action to perform: "update", "add" or "remove" associated iptables rules
-        -c <"country_codes"> : tld's (country codes). if passing multiple country codes, use double quotes
-        -s                   : Skip fetching (only run the apply script)
-        -p                   : No Drop: applies the config but skips setting INPUT chain default policy to DROP
-                                   (continue to accept all connections)
-        -o                   : No backup: don't create backup after successful action
+Options:
+    -a update|add|remove  : Action to perform: "update", "add" or "remove" associated iptables rules
+    -c <"country_codes">  : tld's (country codes). if passing multiple country codes, use double quotes
+    -s                    : Skip fetching (only run the apply script)
+    -o                    : No backup: don't create backup after successful action
 
-        -d                   : Debug
-        -h                   : This help
+    -d                    : Debug
+    -h                    : This help
 
 EOF
 }
 
 #### PARSE ARGUMENTS
 
-while getopts "a:c:ospdh" opt; do
+while getopts "a:c:osdh" opt; do
 	case $opt in
 		a) action=$OPTARG;;
 		c) arg_tlds=$OPTARG;;
 		s) skipfetch="true";;
-		p) nodrop="-p";;
 		o) nobackup="true";;
-		d) debug="-d";;
+		d) debugmode_args="true";;
 		h) usage; exit 0;;
 		\?) usage; exit 1;;
 	esac
 done
 shift $((OPTIND -1))
 
-echo ""
+echo
+
+# get debugmode variable from either the args or environment variable, depending on what's set
+debugmode="${debugmode_args:-$debugmode}"
+# set env var to match the result
+export debugmode="$debugmode"
 
 # Print script enter message for debug
 debugentermsg
@@ -84,7 +93,7 @@ debugentermsg
 #### VARIABLES
 
 # get datadir from the config file
-datadir="$(getconfig "Datadir" "$conf_file")"
+datadir="$(getconfig "Datadir")"
 knowngood_file="$datadir/iptables_knowngood.bak"
 whitelist_dir="$datadir/ip_lists"
 tlds_status_file="$datadir/tlds_status"
@@ -92,7 +101,7 @@ tlds_status_file="$datadir/tlds_status"
 if [ -z "$arg_tlds" ] || [ "$action" = "update" ]; then
 	# read tlds from the config file
 	debugprint "Loading tlds from file..."
-	tlds="$(getconfig "Countries" "$conf_file")"
+	tlds="$(getconfig "Countries")"
 else
 	tlds="$arg_tlds"
 fi
@@ -124,6 +133,10 @@ if ! command -v ${suite_name}-backup &> /dev/null; then
 	die 1 "Error: Can not find '${suite_name}-backup'. Did you run setup? Exiting."
 fi
 
+# check for valid action
+
+[ -z "$action" ] && { usage; die 1 "Specify action with '-a <action>'!"; }
+
 case "$action" in
 	add) apply_action="add" ;;
 	remove) apply_action="remove" ;;
@@ -149,15 +162,16 @@ failed_tlds=""
 ok_tlds=""
 if [ ! "$skipfetch" ] && [ "$action" != "remove" ]; then
 	for tld in $tlds; do
-		${suite_name}-fetch $debug -c "$tld" -p "$whitelist_dir"; rv=$?
-		if [ $rv -gt 0 ] && [ $rv -ne 254 ]; then
-			# positive return value from fetch means fatal code error rather than fetch error, except for 254
+		${suite_name}-fetch -c "$tld" -p "$whitelist_dir"; rv=$?
+		if [ $rv -gt 0 ] && [ $rv -lt 254 ]; then
+			# (0 < $rv < 254) from fetch means fatal code error rather than fetch error
 			die 1 "Error in *fetch script, something is broken."
-		fi
-		if [ $rv -eq 254 ]; then
+		elif [ $rv -eq 254 ]; then
 			errcnt=$(( errcnt + 1 ))
 			failed_tlds="$failed_tlds $tld"
 		else
+			# ($rv = 255) from fetch means fetched list is not newer than the existing ipset
+			[ "$rv" = 255 ] && up_to_date_cnt=$(( up_to_date_cnt + 1 ))
 			ok_cnt=$(( ok_cnt + 1 ))
 			ok_tlds="$ok_tlds $tld"
 		fi
@@ -168,14 +182,14 @@ if [ ! "$skipfetch" ] && [ "$action" != "remove" ]; then
 	failed_tlds="$(awk '{$1=$1};1' <<< "$failed_tlds")"
 
 	if [ "$errcnt" -gt 0 ]; then
-		msg="Failed to fetch the whitelist for countries '$failed_tlds'."
+		msg="Failed to fetch ip lists for countries '$failed_tlds'."
 		echo "$msg"
 		[ "$nolog" != "true" ] && logger -t ${suite_name}-run "$msg"
 		echo "FailedTLDs=$failed_tlds" >> "$tlds_status_file"
 	fi
 
 	if [ "$ok_cnt" -gt 0 ]; then
-		msg="Successfully fetched the whitelist for countries '$ok_tlds'."
+		msg="Successfully fetched the ip lists for countries '$ok_tlds'."
 		echo "$msg"
 		[ "$nolog" != "true" ] && logger -t ${suite_name}-run "$msg"
 		echo "OkTLDs=$ok_tlds" >> "$tlds_status_file"
@@ -186,33 +200,39 @@ if [ ! "$skipfetch" ] && [ "$action" != "remove" ]; then
 
 	tlds="$ok_tlds"
 else
-	echo "NOTE: Skipped fetching because -s switch was used"
-fi
-
-
-### Apply ip lists
-
-${suite_name}-apply "$debug" "$nodrop" -a "$apply_action" -c "$tlds"; rv=$?
-if [ $rv -eq 254 ]; then
-	debugprint "NOTE: *apply exited with error code 254."
-	echo ""
-	# if non-fatal errors occur in *apply, exit with an error
-	die 1 ""
-elif [ $rv -gt 0 ] && [ $rv -ne 254 ]; then
-	debugprint "NOTE: *apply exited with error code $rv."
-	echo ""
-	#if fatal errors occur in *apply, attempt to restore last known-good ipsets and iptables state
-	${suite_name}-backup -r "$debug"; rv="$?"
-
-	# exit with the same exit code as backup-restore operation
-	die "$rv" ""
+	debugprint "Skipped fetching because '-s' switch was used"
 fi
 echo
 
-# call the backup script to create a known-good backup of ipsets and iptables state
-[ -z "$nobackup" ] && ${suite_name}-backup "$debug" -b
+### Apply ip lists
 
-[ "$nolog" != "true" ] && logger -t ${suite_name}-run "Successfully applied action '$action' for countries '$tlds'."
+if [ "$action" = "update" ] && [ "$ok_cnt" -le "$up_to_date_cnt" ]; then
+# if all successfully fetched ip lists are no newer than existing ipsets, skip the -apply script
+	echo "Fetched ip lists are not newer than existing ipsets, skipping iptables reconfiguration."
+	echo
+else
+	${suite_name}-apply -a "$apply_action" -c "$tlds"; rv=$?
+	if [ $rv -eq 254 ]; then
+		debugprint "NOTE: *apply exited with error code 254."
+		echo ""
+		# if non-fatal errors occur in *apply, exit with an error
+		die 1 ""
+	elif [ $rv -gt 0 ] && [ $rv -ne 254 ]; then
+		debugprint "NOTE: *apply exited with error code $rv."
+		echo ""
+		#if fatal errors occur in *apply, attempt to restore last known-good ipsets and iptables state
+		${suite_name}-backup -a restore; rv="$?"
+
+		# exit with the same exit code as backup-restore operation
+		die "$rv" ""
+	fi
+	echo
+
+	# call the backup script to create a known-good backup of ipsets and iptables state
+	[ -z "$nobackup" ] && ${suite_name}-backup -a backup
+
+	[ "$nolog" != "true" ] && logger -t ${suite_name}-run "Successfully applied action '$action' for countries '$tlds'."
+fi
 
 if [ "$errcnt" -ne 0 ]; then rv=254; else rv=0; fi
 
