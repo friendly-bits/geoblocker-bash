@@ -15,10 +15,9 @@
 
 # 'geoblocker_bash-run -a update' : intended for triggering from periodic cron jobs.
 #        Updates the ipsets for all country codes that had been previously configured.
-#        Also used by the reboot cron job to implement persistence.
 
 # all actions:
-#     If successful, calls the backup script to create backup of the current iptables state and current ipsets.
+#     If successful, calls the backup script to create backup of the current iptables state and current ipset.
 #     If an error is enountered, classifies it as a temporary or a permanent error.
 #     Permanent errors mean that something is fundamentally broken.
 #     Temporary errors are transient (for example a download error).
@@ -207,7 +206,7 @@ echo
 
 ### Apply ip lists
 
-if [ "$action" = "update" ] && [ "$ok_cnt" -le "$up_to_date_cnt" ]; then
+if [ "$action" = "update" ] && [ ! "$skipfetch" ] && [ "$ok_cnt" -le "$up_to_date_cnt" ]; then
 # if all successfully fetched ip lists are no newer than existing ipsets, skip the -apply script
 	echo "Fetched ip lists are not newer than existing ipsets, skipping iptables reconfiguration."
 	echo
