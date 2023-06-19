@@ -9,29 +9,39 @@
 #    or an asterisk. Note that the step value notation of Vixie cron is not supported (e.g., 2-6/2).
 #
 #    Based on prior "verifycron" script circulating on the internets
-#    This is a simplified version, adapted to receive one cron schedule expression in an argument.
+#    This is a simplified and improved version, adapted to receive one cron schedule expression in an argument.
+
+
+#### Initial setup
 
 me=$(basename "$0")
 suite_name="geoblocker_bash"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 [ -n "$script_dir" ] && cd "$script_dir" || { echo "Error: Couldn't cd into '$script_dir'."; exit 1; }
 
-source "${suite_name}-common" || { echo "Error: Can't find ${suite_name}-common."; exit 1; }
+source "$script_dir/${suite_name}-common" || { echo "Error: Can't find ${suite_name}-common."; exit 1; }
 # **NOTE** that some functions and variables are sourced from the *common script
+
+# sanitize arguments
+sanitize_args "$@"
+# replace arguments with sanitized ones
+set -- "${arguments[@]}"
+
 
 #### USAGE
 
 usage() {
     cat <<EOF
 
+$me
     Checks a cron schedule expression to ensure that it's formatted properly.  Expects standard cron notation of
        min hr dom mon dow
     where min is 0-59, hr 0-23, dom is 1-31, mon is 1-12 (or names) and dow is 0-7 (or names).  Fields can have ranges (a-e), lists
     separated by commas (a,c,z), or an asterisk. Note that the step value notation of Vixie cron is not supported (e.g., 2-6/2).
 
-    Usage: $me -x "<schedule_expression>" [-h] [-d]
+Usage: $me -x "<schedule_expression>" [-h] [-d]
 
-    Options:
+Options:
     -x "<sch_expression>"  : crontab schedule expression ***in double quotes***
                                  example: "0 4 * * 6"
                                  format: min hr dom mon dow
@@ -40,7 +50,7 @@ usage() {
     -h                     : This help
 
 EOF
-} >&2
+}
 
 #### Parse arguments
 
@@ -54,7 +64,12 @@ while getopts "x:hd" opt; do
 done
 shift $((OPTIND -1))
 
-echo ""
+echo
+
+# get debugmode variable from either the args or environment variable, depending on what's set
+debugmode="${debugmode_args:-$debugmode}"
+# set env var to match the result
+export debugmode="$debugmode"
 
 # Print script enter message for debug
 debugentermsg
