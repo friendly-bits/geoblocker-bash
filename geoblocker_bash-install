@@ -50,7 +50,7 @@ This script:
 5) If an error occurs during installation, calls the uninstall script to revert any changes made to the system.
 6) Accepts a custom cron schedule expression as an argument. Default cron schedule is "0 4 * * *" - at 4:00 [am] every day.
 
-Usage: $me -c <"tld [tld] ... [tld]"> [-s <"sch_expression">|disable] [-p] [-d] [-h]
+Usage: $me -c <"tld [tld] ... [tld]"> [-s <"sch_expression">|disable] [-n] [-d] [-h]
 
 Options:
     -c <"tld(s)">                 : tld / country codes. if passing multiple country codes, use double quotes
@@ -58,7 +58,7 @@ Options:
                                            default: "0 4 * * *" (at 4:00 [am] every day)
                                     "disable" turns off persistence
 
-    -p                            : No Drop: applies the config but skips setting INPUT chain default policy to DROP
+    -n                            : No Drop: applies the config but skips setting INPUT chain default policy to DROP
     -d                            : Debug
     -h                            : This help
 
@@ -67,11 +67,11 @@ EOF
 
 #### PARSE ARGUMENTS
 
-while getopts "c:s:pdh" opt; do
+while getopts "c:s:ndh" opt; do
 	case $opt in
 		c) tlds=$OPTARG;;
 		s) cron_schedule=$OPTARG;;
-		p) nodrop="true";;
+		n) nodrop="true";;
 		d) debugmode_args="true";;
 		h) usage; exit 0;;
 		\?) usage; exit 1;;
