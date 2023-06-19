@@ -7,20 +7,27 @@
 # Fetches ipv4 subnets for a given country from RIPE
 ## See https://stat.ripe.net/docs/data_api
 #
-# Parses, validates and compiles the downloaded list into a plain list, and saves to a file.
+# Parses, validates, compiles the downloaded list into a plain list, and saves to a file.
 
 # Requires jq - JSON processor.
 ## On Debian and derivatives, if you are missing jq then install it using this command:
 ## apt install jq
 
 
+#### Initial setup
+
 me=$(basename "$0")
 suite_name="geoblocker_bash"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 [ -n "$script_dir" ] && cd "$script_dir" || { echo "Error: Couldn't cd into '$script_dir'."; exit 1; }
 
-source "${suite_name}-common" || { echo "Error: Can't find ${suite_name}-common."; exit 1; }
+source "$script_dir/${suite_name}-common" || { echo "Error: Can't find ${suite_name}-common."; exit 1; }
 # **NOTE** that some functions and variables are sourced from the *common script
+
+# sanitize arguments
+sanitize_args "$@"
+# replace arguments with sanitized ones
+set -- "${arguments[@]}"
 
 
 #### USAGE
@@ -29,19 +36,17 @@ usage() {
     cat <<EOF
 
 This script:
-1) Fetches ipv4 subnets for a given country from RIPE
-2) Then parses, validates and compiles them into plain list, and saves to a file
-3) Attempts to determine local subnet for the main network interface and appends it to the file
+1) Fetches ipv4 subnets for a given country from RIPE.
+2) Parses, validates, compiles them into a plain list, and saves to a file.
 
+Usage: $me -c <country_code> -p <path> [-d] [-h]
 
-    Usage: $me -c country -p path [-d] [-h]
+Options:
+    -c <country_code>  : tld/country code
+    -p <path>          : Path to directory where downloaded and compiled subnet lists will be stored
 
-    Options:
-    -c tld    : tld/country code
-    -p path   : Path to directory where downloaded and compiled subnet lists will be stored
-
-    -d        : Debug
-    -h        : This help
+    -d                 : Debug
+    -h                 : This help
 
 EOF
 }
@@ -52,14 +57,19 @@ while getopts "c:p:dh" opt; do
 	case $opt in
 	c) country=$OPTARG;;
 	p) iplist_path=$OPTARG;;
-	d) debug=true;;
+	d) debugmode_args="true";;
 	h) usage; exit 0;;
 	\?) usage; exit 1;;
 	esac
 done
 shift $((OPTIND -1))
 
-echo ""
+echo
+
+# get debugmode variable from either the args or environment variable, depending on what's set
+debugmode="${debugmode_args:-$debugmode}"
+# set env var to match the result
+export debugmode="$debugmode"
 
 # Print script enter message for debug
 debugentermsg
@@ -147,8 +157,9 @@ ripe_db_time=$(jq -r '.data.query_time' "$fetched_file")
 # debugprint "ripe_db_time=$ripe_db_time" >&2
 date_new=$(date -d "$ripe_db_time" +%s)
 
-if [ ! "$date_new" -gt "$date_old" ] && [ ! "$debug" ]; then
-	echo "Note: Not updating $filename because data querytime did not change: $date_old ($(date --date=@$date_old))."
+if [ ! "$date_new" -gt "$date_old" ] && [ ! "$debugmode" ]; then
+	echo "Not updating '$filename' because data querytime did not change: '$(date --date=@$date_old)'."
+	up_to_date="true"
 else
 	errorcount=0
 	parsed_file=$(mktemp "/tmp/parsed-$country-XXXX.list")
@@ -212,4 +223,5 @@ echo ""
 
 debugexitmsg
 
-exit 0
+[ "$up_to_date" = "true" ] && rv=255 || rv=0
+exit $rv
