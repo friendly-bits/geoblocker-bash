@@ -2,27 +2,38 @@
 
 # geoblocker_bash-manage
 
-# Provides an interface for the user (and for the -install script) to set up geoblocking.
+# Provides an interface to configure geoblocking.
 
 # Supported actions: add, remove, schedule.
 
 # 'geoblocker_bash-manage -a add|remove -c <country_code>' :
 #     Adds or removes the specified country codes (tld's) to/from the config file.
 #     Calls the -run script to fetch and apply the whitelists.
-#     Creates a periodic cron job and a reboot job, unless ran with the -n (no persistence) option.
-#     Cron jobs implement persistence and automatic list updates.
-#     Accepts an optional custom cron schedule expression as an argument.
-#     If schedule is not specified, uses schedule from the config file.
 
-# 'geoblocker_bash-manage -a schedule -s <schedule_expression>' : changes the schedule for the periodic cron job.
+# 'geoblocker_bash-manage -a schedule'
+#     Calls the -cronsetup script to configure cron jobs.
+#     Cron jobs implement persistence and automatic list updates.
+#     Accepts cron schedule expression as an argument.
+
+# 'geoblocker_bash-manage -a schedule -s <schedule_expression>' : enables persistence
+#     and configures the schedule for the periodic cron job.
+# 'geoblocker_bash-manage -a schedule -s disable' : disables persistence.
+
+
+#### Initial setup
 
 me=$(basename "$0")
 suite_name="geoblocker_bash"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 [ -n "$script_dir" ] && cd "$script_dir" || { echo "Error: Couldn't cd into '$script_dir'."; exit 1; }
 
-source "${suite_name}-common" || { echo "Error: Can't find ${suite_name}-common."; exit 1; }
+source "$script_dir/${suite_name}-common" || { echo "Error: Can't find ${suite_name}-common."; exit 1; }
 # **NOTE** that some functions and variables are sourced from the *common script
+
+# sanitize arguments
+sanitize_args "$@"
+# replace arguments with sanitized ones
+set -- "${arguments[@]}"
 
 #### USAGE
 
@@ -30,50 +41,51 @@ usage() {
     cat <<EOF
 
 $me
-    Provides an interface for the user (and for the -install script) to set up geoblocking.
-    Supported actions: add, remove, schedule.
-
+    Provides an interface to configure geoblocking.
+ 
 WARNING: if removing a whitelist: Geoblocking will remain active after removal.
          If you remove your country's whitelist, you may lose remote access to your system.
 
 
-    Usage: $me -a <add|remove|schedule> [-c "[tld] [tld] ... [tld]"] [-s "<sch_expression>"] [-n] [-p] [-d] [-h]
+Usage: $me -a <action> [-c "[tld] [tld] ... [tld]"] [-s <"sch_expression"|disable>] [-d] [-h]
 
-    Options:
-        -a action               : action to perform: "add" or "remove" associated rules and cron jobs
-                                     or "schedule" to change the cron schedule without changing iptables rules
+Options:
+    -a add|remove|schedule        : action to perform: add or remove ipsets, iptables rules and cron jobs
+                                       or "schedule" to change the cron schedule (has no effect on iptables rules).
 
-        -c "tld(s)"             : tld / country codes. if passing multiple country codes, use double quotes
-        -s "<sch_expression>"   : schedule expression for the periodic cron job, must be inside double quotes
+    -c "tld(s)"                   : tld / country codes. if passing multiple country codes, use double quotes.
+    -s <"sch_expression">|disable : schedule expression for the periodic cron job, must be inside double quotes.
+                                       "disable" removes cron jobs and turns off persistence.
 
-        -n                      : No persistence (skip creating cron jobs)
-        -p                      : No Drop: applies the config but skips setting INPUT chain default policy to DROP
-                                     (continue to accept all connections)
-        -f                      : Force the 'add' action even if specified country had been already added
+    -f                            : Force the 'add' action even if specified country has been already added.
 
-        -d                      : Debug
-        -h                      : This help
+    -d                            : Debug
+    -h                            : This help
 
 EOF
 }
 
+
 #### PARSE ARGUMENTS
-while getopts "a:c:s:fnpdh" opt; do
+while getopts "a:c:s:fdh" opt; do
 	case $opt in
 		a) action=$OPTARG;;
 		c) tlds_arg=$OPTARG;;
 		s) cron_schedule=$OPTARG;;
-		n) skip_cron=true;;
-		p) nodrop="-p";;
 		f) forceadd="true";;
-		d) debug="-d";;
+		d) debugmode_args="true";;
 		h) usage; exit 0;;
 		\?) usage; exit 1;;
 	esac
 done
 shift $((OPTIND -1))
 
-echo ""
+echo
+
+# get debugmode variable from either the args or environment variable, depending on what's set
+debugmode="${debugmode_args:-$debugmode}"
+# set env var to match the result
+export debugmode="$debugmode"
 
 # Print script enter message for debug
 debugentermsg
@@ -125,18 +137,16 @@ remove_a_from_b() {
 export nolog="true"
 
 # get install_dir from the config file
-install_dir="$(getconfig "Installdir" "$conf_file")"
+install_dir="$(getconfig "Installdir")"; rv=$?
 
-#convert country codes to lower case
+#convert to lower case
 tlds_arg="${tlds_arg,,}"
-
-# get sleeptime (for reboot) from the config file
-sleeptime="$(getconfig "RebootSleepTime" "$conf_file")"
+action="${action,,}"
 
 run_command="${install_dir}/${suite_name}-run"
 
 # get datadir from the config file
-datadir="$(getconfig "Datadir" "$conf_file")"
+datadir="$(getconfig "Datadir")"
 
 tlds_status_file="$datadir/tlds_status"
 
@@ -146,15 +156,12 @@ tlds_status_file="$datadir/tlds_status"
 # check for root
 [ "$EUID" -ne 0 ] && die 1 "This needs to be run as root."
 
-# check if cron service is enabled
-(systemctl is-enabled cron.service) > /dev/null; rv=$?
-[ $rv -ne 0 ] && crondisabled="true"
-
 # check that the config file exists
 [ ! -f "$conf_file" ] && die "Config file '$conf_file' doesn't exist! Run the installation script again."
 
+## Check arguments for sanity
 
-# Check passed arguments for sanity
+# check for valid action
 
 [ -z "$action" ] && { usage; die 1 "Specify action with '-a <action>'!"; }
 
@@ -162,64 +169,26 @@ case "$action" in
 	add) ;;
 	remove) ;;
 	schedule) ;;
-	*) die 1 "Error: unsupported action '$action'.";;
+	*) die 1 "Error: unsupported action '$action'." ;;
 esac
 
 [[ ("$action" == "add" || "$action" == "remove") && -z "$tlds_arg" ]] && \
 	die 1 "Error: action '$action' requires to specify countries with '-c <tlds>'!"
 
-[ "$action" = "schedule" ] && [ -n "$tlds_arg" ] && \
-	die 1 "Error: action '$action' only supports changing the cron schedule! Do not use it with the '-c' option!"
+[[ "$action" == "schedule" && ( -n "$tlds_arg" || -n "$forceadd" ) ]] && \
+	die 1 "Action '$action' only supports changing the cron schedule! Do not use it with any option except '-s' or '-d' !"
 
-[ "$action" = "schedule" ] && [ -n "$skip_cron" ] && \
-	die 1 "Error: action '$action' is incompatible with option '-n'!"
-
-[ "$action" = "schedule" ] && [ -z "$cron_schedule" ] && \
-	die 1 "Error: action '$action' requires to provide cron schedule with option '-s'!"
-
-[ "$action" = "schedule" ] && [ -n "$nodrop" ] && \
-	die 1 "Error: action '$action' is for setting the cron schedule only, don't use it with '-p'!"
-
-if [ "$crondisabled" ] && [ -n "$cron_schedule" ]; then
-	err1="Error: cron service seems to be disabled. Can not create cron jobs!"
-	err2="On Debian and derivatives, enable the cron service with 'systemctl enable cron.service'. Exiting."
-	die 1 "$err1" "$err2"
-fi
-
-if [[ "$crondisabled" && -z "$skip_cron" && ("$action" == "add" || "$action" == "schedule") ]]; then
-	err1="Error: cron service seems to be disabled. Can not perform action '$action'"
-	err2="Either use the '-n' option to skip cron jobs creation, or enable the cron service."
-	die 1 "$err1" "$err2"
-fi
-
-[ -n "$cron_schedule" ] && [ -n "$skip_cron" ] && \
-	die 1 "Error: Conflicting arguments. Use either '-s' or '-n' but not both."
-
-if [ ! "$skip_cron" ]; then
-	# if cron_schedule wasn't provided in args, use the schedule from the config file
-	if [ -z "$cron_schedule" ]; then
-		debugprint "Reading cron schedule from the config..."
-		cron_schedule="$(getconfig "Cron_schedule" "$conf_file")"
-		debugprint "Read cron schedule: $cron_schedule"
-	fi
-
-	# validate cron schedule
-	debugprint "Validating cron schedule: '$cron_schedule'."
-	validate_cron_schedule.sh -x "$cron_schedule" "$debug"; rv=$?
-	if [ "$rv" -ne 0 ]; then
-		die 1 "Error validating cron schedule '$cron_schedule'. Exiting."
-	else
-		debugprint "Successfully validated cron schedule: '$cron_schedule'."
-	fi
-else
-	debugprint "Skipping cron schedule validation."
-fi
-
+[ "$action" != "schedule" ] && [ -n "$cron_schedule" ] && {
+	msg1="Error: the '-s <\"cron_schedule\">' option only works with the \"schedule\" action."
+	msg2="To set up cron schedule, use '$me -a schedule -s <\"cron_schedule\">'"
+	usage
+	die "$msg1" "$msg2";
+}
 
 #### MAIN
 
 ### Read current set of countries from the the config file into config_tlds
-config_tlds="$(getconfig "Countries" "$conf_file")"
+config_tlds="$(getconfig "Countries")"
 
 debugprint "Countries in initial config: '$config_tlds'"
 
@@ -264,24 +233,24 @@ esac
 # TODO: Add checks for discrepancy between the config and actual existing ipsets and iptables rules
 
 if [ "$action" = "schedule" ]; then
-	debugprint "Note: Skipping the *run script call because specified action was 'schedule'."
+	debugprint "Skipping the *run script call because specified action was 'schedule'."
 else
 
 	if [ -z "$tlds_to_change" ] && [ -z "$forceadd" ]; then
-		config_tlds="$(getconfig "Countries" "$conf_file")"
+		config_tlds="$(getconfig "Countries")"
 		echo "Countries in final config: '$config_tlds'."
 		die 254 "Nothing to do, exiting."
 	fi
 
-	debugprint "planned tlds before '$action': '$new_tlds'"
+	debugprint "planned tlds after '$action': '$new_tlds'"
 
 	# if new_tlds list is empty
 	[ -z "$new_tlds" ] && \
-		die 1 "Planned final countries list is empty! If you really want to block evrything, do this manually. Exiting."
+		die 1 "Planned final countries list is empty! If you really want to block evrything, do this manually."
 
 
 	### Call the *run script
-	$run_command -o "$debug" "$nodrop" -a "$action" -c "$tlds_to_change"; rv=$?
+	$run_command -o -a "$action" -c "$tlds_to_change"; rv=$?
 
 	# 254 return code means fetch failure
 	if [ $rv -eq 254 ]; then
@@ -299,13 +268,13 @@ else
 
 		# restore old countries set in the config file
 		echo "Re-applying previous countries set: '$config_tlds'... "
-		$run_command "$debug" "$nodrop" -a "update"; rv=$?
+		$run_command -a "update"; rv=$?
 		if [ $rv -eq 0 ]; then
 			die 0 "Successfully re-applied previous countries set."
 		else
 			echo "Failed to re-apply previous countries set." >&2
 			# call the *backup script to initiate recovery from fault
-			${suite_name}-backup -r "$debug"; rv=$?
+			${suite_name}-backup -a restore; rv=$?
 
 			# exit with the same exit code as backup-restore operation
 			die "$?" ""
@@ -331,80 +300,46 @@ else
 		die 1 "All actions failed."
 	fi
 
-	setconfig "Countries" "$conf_file" "$new_tlds"; rv=$?
+	setconfig "Countries" "$new_tlds"; rv=$?
 	[ "$rv" -ne 0 ] && die 1 "Failed to write new set of tlds '$new_tlds' to config file '$conf_file'."
 
-	config_tlds="$(getconfig "Countries" "$conf_file")"
+	config_tlds="$(getconfig "Countries")"
 	echo "Countries in final config: '$config_tlds'."
 fi
 
 
 ### Cron jobs management
 
-## Read current cron jobs into variable
-	curr_cron_jobs="$(crontab -u root -l 2>/dev/null | grep "\"$run_command\"")"
-	debugprint "Current cron jobs: $curr_cron_jobs"
+if [ "$action" != "schedule" ]; then
+	debugprint "Skipping cron setup because action is not 'schedule'."
+else
 
-## Remove current cron jobs
-echo ""
-echo "Removing cron jobs for ${suite_name}..."
-crontab -u root -l 2>/dev/null | grep -v "\"$run_command\"" | sudo crontab -u root -
+	# translate *manage arguments into *cronsetup arguments
+	# can't send empty $cron_schedule argument because of getopts issues with empty arguments
+	if [ "$cron_schedule" = "disable" ]; then
+		cron_action="disable"
+		cron_schedule="disable"
+	else cron_action="apply"
+	fi
 
-
-# If action is "remove", don't assume that persistence is required
-# Only create new cron jobs if prior cron jobs exist
-[ "$action" = "remove" ] && [ -z "$curr_cron_jobs" ] && skip_cron="true"
-
-if [ ! "$skip_cron" ]; then
+	[ -z "$cron_schedule" ] && cron_schedule="disable"
 
 	# check that countries list in config is not empty
-	config_tlds="$(getconfig "Countries" "$conf_file")"
+	config_tlds="$(getconfig "Countries")"
 
 	if [ -z "$config_tlds" ]; then
 		die 1 "Error: Countries list in the config file is empty! No point in creating cron jobs."
 	else
-
-		### Create cron jobs
-
-		echo ""
-		echo -n "Creating periodic cron job with schedule '$cron_schedule'... "
-		echo -e "$(sudo crontab -u root -l 2>/dev/null)\n$cron_schedule \"$run_command\" $nodrop -a update &>/dev/null" | sudo crontab -u root -
-		rv=$?
-
-		if [ $rv -ne 0 ]; then
-			die 1 "Error running the crontab command."
-		else
-			echo "Ok."
-			cron_line_result=$(crontab -u root -l 2>/dev/null |  grep  "\"$run_command\"")
-			debugprint "Cron line: '$cron_line_result'"
-		fi
-
-		echo -n "Creating reboot cron job... "
-
-		# using the -s switch for the *run script to skip fetching at reboot
-		## otherwise if there was no internet connection at reboot time, *fetch would fail which would cause *run to fail,
-		## so *apply wouldn't run, which would leave the system without geoblocking rules
-		echo -e "$(sudo crontab -u root -l 2>/dev/null)\n@reboot sleep $sleeptime && \"$run_command\" $nodrop  -a update -s &>/dev/null" | \
-                	sudo crontab -u root -; rv=$?
-
-		if [ $rv -ne 0 ]; then
-			die 1 "Error running the crontab command."
-		else
-			echo "Ok."
-			cron_line_result="$(crontab -u root -l 2>/dev/null |  grep "reboot sleep .* && \"$run_command\"")"
-			debugprint "Reboot cron line: '$cron_line_result'"
-		fi
-
-		# save cron schedule to the config file
-		setconfig "Cron_schedule" "$conf_file" "$cron_schedule"
+		${suite_name}-cronsetup -a "$cron_action" -s "$cron_schedule"
 	fi
-else
-	echo "NOTE: Skipping cron jobs creation."
+
+	echo
 fi
-echo ""
+
+### Backup
 
 # call the backup script
-[[ "$action" = "add" || "$action" = "remove" ]] && ${suite_name}-backup "$debug" -b
+[[ "$action" = "add" || "$action" = "remove" ]] && ${suite_name}-backup -a backup
 
 
 echo ""
@@ -413,7 +348,5 @@ echo "View cron jobs with 'sudo crontab -l'"
 echo
 
 debugexitmsg
-
-unset nolog
 
 exit 0
