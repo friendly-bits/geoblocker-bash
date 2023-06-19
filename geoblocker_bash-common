@@ -2,13 +2,14 @@
 
 # geoblocker_bash-common
 	
-# common functions and variables for geoblocker_bash suite
+# Common functions and variables for geoblocker_bash suite
+# This script does nothing if called directly. It is sourced from other scripts.
 
 ### Functions
 
 debugprint() {
 # prints a debug message
-	[ "$debug" ] && echo -e "	Debug: ${me_short}: $*"
+	[ "$debugmode" ] && echo -e "	Debug: ${me_short}: $*" >&2
 }
 
 debugentermsg() {
@@ -45,15 +46,15 @@ die() {
 }
 
 getconfig() {
-# reads a field named $1 from the config file $2
+# reads a field named $1 from the config file $conf_file (or from file $2 if specified)
 # outputs the resulting field
 # returns 0 if successful, 1 if not
 	fieldname="$1"
-	configfile="$2"
+	configfile="${2:-$conf_file}"
 	[ -z "$fieldname" ] || [ -z "$configfile" ] && return 1
 
 	entry="$(grep "$fieldname=" "$configfile")"; rv=$?
-	[ "$rv" -ne 0 ] && return 1
+	[ "$rv" -ne 0 ] && return 2
 
 	field="${entry//$fieldname=}"
 	echo "$field"
@@ -62,15 +63,15 @@ getconfig() {
 }
 
 setconfig() {
-# changes a field named $1 in the config file $2 to value $3
+# changes a field named $1 in the config file $conf_file (or in file $3 if specified) to value $2
 # returns 0 if successful, 1 if not
 	fieldname="$1"
-	configfile="$2"
-	field="$3"
-	if [ -z "$fieldname" ] || [ -z "$configfile" ]; then return 1; fi
+	field="$2"
+	configfile="${3:-$conf_file}"
+	[ -z "$fieldname" ] || [ -z "$configfile" ] && return 1
 
 	# create the config file if it doesn't exist
-	touch "$conf_file"; rv01=$?
+	touch "$configfile"; rv01=$?
 
 	# remove corresponding config line
 	grep -v "$fieldname=" "$configfile" > "${configfile}.temp"
@@ -130,10 +131,6 @@ sanitize_args() {
 # trims single- and double-quotes, trims extra whitespaces, discards empty arguments
 arguments=()
 for arg in "$@"; do
-	# trim single-quotes if any
-	arg="${arg//\'}";
-	# trim double-quotes if any
-	arg="${arg//\"}"
 	# trim leading and trailing whitespaces
 	arg="$(awk '{$1=$1};1' <<< "$arg")"
 	# add to array while discarding empty arguments
@@ -157,10 +154,6 @@ conf_file="${conf_dir}/${suite_name}.conf"
 
 
 ### Main
-#arguments=()
-# sanitize arguments
-sanitize_args "$@"
-# replace arguments with sanitized ones
-set -- "${arguments[@]}"
+arguments=("$@")
 
 return 0
