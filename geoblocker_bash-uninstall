@@ -8,11 +8,14 @@
 # Deletes scripts' data folder /var/lib/geoblocker_bash
 # Deletes the scripts from /usr/local/bin
 
+
+#### Initial setup
+
 me=$(basename "$0")
 suite_name="geoblocker_bash"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 [ -n "$script_dir" ] && cd "$script_dir" || { echo "Error: Couldn't cd into '$script_dir'. Exiting."; exit 1; }
-source "${suite_name}-common" || { echo "Error: Can't find ${suite_name}-common. Exiting."; exit 1; }
+source "$script_dir/${suite_name}-common" || { echo "Error: Can't find ${suite_name}-common. Exiting."; exit 1; }
 
 #### USAGE
 
@@ -27,11 +30,11 @@ $me
 5) Deletes the scripts from /usr/local/bin
 
 
-    Usage: $me [-p]
+Usage: $me [-p] [-d] [-h]
 
-    Options:
+Options:
 	-p     : partial uninstall: restores iptables to pre-install state and removes cron jobs but leaves files in place
-    -d     : debug
+    -d     : Debug
 	-h     : This help
 
 EOF
@@ -42,14 +45,19 @@ EOF
 while getopts "phd" opt; do
 	case $opt in
 		p) partial_uninstall="true";;
-		d) debug="-d";;
+		d) debugmode_args="true";;
 		h) usage; exit 0;;
 		\?) usage; exit 1;;
 	esac
 done
 shift $((OPTIND -1))
 
-echo ""
+echo
+
+# get debugmode variable from either the args or environment variable, depending on what's set
+debugmode="${debugmode_args:-$debugmode}"
+# set env var to match the result
+export debugmode="$debugmode"
 
 # Print script enter message for debug
 debugentermsg
@@ -68,14 +76,14 @@ fi
 ### Initialize variables
 install_dir="/usr/local/bin"
 
-datadir="$(getconfig "Datadir" "$conf_file")"; rv=$?
+datadir="$(getconfig "Datadir")"; rv=$?
 if [ "$rv" -ne 0 ] || [ -z "$datadir" ]; then datadir="/var/lib/${suite_name}"; fi
 preinstall_policies_file="$datadir/preinstall_policies.bak"
 iptables_comment="$suite_name"
 
 ### Delete associated cron jobs
 echo "Deleting cron jobs for ${suite_name}..."
-crontab -u root -l 2>/dev/null |  grep -v '${suite_name}-run' | sudo crontab -u root -
+crontab -u root -l 2>/dev/null |  grep -v "${suite_name}-run" | sudo crontab -u root -
 
 ### Restore pre-install state of default policies for INPUT and FORWARD chains
 
@@ -122,6 +130,7 @@ if [ ! "$partial_uninstall" ]; then
 	rm "$install_dir/${suite_name}-fetch"
 	rm "$install_dir/${suite_name}-apply"
 	rm "$install_dir/${suite_name}-manage"
+	rm "$install_dir/${suite_name}-cronsetup"
 	rm "$install_dir/${suite_name}-run"
 	rm "$install_dir/${suite_name}-install"
 	rm "$install_dir/${suite_name}-common"
