@@ -1,12 +1,11 @@
 #!/bin/bash
 
 # check_ip_in_ripe.sh
-#
-#
+
 # Checks whether a given IP address belongs to a subnet found in RIPE's records for a given country
-#
+
 # Based on a prior script by mivk, called get-ripe-ips.
-#
+
 # Fetches ipv4 subnets for a given country from RIPE
 ## See https://stat.ripe.net/docs/data_api
 # Parses and compiles them into a plain list, and saves to a temporary file
@@ -23,15 +22,16 @@ me=$(basename "$0")
 usage() {
     cat <<EOF
 
-This script:
-1) Fetches ipv4 subnets for a given country from RIPE
-2) Parses and compiles them into a plain list, and saves to a temporary file
-3) Checks whether the specified IP adress belongs to one of the subnets in the list fetched from RIPE
-Requires "jq" and "grepcidr" utility. If you are on Debian or derivatives, install both with "apt install jq grepcidr".
+$me
+- Fetches ipv4 subnets for a given country from RIPE
+- Parses and compiles them into a plain list, and saves to a temporary file
+- Checks whether the specified IP adress belongs to one of the subnets in the list fetched from RIPE
 
-    Usage: $me -c country -i ip [-d] [-h]
+Requires "jq" and "grepcidr" utilities. If you are on Debian or derivatives, install both with "apt install jq grepcidr".
 
-    Options:
+Usage: $me -c country -i ip [-d] [-h]
+
+Options:
     -c tld    : tld/country code
     -i ip     : ipv4 address you want to check
 
