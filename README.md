@@ -1,7 +1,7 @@
 # geoblocker_bash
-Automatic geoip blocker for Linux based on a whitelist for a country or multiple countries.
+Automatic geoip blocker for Linux based on a whitelist for a country or multiple countries, written purely in Bash.
 
-Fetches, parses and validates an ipv4 whitelist for given countries, then blocks incoming traffic from anywhere except whitelisted subnets. Implements automatic update of the whitelist. Implements fault detection and recovery. Uses iptables.
+Fetches, parses and validates an ipv4 whitelist for given countries, then blocks (via iptables rules) incoming traffic from anywhere except whitelisted subnets and local subnet. Implements automatic update of the whitelist. Has built-in mechanisms for fault detection and recovery. Easy to install and configure (and easy to uninstall).
 
 The ip list is fetched from RIPE - regional Internet registry for Europe, the Middle East and parts of Central Asia. RIPE appears to store ip lists for countries in other regions as well, so currently this can be used for any country in the world.
 
@@ -62,7 +62,11 @@ additional mandatory prerequisites: to install, run 'sudo apt install ipset wget
 
 6) The run, fetch and apply scripts write to syslog in case an error occurs. The run script also writes to syslog upon success. To verify that cron jobs ran successfully, on Debian and derivatives run 'sudo cat /var/log/syslog | grep geoblocker_bash'
 
-7) I will appreciate a report of whether it works or doesn't work on your system (please specify which), or if you find a bug. If you have a suggestion for code improvement, please let me know as well. You can use the "Discussions" or "Issues" tab for that.
+7) In the near'ish future support for blacklists may get implemented as well.
+
+8) Currently only support ipv4. If you want support for ipv6, please let me know using the Issues tab, and I may consider implementing it.
+
+9) I will appreciate a report of whether it works or doesn't work on your system (please specify which), or if you find a bug. If you have a suggestion for code improvement, please let me know as well. You can use the "Discussions" and "Issues" tabs for that.
 
 **Detailed description**
 
