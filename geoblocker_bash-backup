@@ -2,13 +2,13 @@
 
 # geoblocker_bash-backup
 
-# Creates a backup of the current iptables states and current ipsets or restores them from backup.
-# Supported actions: backup, restore
+# Creates a backup of the current iptables state and geoblocker-associated ipsets, or restores them from backup.
 
-# 'geoblocker_bash-backup -a backup -f <backup_file>' :
-#     Creates a backup of the current iptables state and current geoblocker-associated ipsets
+# 'geoblocker_bash-backup -a backup' :
+#     Creates a backup of the current iptables state and geoblocker-associated ipsets
 
-# 'geoblocker_bash-backup -a restore -f backup_file' : Used for automatic recovery from fault conditions
+# 'geoblocker_bash-backup -a restore' : Used for automatic recovery from fault conditions
+#         (should not happen but implemented just in case)
 #     Restores ipsets and iptables state from backup.
 #     If restore from backup fails, assumes a fundamental issue and calls the uninstall script
 #         to perform a partial uninstall (removes associated ipsets and iptables rules,

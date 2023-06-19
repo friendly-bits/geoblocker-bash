@@ -2,22 +2,23 @@
 
 # geoblocker_bash-run
 
-# Serves as a proxy to call the -fetch and -apply scripts with arguments required for the action.
+# Serves as a proxy to call the -fetch, -apply and -backup scripts with arguments required for each action.
 # Intended for easy triggering from the -manage script and from cron jobs.
 
 # Supported actions: add, remove, update
 
-# 'geoblocker_bash-run -a add -c <country_code>' :
+# 'geoblocker_bash-run -a add -c <"country_codes">' :
 #        Fetches iplist and applies ipset and iptables rules for specified countries.
 
-# 'geoblocker_bash-run -a remove -c <country_code>' :
+# 'geoblocker_bash-run -a remove -c <"country_codes">' :
 #        Removes iplist, ipset and iptables rules for specified countries.
 
-# 'geoblocker_bash-run -a update' : used for triggering from cron jobs.
-#        Used to update the ip lists at a periodic schedule, and to activate the rules on reboot.
+# 'geoblocker_bash-run -a update' : intended for triggering from periodic cron jobs.
+#        Updates the ipsets for all country codes that had been previously configured.
+#        Also used by the reboot cron job to implement persistence.
 
 # all actions:
-#     If successful, calls the backup script to create backup of the current iptables state and current ipset.
+#     If successful, calls the backup script to create backup of the current iptables state and current ipsets.
 #     If an error is enountered, classifies it as a temporary or a permanent error.
 #     Permanent errors mean that something is fundamentally broken.
 #     Temporary errors are transient (for example a download error).

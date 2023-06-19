@@ -2,9 +2,7 @@
 
 # geoblocker_bash-apply
 
-# Loads or removes ipsets and iptables rules for specified country codes.
-
-# Supported actions (specified by the -a option): add, remove
+# Creates or removes ipsets and iptables rules for specified country codes.
 
 # 'geoblocker_bash-apply -a add -c <"country_codes">' :
 #     Loads ip lists for the specified countries into ipsets
@@ -12,7 +10,7 @@
 #         from the local subnet and from subnets included in the ipsets.
 
 # 'geoblocker_bash-apply -a remove -c <"country_codes">' :
-#     removes the ipset and associated iptables rules for specified countries.
+#     removes ipsets and associated iptables rules for specified countries.
 
 # Requires the 'ipset' utility. To install it on Debian or derivatives, use the command:
 ## apt install ipset

@@ -8,14 +8,11 @@
 
 # 'geoblocker_bash-manage -a add|remove -c <country_code>' :
 #     Adds or removes the specified country codes (tld's) to/from the config file.
-#     Calls the -run script to fetch and apply the whitelists.
+#     Calls the -run script to fetch and apply the ip lists.
+#     Sets up or disables persistence via the -cronsetup script.
+#     Calls the -backup script to create a backup of current config, ipsets and iptables state.
 
-# 'geoblocker_bash-manage -a schedule'
-#     Calls the -cronsetup script to configure cron jobs.
-#     Cron jobs implement persistence and automatic list updates.
-#     Accepts cron schedule expression as an argument.
-
-# 'geoblocker_bash-manage -a schedule -s <schedule_expression>' : enables persistence
+# 'geoblocker_bash-manage -a schedule -s <"schedule_expression">' : enables persistence
 #     and configures the schedule for the periodic cron job.
 # 'geoblocker_bash-manage -a schedule -s disable' : disables persistence.
 

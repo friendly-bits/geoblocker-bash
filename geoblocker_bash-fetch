@@ -4,10 +4,10 @@
 
 # Based on a prior script by mivk, called get-ripe-ips.
 
-# Fetches ipv4 subnets for a given country from RIPE
+# Fetches ipv4 subnets for a given country code from RIPE
 ## See https://stat.ripe.net/docs/data_api
 #
-# Parses, validates, compiles the downloaded list into a plain list, and saves to a file.
+# Parses, validates, compiles the downloaded list, and saves to a file.
 
 # Requires jq - JSON processor.
 ## On Debian and derivatives, if you are missing jq then install it using this command:
