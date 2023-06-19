@@ -55,7 +55,7 @@ additional mandatory prerequisites: to install, run 'sudo apt install ipset wget
 
 2) You can specify a custom schedule for the periodic cron job by passing an argument to the install script. Run it with the '-h' option for more info.
 
-3) **Note** that cron jobs **will be run as root**.
+3) Note that cron jobs will be run as root.
 
 4) To test before deployment, you can run the install script with the "-n" option to apply all actions except actually blocking incoming connections (will NOT set INPUT chain policy to DROP). This way, you can make sure no errors are encountered, and check resulting iptables config before commiting to actual blocking. To enable blocking later, reinstall without the "-n" option.
 
@@ -76,10 +76,10 @@ additional mandatory prerequisites: to install, run 'sudo apt install ipset wget
 The suite currently includes 11 scripts:
 1. geoblocker_bash-install
 2. geoblocker_bash-uninstall
-3. geoblocker_bash-fetch
-4. geoblocker_bash-apply
-5. geoblocker_bash-run
-6. geoblocker_bash-manage
+3. geoblocker_bash-manage
+4. geoblocker_bash-run
+5. geoblocker_bash-fetch
+6. geoblocker_bash-apply
 7. geoblocker_bash-cronsetup
 8. geoblocker_bash-backup
 9. geoblocker_bash-common
@@ -97,6 +97,7 @@ The scripts intended as user interface are **-install**, **-uninstall**, **-mana
 - Accepts optional custom cron schedule expression as an argument. Default cron schedule is "0 4 * * *" - at 4:00 [am] every day.
 
 **The -uninstall script**
+- Doesn't require any arguments
 - Deletes associated cron jobs
 - Restores pre-install state of default policies for INPUT and FORWARD chains
 - Deletes associated iptables rules and removes the whitelist ipset
@@ -105,48 +106,46 @@ The scripts intended as user interface are **-install**, **-uninstall**, **-mana
 
 **The -manage script**: provides an interface to configure geoblocking.
 
-Supported actions: add, remove, schedule
-
-'geoblocker_bash-manage -a add|remove -c <country_code>' :
+_'geoblocker_bash-manage -a add|remove -c <country_code>'_ :
 * Adds or removes the specified country codes (tld's) to/from the config file
 * Calls the -run script to fetch and apply the ip lists
 * Calls the -backup script to create a backup of current config, ipsets and iptables state.
 
-'geoblocker_bash-manage -a schedule -s <"schedule_expression">' : enables persistence and configures the schedule for the periodic cron job.
+_'geoblocker_bash-manage -a schedule -s <"schedule_expression">'_ : enables persistence and configures the schedule for the periodic cron job.
 
-'geoblocker_bash-manage -a schedule -s disable' : disables persistence.
+_'geoblocker_bash-manage -a schedule -s disable'_ : disables persistence.
 
 **The -run script**: Serves as a proxy to call the -fetch, -apply and -backup scripts with arguments required for each action.
 
-'geoblocker_bash-run -a add -c <"country_codes">' : Fetches iplists and loads ipsets and iptables rules for specified countries.
+_'geoblocker_bash-run -a add -c <"country_codes">'_ : Fetches iplists and loads ipsets and iptables rules for specified countries.
 
-'geoblocker_bash-run -a remove -c <"country_codes">' : Removes iplists, ipsets and iptables rules for specified countries.
+_'geoblocker_bash-run -a remove -c <"country_codes">'_ : Removes iplists, ipsets and iptables rules for specified countries.
 
- 'geoblocker_bash-run -a update' : intended for triggering from periodic cron jobs. Updates the ipsets for all country codes that had been previously configured. Also used by the reboot cron job to implement persistence.
+_'geoblocker_bash-run -a update'_ : intended for triggering from periodic cron jobs. Updates the ipsets for all country codes that had been previously configured. Also used by the reboot cron job to implement persistence.
 
 **The -fetch script**
 - Fetches ipv4 subnets list for a given country code from RIPE.
 - Parses, validates, compiles the downloaded list, and saves to a file.
 
-**The -apply script**:  Creates or removes ipsets and iptables rules for specified country codes.
+**The -apply script**:  directly interfaces with iptables. Creates or removes ipsets and iptables rules for specified country codes.
 
-'geoblocker_bash-apply -a add -c <"country_codes">' :
+_'geoblocker_bash-apply -a add -c <"country_codes">'_ :
 - Loads an ip list file for specified countries into ipsets and sets iptables rules to only allow connections from the local subnet and from subnets included in the ipsets.
 
-'geoblocker_bash-apply -a remove -c <"country_codes">' :
+_'geoblocker_bash-apply -a remove -c <"country_codes">'_ :
 - removes ipsets and associated iptables rules for specified countries.
-
+**The -cronsetup script** exists to manage all the cron-related logic in one place. Called by the -manage script to enable/disable persistence and schedule cron jobs.
 **The -backup script**: Creates a backup of the current iptables state and geoblocker-associated ipsets, or restores them from backup.
 
-'geoblocker_bash-backup -a backup' : Creates a backup of the current iptables state and geoblocker-associated ipsets.
+_'geoblocker_bash-backup -a backup'_ : Creates a backup of the current iptables state and geoblocker-associated ipsets.
 
-'geoblocker_bash-backup -a restore' : Used for automatic recovery from fault conditions (should not happen but implemented just in case)
+_'geoblocker_bash-backup -a restore'_ : Used for automatic recovery from fault conditions (should not happen but implemented just in case)
 - Restores ipsets and iptables state from backup
 - If restore from backup fails, assumes a fundamental issue and disables geoblocking entirely
 
 **The -common script:** : Stores common functions and variables for geoblocker_bash suite. Does nothing if called directly.
 
-**The validate_cron_schedule.sh script** is used by the -manage script. It accepts cron schedule expression and attempts to make sure that it complies with the format that cron expects. Used to validate optionally user-specified cron schedule expression.
+**The validate_cron_schedule.sh script** is used by the -cronsetup script. It accepts a cron schedule expression and attempts to make sure that it conforms to cron format.
 
 **The check_ip_in_ripe.sh script** can be used to verify that a certain ip address belongs to a subnet found in RIPE's records for a given country. It is not called from other scripts.
 
