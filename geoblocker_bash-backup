@@ -2,26 +2,34 @@
 
 # geoblocker_bash-backup
 
-# Creates a backup of the current iptables states and current ipsets or restores the above from backup.
-# Supported actions: -b (backup), -r (restore)
+# Creates a backup of the current iptables states and current ipsets or restores them from backup.
+# Supported actions: backup, restore
 
-# 'geoblocker_bash-backup -f <backup_file> -b' :
+# 'geoblocker_bash-backup -a backup -f <backup_file>' :
 #     Creates a backup of the current iptables state and current geoblocker-associated ipsets
 
-# 'geoblocker_bash-backup -f backup_file -r' : Used for automatic recovery from fault conditions
+# 'geoblocker_bash-backup -a restore -f backup_file' : Used for automatic recovery from fault conditions
 #     Restores ipsets and iptables state from backup.
 #     If restore from backup fails, assumes a fundamental issue and calls the uninstall script
-#     to perform a partial uninstall (removes associated ipsets and iptables rules,
-#     restores pre-install policies for INPUT and FORWARD iptables chains,
-#     does not remove installed files, config and data).
+#         to perform a partial uninstall (removes associated ipsets and iptables rules,
+#         restores pre-install policies for INPUT and FORWARD iptables chains,
+#         does not remove installed files, config and data).
+
+
+#### Initial setup
 
 me=$(basename "$0")
 suite_name="geoblocker_bash"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 [ -n "$script_dir" ] && cd "$script_dir" || { echo "Error: Couldn't cd into '$script_dir'."; exit 1; }
 
-source "${suite_name}-common" || { echo "Error: Can't find ${suite_name}-common."; exit 1; }
+source "$script_dir/${suite_name}-common" || { echo "Error: Can't find ${suite_name}-common."; exit 1; }
 # **NOTE** that some functions and variables are sourced from the *common script
+
+# sanitize arguments
+sanitize_args "$@"
+# replace arguments with sanitized ones
+set -- "${arguments[@]}"
 
 
 #### USAGE
@@ -31,34 +39,37 @@ usage() {
 
 $me
 - Creates a backup of the current iptables states and current ipsets,
-- or restores the above from backup
+- or restores them from backup
 - if restore from backup fails, calls the uninstall script to perform a partial uninstall
 
-    Usage: $me <-b|-r> [-d] [-h]
+Usage: $me -a <action> [-d] [-h]
 
-    Options:
-        -b          : action: create backup
-        -r          : action: restore from backup
+Options:
+    -a backup|restore  : action to perform: "backup" or "restore" config, associated ipsets and iptables rules
 
-        -d          : Debug
-        -h          : This help
+    -d                 : Debug
+    -h                 : This help
 
 EOF
 }
 
 #### PARSE ARGUMENTS
-while getopts "brdh" opt; do
+while getopts "a:dh" opt; do
 	case $opt in
-		b) act_backup="true";;
-		r) act_restore="true";;
-		d) debug="-d";;
+		a) action=$OPTARG;;
+		d) debugmode_args="true";;
 		h) usage; exit 0;;
 		\?) usage; exit 1;;
 	esac
 done
 shift $((OPTIND -1))
 
-echo ""
+echo
+
+# get debugmode variable from either the args or environment variable, depending on what's set
+debugmode="${debugmode_args:-$debugmode}"
+# set env var to match the result
+export debugmode="$debugmode"
 
 # Print script enter message for debug
 debugentermsg
@@ -202,7 +213,7 @@ iptables_comment="$suite_name"
 ipset_tag="$suite_name"
 
 # get datadir from the config file
-datadir="$(getconfig "Datadir" "$conf_file")"
+datadir="$(getconfig "Datadir")"
 
 conf_file_backup="$datadir/${suite_name}.conf.bak"
 knowngood_file="$datadir/iptables_knowngood.bak"
@@ -217,12 +228,6 @@ fi
 
 # check that the config file exists
 [ ! -f "$conf_file" ] && die "Config file '$conf_file' doesn't exist! Run the installation script again."
-
-# check that conflicting actions were not requested
-if [ "$act_backup" ] && [ "$act_restore" ]; then usage; die "Conflicting actions requested: -b and -r can not be used together."; fi
-
-# check that an action was specified
-if [ ! "$act_backup" ] && [ ! "$act_restore" ]; then usage; die "Use \"-b\" or \"-r\" to specify action"; fi
 
 # check for knowngood file path
 if [ -z "$knowngood_file" ]; then
@@ -244,10 +249,20 @@ if ! command -v "iptables-restore" &> /dev/null; then
 	die "Error: Can not find 'iptables-restore'."
 fi
 
+# check for valid action
+
+[ -z "$action" ] && { usage; die 1 "Specify action with '-a <action>'!"; }
+
+case "$action" in
+	backup) ;;
+	restore) ;;
+	*) usage; die "Error: unsupported action '$action'" ;;
+esac
+
 
 #### MAIN
 
-if [ "$act_backup" ]; then
+if [ "$action" = "backup" ]; then
 ### Create backup file for known-good iptables state and save current state to the file
 
 	echo -n "Creating backup of current iptables state... "
@@ -279,7 +294,7 @@ if [ "$act_backup" ]; then
 	echo "Backup file: \"$knowngood_file\""
 fi
 
-if [ "$act_restore" ]; then
+if [ "$action" = "restore" ]; then
 ### Restore iptables and ipsets to known-good state from backup file
 	restoreknowngood "$knowngood_file"
 	msg1="Successfully restored known-good ipset and iptables state from backup."
