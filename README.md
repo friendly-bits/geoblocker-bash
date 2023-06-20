@@ -5,7 +5,7 @@ Fetches, parses and validates an ipv4 whitelist for given countries, then blocks
 
 The ip lists are fetched from RIPE - regional Internet registry for Europe, the Middle East and parts of Central Asia. RIPE stores ip lists for countries in other regions as well, so currently this can be used for any country in the world.
 
-Intended use case is a server/computer that needs to be publically accessible only in a certain country or countries.
+Intended use case is a server/computer that needs to be publicly accessible only in a certain country or countries.
 
 ## **TL;DR**
 
@@ -27,7 +27,7 @@ https://github.com/blunderful-scripts/geoblocker_bash/releases
 (when specifying multiple countries, put the list in double quotes)
  
 **To change configuration:**
-- run ```sudo geoblocker_bash-manage -a <action> [-c "country_codes"]```
+- run ```sudo geoblocker_bash-manage -a <action> [-c "country_codes"]``` (where 'action' is either 'add', 'remove' or 'schedule')
 - example (to add whitelists for Germany and Netherlands): ```sudo geoblocker_bash-manage -a add -c "DE NL"```
 - example (to remove whitelist for Germany): ```sudo geoblocker_bash-manage -a remove -c DE```
 
