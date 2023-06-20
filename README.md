@@ -55,7 +55,7 @@ additional mandatory prerequisites: to install, run ```sudo apt install ipset wg
 
 ## **Notes**
 
-1) Changes applied to iptables are made persistent via cron jobs: a periodic job running at a daily schedule, and a job that runs at system reboot (after 30 seconds delay).
+1) Changes applied to iptables are made persistent via cron jobs: a periodic job running by default on a daily schedule, and a job that runs at system reboot (after 30 seconds delay).
 
 2) You can specify a custom schedule for the periodic cron job by passing an argument to the install script. Run it with the '-h' option for more info.
 
