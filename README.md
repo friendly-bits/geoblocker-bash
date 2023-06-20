@@ -20,14 +20,14 @@ https://github.com/blunderful-scripts/geoblocker_bash/releases
 - example: ```bash check_ip_in_ripe.sh -c DE -i <your_public_ip_address>``` (for Germany)
 5) Once verified that your public ip address is included in the list, run
 
-```sudo bash geoblocker_bash-install -c "<country_code> [country_code] ... [country_code]"```
-- example: ```sudo bash geoblocker_bash-install -c DE``` (for Germany)
-- example: ```sudo bash geoblocker_bash-install -c "DE NL"``` (for Germany and Netherlands)
+```sudo bash geoblocker_bash-install -c <"country_codes">```
+- example (for Germany): ```sudo bash geoblocker_bash-install -c DE```
+- example (for Germany and Netherlands): ```sudo bash geoblocker_bash-install -c "DE NL"```
 
 (when specifying multiple countries, put the list in double quotes)
  
-**To manage:**
-- run ```sudo geoblocker_bash-manage -a add|remove [-c "country_code country_code ... country_code"]```
+**To change configuration:**
+- run ```sudo geoblocker_bash-manage -a <action> [-c "country_codes"]```
 - example (to add whitelists for Germany and Netherlands): ```sudo geoblocker_bash-manage -a add -c "DE NL"```
 - example (to remove whitelist for Germany): ```sudo geoblocker_bash-manage -a remove -c DE```
 
