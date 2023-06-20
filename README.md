@@ -44,7 +44,7 @@ where 'action' is either 'add', 'remove' or 'schedule'.
 ## **Prerequisites**:
 
 - Linux running systemd (tested on Debian and Mint, should work on any Debian derivative, may require modifications to work on other distributions)
-- iptables (default firewall management utility on most linux distributions)
+- iptables - firewall management utility (nftables support may get implemented later)
 - standard GNU utilities including awk, sed, grep, bc
 
 additional mandatory prerequisites: to install, run ```sudo apt install ipset wget jq grepcidr```
