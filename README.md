@@ -33,7 +33,7 @@ where 'action' is either 'add', 'remove' or 'schedule'.
 - example (to add whitelists for Germany and Netherlands): ```sudo geoblocker_bash-manage -a add -c "DE NL"```
 - example (to remove whitelist for Germany): ```sudo geoblocker_bash-manage -a remove -c DE```
 
- To disable/enable/change the schedule, run
+ To disable/enable/change the schedule, use the '-s' option followed by either cron schedule expression in doulbe quotes, or 'disable':
  ```sudo geoblocker_bash-manage -a schedule -s <cron_schdedule_expression>|disable```
 - example (to enable or change periodic cron job schedule): ```sudo geoblocker_bash-manage -a schedule -s "1 4 * * *"```
 - example (to disable cron jobs entirely, meaning there will be no persistence): ```sudo geoblocker_bash-manage -a schedule -s disable```
