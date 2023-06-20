@@ -166,12 +166,12 @@ else
 	parsed_file=$(mktemp "/tmp/parsed-$country-XXXX.list")
 	validated_file=$(mktemp "/tmp/validated-$country-XXXX.list")
 
-	echo -n "Parsing downloaded subnets... "
+	echo -n "Parsing... "
 	jq -r ".data.resources.$family | .[]" "$fetched_file" > "$parsed_file"
 
 	parsed_subnet_cnt=$(wc -l < "$parsed_file")
 
-	echo -n "Validating downloaded subnets... "
+	echo -n "Validating... "
 	grep -P "$subnet_regex" "$parsed_file" > "$validated_file"
 
 	validated_subnets_cnt=$(wc -l < "$validated_file")
