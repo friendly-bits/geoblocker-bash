@@ -44,7 +44,6 @@ where 'action' is either 'add', 'remove' or 'schedule'.
 ## **Prerequisites**:
 
 - Linux running systemd (tested on Debian and Mint, should work on any Debian derivative, may require modifications to work on other distributions)
-- Root access
 - iptables (default firewall management utility on most linux distributions)
 - standard GNU utilities including awk, sed, grep, bc
 
