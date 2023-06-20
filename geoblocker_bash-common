@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # geoblocker_bash-common
-	
+
 # Common functions and variables for geoblocker_bash suite
 # This script does nothing if called directly. It is sourced from other scripts.
 
@@ -74,13 +74,12 @@ getconfig() {
 	configfile="${2:-$conf_file}"
 	[ -z "$fieldname" ] || [ -z "$configfile" ] && return 1
 
-	entry="$(grep "$fieldname=" "$configfile")"; rv=$?
-	[ "$rv" -ne 0 ] && return 2
+	entry="$(grep "$fieldname=" "$configfile" 2>/dev/null)" || return 2
 
 	field="${entry//$fieldname=}"
 	echo "$field"
 
-	return $rv
+	return 0
 }
 
 setconfig() {
@@ -92,17 +91,16 @@ setconfig() {
 	[ -z "$fieldname" ] || [ -z "$configfile" ] && return 1
 
 	# create the config file if it doesn't exist
-	touch "$configfile"; rv01=$?
+	touch "$configfile" || return 1
 
 	# remove corresponding config line
-	grep -v "$fieldname=" "$configfile" > "${configfile}.temp"
-	mv "${configfile}.temp" "$configfile"; rv02=$?
+	grep -v "$fieldname=" "$configfile" > "${configfile}.temp" || { rm "${configfile}.temp"; return 1; }
+	mv "${configfile}.temp" "$configfile" || { rm "${configfile}.temp"; return 1; }
 
 	# add updated config line
-	echo -e "$fieldname=$field" >> "$configfile"; rv03=$?
+	echo -e "$fieldname=$field" >> "$configfile" || return 1
 
-	rv0=$(( rv01 + rv02 + rv03 ))
-	return $rv0
+	return 0
 }
 
 # this can't be used from a sourced script because it'll return the path to the sourced script and not to the caller
@@ -134,7 +132,7 @@ getlocalsubnet() {
 	localip="$(ip addr | grep 'state UP' -A2 | tail -n1 | awk '{print $2}')"
 
 	# Change last ipv4 octet to 0
-	lsubnet=$(echo "$localip" | sed 's|\([0-9]*\.[0-9]*\.[0-9]*\.\)[0-9]*|\10|')
+	lsubnet="$(echo "$localip" | sed 's|\([0-9]*\.[0-9]*\.[0-9]*\.\)[0-9]*|\10|')"
 
 	# Verifies that the argument is a valid ipv4 subnet
 	echo "$lsubnet" | grep -P "$subnet_regex" &>/dev/null; rv=$?
@@ -160,14 +158,14 @@ done
 }
 
 ### Variables
-me=$(basename "$0")
+me="$(basename "$0")"
 me_short="${me//${suite_name}-/}"
 me_short_cap="${me_short^^}"
 
 parent="$(basename "$(ps -o args= $PPID)" 2>/dev/null | awk -v RS='/| ' '/^.*'$suite_name'/ {a=$0} END{print a}')"
 
 [ "$parent" = "$me" ] && parent=""
-parent_short="${parent//${suite_name}-/}"
+parent_short="${parent//"${suite_name}-"/}"
 parent_short_cap="${parent_short^^}"
 
 conf_dir="/etc/${suite_name}"
