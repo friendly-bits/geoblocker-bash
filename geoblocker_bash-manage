@@ -229,8 +229,8 @@ esac
 
 # TODO: Add checks for discrepancy between the config and actual existing ipsets and iptables rules
 
-if [ "$action" = "schedule" ]; then
-	debugprint "Skipping the *run script call because specified action was 'schedule'."
+if [ "$action" != "add" ] && [ "$action" != "remove" ]; then
+	debugprint "Skipping the *run script call because specified action was '$action'."
 else
 
 	if [ -z "$tlds_to_change" ] && [ -z "$forceadd" ]; then
@@ -302,6 +302,11 @@ else
 
 	config_tlds="$(getconfig "Countries")"
 	echo "Countries in final config: '$config_tlds'."
+	echo
+	echo "View iptables rules with 'sudo iptables -L'"
+	echo
+	## call the backup script
+	${suite_name}-backup -a backup
 fi
 
 
@@ -329,19 +334,10 @@ else
 	else
 		${suite_name}-cronsetup -a "$cron_action" -s "$cron_schedule"
 	fi
-
 	echo
+	echo "View current cron jobs with 'sudo crontab -l'"
 fi
 
-### Backup
-
-# call the backup script
-[[ "$action" = "add" || "$action" = "remove" ]] && ${suite_name}-backup -a backup
-
-
-echo ""
-echo "View iptables rules with 'sudo iptables -L'"
-echo "View cron jobs with 'sudo crontab -l'"
 echo
 
 debugexitmsg
