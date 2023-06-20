@@ -27,7 +27,9 @@ https://github.com/blunderful-scripts/geoblocker_bash/releases
 (when specifying multiple countries, put the list in double quotes)
  
 **To change configuration:**
-- run ```sudo geoblocker_bash-manage -a <action> [-c "country_codes"]``` (where 'action' is either 'add', 'remove' or 'schedule')
+run ```sudo geoblocker_bash-manage -a <action> [-c "country_codes"]```
+
+where 'action' is either 'add', 'remove' or 'schedule'.
 - example (to add whitelists for Germany and Netherlands): ```sudo geoblocker_bash-manage -a add -c "DE NL"```
 - example (to remove whitelist for Germany): ```sudo geoblocker_bash-manage -a remove -c DE```
 
