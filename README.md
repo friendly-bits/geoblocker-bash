@@ -137,7 +137,9 @@ The scripts intended as user interface are **-install**, **-uninstall**, **-mana
 
 ```geoblocker_bash-apply -a remove -c <"country_codes">``` :
 - removes ipsets and associated iptables rules for specified countries.
+
 **The -cronsetup script** exists to manage all the cron-related logic in one place. Called by the -manage script to enable/disable persistence and schedule cron jobs.
+
 **The -backup script**: Creates a backup of the current iptables state and geoblocker-associated ipsets, or restores them from backup.
 
 ```geoblocker_bash-backup -a backup``` : Creates a backup of the current iptables state and geoblocker-associated ipsets.
