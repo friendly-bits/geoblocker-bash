@@ -147,7 +147,7 @@ getlocalsubnet() {
 }
 
 sanitize_args() {
-# trims single- and double-quotes, trims extra whitespaces, discards empty arguments
+# trims extra whitespaces, discards empty arguments
 arguments=()
 for arg in "$@"; do
 	# trim leading and trailing whitespaces
