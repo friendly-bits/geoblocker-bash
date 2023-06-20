@@ -156,8 +156,9 @@ esac
 debugprint "tlds to process: $tlds"
 
 ### Fetch ip lists
-errcnt="0"
-ok_cnt="0"
+errcnt=0
+ok_cnt=0
+up_to_date_cnt=0
 failed_tlds=""
 ok_tlds=""
 if [ ! "$skipfetch" ] && [ "$action" != "remove" ]; then
@@ -182,16 +183,12 @@ if [ ! "$skipfetch" ] && [ "$action" != "remove" ]; then
 	failed_tlds="$(awk '{$1=$1};1' <<< "$failed_tlds")"
 
 	if [ "$errcnt" -gt 0 ]; then
-		msg="Failed to fetch ip lists for countries '$failed_tlds'."
-		echo "$msg"
-		[ "$nolog" != "true" ] && logger -t ${suite_name}-run "$msg"
+		echolog -err "Failed to fetch ip lists for countries '$failed_tlds'."
 		echo "FailedTLDs=$failed_tlds" >> "$tlds_status_file"
 	fi
 
 	if [ "$ok_cnt" -gt 0 ]; then
-		msg="Successfully fetched the ip lists for countries '$ok_tlds'."
-		echo "$msg"
-		[ "$nolog" != "true" ] && logger -t ${suite_name}-run "$msg"
+		echolog "Successfully fetched the ip lists for countries '$ok_tlds'."
 		echo "OkTLDs=$ok_tlds" >> "$tlds_status_file"
 	else
 		err="All fetch attempts failed."
@@ -207,8 +204,8 @@ echo
 ### Apply ip lists
 
 if [ "$action" = "update" ] && [ ! "$skipfetch" ] && [ "$ok_cnt" -le "$up_to_date_cnt" ]; then
-# if all successfully fetched ip lists are no newer than existing ipsets, skip the -apply script
-	echo "Fetched ip lists are not newer than existing ipsets, skipping iptables reconfiguration."
+# if all successfully fetched ip lists are not newer than existing ipsets, skip the -apply script
+	echolog "Fetched ip lists are not newer than applied ip lists, skipping iptables reconfiguration."
 	echo
 else
 	${suite_name}-apply -a "$apply_action" -c "$tlds"; rv=$?
@@ -231,7 +228,7 @@ else
 	# call the backup script to create a known-good backup of ipsets and iptables state
 	[ -z "$nobackup" ] && ${suite_name}-backup -a backup
 
-	[ "$nolog" != "true" ] && logger -t ${suite_name}-run "Successfully applied action '$action' for countries '$tlds'."
+	echolog "Successfully applied action '$action' for countries '$tlds'."
 fi
 
 if [ "$errcnt" -ne 0 ]; then rv=254; else rv=0; fi
