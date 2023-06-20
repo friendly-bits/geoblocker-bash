@@ -7,8 +7,8 @@ The ip list is fetched from RIPE - regional Internet registry for Europe, the Mi
 
 Intended use case is a server/computer that needs to be publically accessible only in a certain country or countries.
 
-**TL;DR**
---------
+## **TL;DR**
+
 Recommended to read the NOTES section below.
 
 **To install:**
@@ -39,8 +39,8 @@ https://github.com/blunderful-scripts/geoblocker_bash/releases
 **To uninstall:**
 - run ```sudo geoblocker_bash-uninstall```
 
-**PREREQUISITES**:
---------
+## **Prerequisites**:
+
 - Linux running systemd (tested on Debian and Mint, should work on any Debian derivative, may require modifications to work on other distributions)
 - Root access
 - iptables (default firewall management utility on most linux distributions)
@@ -52,8 +52,8 @@ additional mandatory prerequisites: to install, run ```sudo apt install ipset wg
 - jq - Json processor (used to parse lists downloaded from RIPE)
 - grepcidr - filters ip addresses matching CIDR patterns (used by check_ip_in_ripe.sh to check if an ip address belongs to a subnet from a list of subnets)
 
-**NOTES**
---------
+## **Notes**
+
 1) Changes applied to iptables are made persistent via cron jobs: a periodic job running at a daily schedule, and a job that runs at system reboot (after 30 seconds delay).
 
 2) You can specify a custom schedule for the periodic cron job by passing an argument to the install script. Run it with the '-h' option for more info.
@@ -74,8 +74,8 @@ additional mandatory prerequisites: to install, run ```sudo apt install ipset wg
 
 10) I will appreciate a report of whether it works or doesn't work on your system (please specify which), or if you find a bug. If you have a suggestion for code improvement, please let me know as well. You can use the "Discussions" and "Issues" tabs for that.
 
- **IN DETAIL**
---------
+## **In detail**
+
 The suite currently includes 11 scripts:
 1. geoblocker_bash-install
 2. geoblocker_bash-uninstall
@@ -154,8 +154,8 @@ The scripts intended as user interface are **-install**, **-uninstall**, **-mana
 
 **The check_ip_in_ripe.sh script** can be used to verify that a certain ip address belongs to a subnet found in RIPE's records for a given country. It is not called from other scripts.
 
-**EXTRA NOTES FOR THE CURIOUS**
---------
+## **Extra notes for the curious**
+
 - All scripts (except -common) display "usage" when called with the "-h" option. You can find out about some additional options specific for each script by running it with the "-h" option.
 - All scripts accept the "-d" option for debug
 - The fetch script can be easily modified to get the lists from another source instead of RIPE, for example from ipdeny.com
