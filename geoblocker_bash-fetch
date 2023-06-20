@@ -116,6 +116,7 @@ fi
 # check that iplist directory exists
 [ ! -d "$iplist_path" ] && die 1 "Directory '$iplist_path' doesn't exist!"
 
+
 #### Main
 
 fetched_file=$(mktemp "/tmp/fetched-$country-XXXX.json")
@@ -146,7 +147,7 @@ echo "Ok."
 
 ##
 if [ -f "$out_list" ]; then
-# if $out_list exists then store its date in date_old
+	out_list_exists="true"
 	date_old=$(stat --printf "%Y" "$out_list")
 else
 	date_old=0
@@ -169,39 +170,45 @@ else
 	jq -r ".data.resources.$family | .[]" "$fetched_file" > "$parsed_file"
 
 	parsed_subnet_cnt=$(wc -l < "$parsed_file")
-	if [ "$parsed_subnet_cnt" -ge "$min_subnets_num" ]; then
-		echo "Ok."
-	else
-		rm "$parsed_file" &>/dev/null
-		rm "$validated_file" &>/dev/null
-		rm "$fetched_file"
-		die 254 "Error: parsed subnets count is less than $min_subnets_num. Probably a download error."
-	fi
 
 	echo -n "Validating downloaded subnets... "
 	grep -P "$subnet_regex" "$parsed_file" > "$validated_file"
 
-	validated_subnet_cnt=$(wc -l < "$validated_file")
+	validated_subnets_cnt=$(wc -l < "$validated_file")
 
-	errorcount=$((parsed_subnet_cnt - validated_subnet_cnt))
+	errorcount=$((parsed_subnet_cnt - validated_subnets_cnt))
 
 	if [ $errorcount -ne 0 ]; then
 		echo "Issues found."
 		echo "Warning: $errorcount subnets failed validation." >&2
 		echo "Invalid subnets removed from the list." >&2
 	else
-		if [ "$validated_subnet_cnt" -ge "$min_subnets_num" ]; then
+		if [ "$validated_subnets_cnt" -ge "$min_subnets_num" ]; then
 			echo "Ok."
 		else
 			rm "$parsed_file" &>/dev/null
 			rm "$validated_file" &>/dev/null
 			rm "$fetched_file"
-			die 254 "Error: validated subnets count is less than $min_subnets_num. Probably a download error."
+			die 254 "Error: validated subnets count '$validated_subnets_cnt' is less than '$min_subnets_num'. Probably a download error."
 		fi
 	fi
 
-	echo "Validated $validated_subnet_cnt subnets."
+	echo "Validated $validated_subnets_cnt subnets."
 	echo ""
+
+	if [ "$out_list_exists" ]; then
+		old_subnets_cnt="$(wc -l < "$out_list")"
+		# compare fetched subnets count to old subnets count, get result in %
+		subnets_percents="$(echo "scale=0 ; $validated_subnets_cnt * 100 / $old_subnets_cnt" | bc)"
+		if [ "$subnets_percents" -lt 90 ]; then
+			rm "$parsed_file" &>/dev/null
+			rm "$validated_file" &>/dev/null
+			rm "$fetched_file"
+			die 254 "Error: validated subnets count '$validated_subnets_cnt' decreased by more than 10% relatively to subnets count in the existing list - '$old_subnets_cnt'." "Warning: something is wrong! Not updating the list."
+		else
+			debugprint "Validated subnets count is ${subnets_percents}% of the count in the existing list"
+		fi
+	fi
 
 	echo -n "Updating $out_list... "
 	mv "$validated_file" "$out_list"; rv=$?
