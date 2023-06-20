@@ -7,6 +7,27 @@
 
 ### Functions
 
+echolog() {
+# outputs arguments to stdout and writes them to syslog
+# if one of the arguments is "-err" then redirect output to stderr
+	msg_args=()
+	# check for "-err" option in arguments
+	for msg_arg in "$@"; do
+		[ "$msg_arg" = "-err" ] && msg_is_err="true" || msg_args+=( "$msg_arg" )
+	done
+
+	if [ -n "${msg_args[*]}" ]; then
+		echo ""
+		# loop through arguments and print them to stderr and to the syslog
+		# "$nolog" is set as environment variable (used in *manage and *install scripts)
+		for arg in "${msg_args[@]}"; do
+			[ "$msg_is_err" ] && echo "$me_short: $arg" 1>&2 || echo "$me_short: $arg"
+			[ "$nolog" != "true" ] && logger -t "$me" "$arg"
+		done
+	else debugprint "nothing in msg_args"
+	fi
+}
+
 debugprint() {
 # prints a debug message
 	[ "$debugmode" ] && echo -e "	Debug: ${me_short}: $*" >&2
