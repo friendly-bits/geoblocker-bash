@@ -1,7 +1,7 @@
 # geoblocker_bash
 Automatic geoip blocker for Linux based on a whitelist for a country or multiple countries, written purely in Bash.
 
-Fetches, parses and validates an ipv4 whitelist for given countries, then blocks (via iptables rules) incoming traffic from anywhere except whitelisted subnets and local subnet. Implements automatic update of the whitelist. Has built-in mechanisms for fault detection and recovery. Easy to install and configure (and easy to uninstall).
+Fetches, parses and validates an ipv4 whitelist for given countries, then blocks (via iptables rules) incoming traffic from anywhere except whitelisted subnets and local subnet. Implements persistence and automatic update of the whitelist. Has built-in mechanisms for fault detection and recovery. Easy to install and configure (and easy to uninstall).
 
 The ip lists are fetched from RIPE - regional Internet registry for Europe, the Middle East and parts of Central Asia. RIPE stores ip lists for countries in other regions as well, so currently this can be used for any country in the world.
 
