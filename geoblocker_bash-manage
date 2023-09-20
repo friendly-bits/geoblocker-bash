@@ -56,7 +56,7 @@ Options:
 
     -f                            : Force the action even if it doesn't make sense or may cause remote server lockout.
 
-    -t                            : Test mode: inject unwanted tld and verify fault recovery
+    -t                            : Test mode: inject unexpected tld and verify fault recovery
     -d                            : Debug
     -h                            : This help
 
@@ -92,40 +92,20 @@ debugentermsg
 
 #### FUNCTIONS
 
-check_tlds_coherency() {
-# checks whether current ipsets and iptables rules match ones in the config file
-	new_verified_tlds="$(find_active_tlds)"
-	unwanted_tlds="$(subtract_list_a_from_b "$config_tlds" "$new_verified_tlds")"
-	tlds_difference="$(find_lists_difference "$new_verified_tlds" "$config_tlds")"
-	echo "$unwanted_tlds"
-	[ "$tlds_difference" == "" ] && return 0 || return 1
-}
-
-find_active_tlds() {
-# checks current ipsets and iptables rules for geoblocker
-# returns a list of active tlds (country codes)
-
-	current_ipset_tlds="$(ipset list -n | grep "$suite_name" | grep -o '..$' | tr '\n' ' ' | awk '{$1=$1};1')"
-	current_iprules_tlds="$(iptables -L | grep -oP "(?<=src /\* $suite_name\_).*?(?= \*/)" | tr '\n' ' ' | awk '{$1=$1};1')"
-
-	tlds_intersection="$(find_lists_intersection "$current_ipset_tlds" "$current_iprules_tlds")"
-	tlds_difference="$(find_lists_difference "$current_ipset_tlds" "$current_iprules_tlds")"
-	echo "$tlds_intersection"
-	[ "$tlds_difference" == "" ] && return 0 || return 1
-}
-
 restore_from_config() {
 # restore tlds from the config file
 
 	echo "Re-applying previous countries set: '$config_tlds'... "
-	$run_command -o -a "remove" -c "$config_tlds $unwanted_tlds $tlds_to_change"
+	$run_command -o -a "remove" -c "$config_tlds $unexpected_tlds $tlds_to_change"
 	$run_command -o -a "add" -c "$config_tlds"; rv=$?
 
-	check_tlds_coherency > /dev/null; rv=$?
+	check_tlds_coherency; rv=$?
 	if [ $rv -eq 0 ]; then
 		echo "Successfully re-applied previous countries set."
 	else
 		echo "Failed to re-apply previous countries set." >&2
+		[ "$unexpected_tlds" != "" ] && echo "Unexpected tlds in the firewall: '$unexpected_tlds'" >&2
+		[ "$missing_tlds" != "" ] && echo "Missing tlds in the firewall: '$missing_tlds'" >&2
 		# call the *backup script to initiate recovery from fault
 		${suite_name}-backup -a restore; rv=$?
 
@@ -133,7 +113,10 @@ restore_from_config() {
 		if [ $rv -eq 0 ]; then
 			echo "Successfully re-applied previous countries set."
 		else
-			die "$rv" "Failed to re-apply previous countries set. Consider fixing your firewall or your system."
+			echo "Failed to restore firewall config from backup." >&2
+			[ "$unexpected_tlds" != "" ] && echo "Unexpected tlds in the firewall: '$unexpected_tlds'" >&2
+			[ "$missing_tlds" != "" ] && echo "Missing tlds in the firewall: '$missing_tlds'" >&2
+			die "$rv" "Something is not working as it should. Consider fixing your firewall or your system. If it's a bug then please report it."
 		fi
 	fi
 }
@@ -200,7 +183,19 @@ esac
 
 #### MAIN
 
-debugprint "Countries in initial config: '$config_tlds'"
+debugprint "Verifying config coherency..."
+# check config coherency vs active ipsets and firewall rules before performing any action
+check_tlds_coherency; rv=$?
+if [ $rv -eq 0 ]; then
+	debugprint "Successfully verified tlds coherency."
+else
+	echo "Warning: actual firewall config differs from what it's supposed to be!"
+	[ "$unexpected_tlds" != "" ] && echo "Unexpected tlds in the firewall: '$unexpected_tlds'" >&2
+	[ "$missing_tlds" != "" ] && echo "Missing tlds in the firewall: '$missing_tlds'" >&2
+	echo "Attempting to re-apply the rules from the config file." >&2
+	restore_from_config
+fi
+
 
 case "$action" in
 
@@ -291,7 +286,6 @@ else
 	[ "$rv" -ne 0 ] && die 1 "Failed to write updated set of tlds '$new_verified_tlds' to config file '$conf_file'."
 
 	config_tlds="$(getconfig "Countries")"
-	debugprint "New tlds after updating config: '$config_tlds'"
 
 ####### Fault recovery test: inject unrequested tld
 [ "$test" ] &&	$run_command -o -a "add" -c "ge"; rv=$?
@@ -299,12 +293,14 @@ else
 
 
 	# double-check coherency after applying new tlds
-	unwanted_tlds="$(check_tlds_coherency)"; rv=$?
+	debugprint "Verifying config coherency..."
+	check_tlds_coherency; rv=$?
 	if [ $rv -eq 0 ]; then
-		debugprint "Successfully double-checked tlds coherency."
+		debugprint "Successfully verified tlds coherency."
 	else
 		echo "Warning: actual firewall config differs from what it's supposed to be!"
-		[ "$unwanted_tlds" != "" ] && echo "Found unwanted tlds: $unwanted_tlds"
+		[ "$unexpected_tlds" != "" ] && echo "Unexpected tlds in the firewall: '$unexpected_tlds'" >&2
+		[ "$missing_tlds" != "" ] && echo "Missing tlds in the firewall: '$missing_tlds'" >&2
 		echo "Attempting to re-apply the rules." >&2
 		tlds_to_change=""
 		restore_from_config
