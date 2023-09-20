@@ -7,6 +7,8 @@ The ip lists are fetched from RIPE - regional Internet registry for Europe, the 
 
 Intended use case is a server/computer that needs to be publicly accessible only in a certain country or countries.
 
+I created this project for running on my own server, and it's being doing its job since the early releases, reducing the bot scans/attacks (which I'd been seeing a lot in the logs) to virtually zero. As I wanted it to be useful for other people as well, I implemented many reliability features which should make it unlikely that the scripts will misbehave on systems other than my own. But of course, use at your own risk.
+
 ## **TL;DR**
 
 Recommended to read the NOTES section below.
