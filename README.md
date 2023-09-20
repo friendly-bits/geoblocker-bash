@@ -28,7 +28,7 @@ https://github.com/blunderful-scripts/geoblocker_bash/releases
 
 (when specifying multiple countries, put the list in double quotes)
 
-6) That's it! If no errors occured during installation (such as missing prerequisites), your computer should now only be accessible from the countries you specified, and automatic list updates should just work. By default, ip lists will be updated daily at 4am - you can verify that updates do work next day by running something like ```cat /var/log/syslog | grep geoblocker_bash```
+6) That's it! If no errors occured during installation (such as missing prerequisites), your computer should now only be accessible from the countries you specified, and automatic list updates should just work. By default, ip lists will be updated daily at 4am - you can verify that updates do work next day by running something like ```sudo cat /var/log/syslog | grep geoblocker_bash```
  
 **To change configuration:**
 run ```sudo geoblocker_bash-manage -a <action> [-c "country_codes"]```
