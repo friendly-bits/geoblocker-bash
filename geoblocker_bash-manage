@@ -121,7 +121,7 @@ restore_from_config() {
 	$run_command -o -a "remove" -c "$config_tlds $unwanted_tlds $tlds_to_change"
 	$run_command -o -a "add" -c "$config_tlds"; rv=$?
 
-	tlds_coherency="$(check_tlds_coherency)"; rv=$?
+	check_tlds_coherency > /dev/null; rv=$?
 	if [ $rv -eq 0 ]; then
 		echo "Successfully re-applied previous countries set."
 	else
@@ -129,7 +129,7 @@ restore_from_config() {
 		# call the *backup script to initiate recovery from fault
 		${suite_name}-backup -a restore; rv=$?
 
-		check_tlds_coherency; rv1=$?; rv=$(( rv + rv1 ))
+		check_tlds_coherency > /dev/null; rv1=$?; rv=$(( rv + rv1 ))
 		if [ $rv -eq 0 ]; then
 			echo "Successfully re-applied previous countries set."
 		else
@@ -161,9 +161,6 @@ config_tlds="$(getconfig "Countries")"
 action="${action,,}"
 
 run_command="${install_dir}/${suite_name}-run"
-
-# get datadir from the config file
-datadir="$(getconfig "Datadir")"
 
 
 #### CHECKS
