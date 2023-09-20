@@ -270,11 +270,17 @@ if [ "$action" = "backup" ]; then
 		# the "[IPSET]" line separates portions of the file
 		echo "[IPSET]" >> "${knowngood_file}.new"
 
-	for curr_ipset in $(ipset list -n | grep "$ipset_tag"); do
+	# get tlds from the config file
+	config_tlds="$(getconfig "Countries")"
+
+	debugprint "got tlds from config: '$config_tlds'"
+
+	for curr_tld in $config_tlds; do
+		curr_ipset="${suite_name}_${curr_tld}"
 		echo -n "Creating backup of ipset \"$curr_ipset\"... "
 		ipset save "$curr_ipset" >> "${knowngood_file}.new"; rv=$?
 		[ "$rv" -ne 0 ] && die "Error creating backup of ipset \"$curr_ipset\"."
-		echo "Ok."
+	echo "Ok."
 	done
 
 	cp "$conf_file" "$conf_file_backup"; rv=$?

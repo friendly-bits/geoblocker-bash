@@ -98,6 +98,13 @@ round_up_to_power2() {
 	 | bc -l
 }
 
+destroy_temp_ipsets() {
+	current_temp_ipsets="$(ipset list -n | grep "$suite_name" | grep "temp" | tr '\n' ' ' | awk '{$1=$1};1')"
+	for temp_ipset in $curr_temp_ipsets; do
+		ipset destroy "$temp_ipset" > /dev/null
+	done
+}
+
 
 #### VARIABLES
 
@@ -149,6 +156,7 @@ esac
 
 #### MAIN
 
+
 ### create temporary ipsets and load ip lists into them
 if [ "$action" = "add" ]; then
 	for tld in $tlds; do
@@ -185,8 +193,7 @@ if [ "$action" = "add" ]; then
 		debugprint "Creating new ipset '$temp_ipset'... "
 		ipset create "$temp_ipset" hash:net family "$family" hashsize "$ipset_hash" maxelem "$ipset_maxelem"; rv=$?
 		if [ $rv -ne 0 ]; then
-			debugprint "Failed. Destroying the temporary ipset."
-			ipset destroy "$temp_ipset" &>/dev/null
+			destroy_temp_ipsets
 			die "Error creating ipset '$temp_ipset' with hashsize '$ipset_hash' and maxelements '$ipset_maxelem'."
 		fi
 		debugprint "Ok."
@@ -203,8 +210,7 @@ if [ "$action" = "add" ]; then
 			ipset restore -exist; rv=$?
 
 		if [ $rv -ne 0 ]; then
-			echo "Failed. Destroying the temporary ipset."
-			ipset destroy "$temp_ipset"
+			destroy_temp_ipsets
 			die 254 "Error when importing the list from '$whitelist_file' into ipset '$temp_ipset'."
 		fi
 
@@ -239,6 +245,7 @@ for tld in $tlds; do
 	iptables-save | sed -r "/INPUT.*comment.*${iptables_comment}/s/-A/iptables -D/e" &>/dev/null; rv="${PIPESTATUS[0]}"
 	if [ $rv -ne 0 ]; then
 		echo "Failure."
+		destroy_temp_ipsets
 		die "Error removing existing rules with command: 'iptables-save | sed -r \"/INPUT.*comment.*$iptables_comment/s/-A/iptables -D/e\" '."
 	fi
 	echo "Ok."
@@ -251,6 +258,7 @@ echo -n "Removing existing global iptables rules for '${suite_name}'... "
 iptables-save | sed -r "/INPUT.*comment.*${iptables_comment_global}/s/-A/iptables -D/e" &>/dev/null; rv="${PIPESTATUS[0]}"
 if [ $rv -ne 0 ]; then
 	echo "Failed."
+	destroy_temp_ipsets
 	die "Error removing existing rules with command: 'iptables-save | sed -r \"/INPUT.*comment.*${iptables_comment_global}/s/-A/iptables -D/e\" '."
 fi
 echo "Ok."
@@ -261,13 +269,21 @@ echo
 if [ "$action" = "remove" ]; then
 	for tld in $tlds; do
 		perm_ipset="${suite_name}_${tld}"
-		echo -n "Destroying ipset for country '$tld'... "
-		ipset destroy "$perm_ipset"; rv=$?
-		if [ $rv -ne 0 ]; then
-			echo "Failed."
-			die "Error destroying ipset '$perm_ipset'."
+
+		# Check if given ipset exists
+		matching_ipset="$(ipset list -n | grep "$perm_ipset")"
+		if [ "$matching_ipset" = "" ]; then
+			echo "Error removing ipset '$perm_ipset' because it doesn't appear to exist."
 		else
-			echo "Ok."
+			echo -n "Destroying ipset for country '$tld'... "
+			ipset destroy "$perm_ipset"; rv=$?
+			if [ $rv -ne 0 ]; then
+				echo "Failed."
+				destroy_temp_ipsets
+				die "Error destroying ipset '$perm_ipset'."
+			else
+				echo "Ok."
+			fi
 		fi
 	done
 	echo
@@ -279,26 +295,40 @@ fi
 # Add rule to allow connections from the local subnet
 localsubnet="$(getlocalsubnet)"
 if [ -z "$localsubnet" ]; then
+	destroy_temp_ipsets
 	die "Error: couldn't determine local subnet."
 else
 	echo "Found local subnet: '$localsubnet'."
 	echo -n "Appending rule to allow all traffic from the local subnet... "
 	iptables -A INPUT -s "$localsubnet" -j ACCEPT -m comment --comment "${iptables_comment_global}"; rv=$?
-	[ $rv -ne 0 ] && die "Failed to append rule with command 'iptables -A INPUT -s \"$localsubnet\" -j ACCEPT'."
+
+	if [ $rv -ne 0 ]; then
+		destroy_temp_ipsets
+		die "Failed to append rule with command 'iptables -A INPUT -s \"$localsubnet\" -j ACCEPT'."
+	fi
 	echo "Ok."
 fi
 
 # Add rule to allow connections from the loopback interface
 echo -n "Inserting rule to allow all traffic from the loopback interface... "
 iptables -I INPUT -i lo -j ACCEPT -m comment --comment "${iptables_comment_global}"; rv=$?
-[ $rv -ne 0 ] && die "Failed to insert rule with command 'iptables -A INPUT -i lo -j ACCEPT'."
+
+if [ $rv -ne 0 ]; then
+	destroy_temp_ipsets
+	die "Failed to insert rule with command 'iptables -I INPUT -i lo -j ACCEPT'."
+fi
 echo "Ok."
 
 # Add rule to allow established/related connections
 echo -n "Inserting rule to allow established/related connections... "
 iptables -I INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT -m comment --comment "${iptables_comment_global}"; rv=$?
-[ $rv -ne 0 ] && die "Failed to insert rules with command 'iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT'."
+
+if [ $rv -ne 0 ]; then
+	destroy_temp_ipsets
+	die "Failed to insert rules with command 'iptables -I INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT'."
+fi
 echo "Ok."
+
 echo
 
 
@@ -335,8 +365,9 @@ if [ "$action" = "add" ]; then
 			debugprint "Creating permanent ipset '$perm_ipset'... "
 			ipset create "$perm_ipset" hash:net family "$family" hashsize "$ipset_hash" maxelem "$ipset_maxelem"; rv=$?
 			if [ $rv -ne 0 ]; then
-				echo "Failed. Destroying the permanent ipset."
+				echo "Failed."
 				ipset destroy "$perm_ipset"
+				destroy_temp_ipsets
 				die "Error when creating ipset '$perm_ipset'."
 			fi
 			debugprint "Ok."
@@ -346,14 +377,22 @@ if [ "$action" = "add" ]; then
 
 		echo -n "Appending the whitelist rule for country '$tld' to the INPUT chain... "
 		iptables -A INPUT -m set --match-set "$perm_ipset" src -j ACCEPT -m comment --comment "$iptables_comment"; rv=$?
-		[ $rv -ne 0 ] && \
+
+		if [ $rv -ne 0 ]; then
+			ipset destroy "$perm_ipset"
+			destroy_temp_ipsets
 			die "Failed to append ipset rules with command: iptables -I INPUT -m set --match-set \"$perm_ipset\" src -j ACCEPT."
+		fi
 		echo "Ok."
 
 		## swap the new (temporary) ipset with the old (permanent) ipset
 		echo -n "Making the new ipset for country '$tld' permanent... "
 		ipset swap "$temp_ipset" "$perm_ipset"; rv=$?
-		[ $rv -ne 0 ] && die "Failed to swap temporary and permanent ipsets."
+		if [ $rv -ne 0 ]; then
+			destroy_temp_ipsets
+			die "Failed to swap temporary and permanent ipsets."
+		fi
+
 		echo "Ok."
 
 		## destroy the old ipset (now it's called temporary)

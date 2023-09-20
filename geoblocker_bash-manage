@@ -39,12 +39,12 @@ usage() {
 
 $me
     Provides an interface to configure geoblocking.
- 
+
 WARNING: if removing a whitelist: Geoblocking will remain active after removal.
          If you remove your country's whitelist, you may lose remote access to your system.
 
 
-Usage: $me -a <action> [-c "[tld] [tld] ... [tld]"] [-s <"sch_expression"|disable>] [-d] [-h]
+Usage: $me -a <action> [-c "[tld] [tld] ... [tld]"] [-s <"sch_expression"|disable>] [-f] [-t] [-d] [-h]
 
 Options:
     -a add|remove|schedule        : action to perform: add or remove ipsets, iptables rules and cron jobs
@@ -54,8 +54,9 @@ Options:
     -s <"sch_expression">|disable : schedule expression for the periodic cron job, must be inside double quotes.
                                        "disable" removes cron jobs and turns off persistence.
 
-    -f                            : Force the 'add' action even if specified country has been already added.
+    -f                            : Force the action even if it doesn't make sense or may cause remote server lockout.
 
+    -t                            : Test mode: inject unwanted tld and verify fault recovery
     -d                            : Debug
     -h                            : This help
 
@@ -64,14 +65,15 @@ EOF
 
 
 #### PARSE ARGUMENTS
-while getopts "a:c:s:fdh" opt; do
+while getopts "a:c:s:ftdh" opt; do
 	case $opt in
 		a) action=$OPTARG;;
 		c) tlds_arg=$OPTARG;;
 		s) cron_schedule=$OPTARG;;
-		f) forceadd="true";;
+		f) force_action="true";;
 		d) debugmode_args="true";;
 		h) usage; exit 0;;
+		t) test=true;;
 		\?) usage; exit 1;;
 	esac
 done
@@ -90,41 +92,52 @@ debugentermsg
 
 #### FUNCTIONS
 
-find_lists_intersection() {
-# finds duplicates-free intersection between space-delimited fields in input strings $1 and $2,
-#      and outputs the intersection as a string
-
-	str1="$1"; str2="$2"
-	result_str="$(comm -12 <(echo "$str1" | tr ' ' '\n' | sort -u) \
-                        <(echo "$str2" | tr ' ' '\n' | sort -u) | tr '\n' ' ')"
-	# trim leading, trailing, and extra in-between whitespaces
-	result_str="$(awk '{$1=$1};1' <<< "$result_str")"
-	echo "$result_str"
+check_tlds_coherency() {
+# checks whether current ipsets and iptables rules match ones in the config file
+	new_verified_tlds="$(find_active_tlds)"
+	unwanted_tlds="$(subtract_list_a_from_b "$config_tlds" "$new_verified_tlds")"
+	tlds_difference="$(find_lists_difference "$new_verified_tlds" "$config_tlds")"
+	echo "$unwanted_tlds"
+	[ "$tlds_difference" == "" ] && return 0 || return 1
 }
 
-find_lists_difference() {
-# finds space-delimited fields that exist in strings $1 or $2 but not both
-#      and outputs the difference as a string
+find_active_tlds() {
+# checks current ipsets and iptables rules for geoblocker
+# returns a list of active tlds (country codes)
 
-	str1="$1"; str2="$2"
-	result_str="$(comm -3 <(echo "$str1" | tr ' ' '\n' | sort -u) \
-                        <(echo "$str2" | tr ' ' '\n' | sort -u) | tr '\n' ' ')"
-	# trim leading, trailing, and extra in-between whitespaces
-	result_str="$(awk '{$1=$1};1' <<< "$result_str")"
-	echo "$result_str"
+	current_ipset_tlds="$(ipset list -n | grep "$suite_name" | grep -o '..$' | tr '\n' ' ' | awk '{$1=$1};1')"
+	current_iprules_tlds="$(iptables -L | grep -oP "(?<=src /\* $suite_name\_).*?(?= \*/)" | tr '\n' ' ' | awk '{$1=$1};1')"
+
+	tlds_intersection="$(find_lists_intersection "$current_ipset_tlds" "$current_iprules_tlds")"
+	tlds_difference="$(find_lists_difference "$current_ipset_tlds" "$current_iprules_tlds")"
+	echo "$tlds_intersection"
+	[ "$tlds_difference" == "" ] && return 0 || return 1
 }
 
-remove_a_from_b() {
-# removes all space-delimited fields found in string $1 from string $2, outputs the result as a string
+restore_from_config() {
+# restore tlds from the config file
 
-	str1="$1"; str2="$2"
-	while read -r field_str; do
-		str2="${str2//$field_str/}"
-	done < <(echo "$str1" | tr ' ' '\n' )
-	# trim leading, trailing, and extra in-between whitespaces
-	str2="$(awk '{$1=$1};1' <<< "$str2")"
-	echo "$str2"
+	echo "Re-applying previous countries set: '$config_tlds'... "
+	$run_command -o -a "remove" -c "$config_tlds $unwanted_tlds $tlds_to_change"
+	$run_command -o -a "add" -c "$config_tlds"; rv=$?
+
+	tlds_coherency="$(check_tlds_coherency)"; rv=$?
+	if [ $rv -eq 0 ]; then
+		echo "Successfully re-applied previous countries set."
+	else
+		echo "Failed to re-apply previous countries set." >&2
+		# call the *backup script to initiate recovery from fault
+		${suite_name}-backup -a restore; rv=$?
+
+		check_tlds_coherency; rv1=$?; rv=$(( rv + rv1 ))
+		if [ $rv -eq 0 ]; then
+			echo "Successfully re-applied previous countries set."
+		else
+			die "$rv" "Failed to re-apply previous countries set. Consider fixing your firewall or your system."
+		fi
+	fi
 }
+
 
 #### VARIABLES
 
@@ -136,16 +149,21 @@ export nolog="true"
 # get install_dir from the config file
 install_dir="$(getconfig "Installdir")"; rv=$?
 
-#convert to lower case
+# convert input country codes (tlds) to lower case
 tlds_arg="${tlds_arg,,}"
+
+# remove duplicates etc
+tlds_arg="$(sanitize_string "$tlds_arg")"
+
+### Read current set of countries from the the config file into config_tlds
+config_tlds="$(getconfig "Countries")"
+
 action="${action,,}"
 
 run_command="${install_dir}/${suite_name}-run"
 
 # get datadir from the config file
 datadir="$(getconfig "Datadir")"
-
-tlds_status_file="$datadir/tlds_status"
 
 
 #### CHECKS
@@ -172,7 +190,7 @@ esac
 [[ ("$action" == "add" || "$action" == "remove") && -z "$tlds_arg" ]] && \
 	die 1 "Error: action '$action' requires to specify countries with '-c <tlds>'!"
 
-[[ "$action" == "schedule" && ( -n "$tlds_arg" || -n "$forceadd" ) ]] && \
+[[ "$action" == "schedule" && ( -n "$tlds_arg" || -n "$force_action" ) ]] && \
 	die 1 "Action '$action' only supports changing the cron schedule! Do not use it with any option except '-s' or '-d' !"
 
 [ "$action" != "schedule" ] && [ -n "$cron_schedule" ] && {
@@ -182,130 +200,125 @@ esac
 	die "$msg1" "$msg2";
 }
 
+
 #### MAIN
 
-### Read current set of countries from the the config file into config_tlds
-config_tlds="$(getconfig "Countries")"
-
 debugprint "Countries in initial config: '$config_tlds'"
-
-# re-create tlds_status_file
-echo "" > "$tlds_status_file"
 
 case "$action" in
 
 	add)
-		# merge $config_tlds with $tlds_arg while removing duplicates
-		new_tlds="$(echo "$config_tlds $tlds_arg" | tr " " "\n" | sort -ibu |  tr "\n" " ")"
-		# trim leading, trailing, and extra in-between whitespaces
-		new_tlds="$(awk '{$1=$1};1' <<< "$new_tlds")"
+		requested_planned_tlds="$(merge_lists "$config_tlds" "$tlds_arg")"
+		debugprint "requested resulting tlds: '$requested_planned_tlds'"
 
-		if [ -z "$forceadd" ]; then
-			# remove any entries already found in config_tlds from tlds_arg and assign to tlds_to_change
-			tlds_to_change="$(remove_a_from_b "$config_tlds" "$tlds_arg")"
-			# find which tlds were specified for removal but don't exist
+		if [ -z "$force_action" ]; then
+			# remove any entries already present in config_tlds from tlds_arg and assign to tlds_to_change
+			tlds_to_change="$(find_lists_difference "$config_tlds" "$requested_planned_tlds")"
 
-			wrong_tlds="$(find_lists_difference "$tlds_to_change" "$tlds_arg")"
-			[ -n "$wrong_tlds" ] && echo "NOTE: countries '$wrong_tlds' have already been added." >&2
+			# find which tlds were specified for addition but already exist
+			wrong_tlds="$(find_lists_intersection "$tlds_arg" "$config_tlds")"
+
+			[ "$wrong_tlds" != "" ] && echo "NOTE: countries '$wrong_tlds' have already been added." >&2
 		else
 			tlds_to_change="$tlds_arg"
 		fi
+		planned_tlds="$(merge_lists "$config_tlds" "$tlds_to_change")"
+		debugprint "action: add, tlds_to_change: '$tlds_to_change'"
 	;;
+
 	remove)
-		# find duplicate-free intersection between config_tlds and tlds_arg
-		tlds_to_change="$(find_lists_intersection "$config_tlds" "$tlds_arg")"
-		debugprint "tlds to remove: '$tlds_to_change'"
+		debugprint "requested tlds to remove: '$tlds_arg'"
+		if [ -z "$force_action" ]; then
+			# find duplicate-free intersection between config_tlds and tlds_arg
+			tlds_to_change="$(find_lists_intersection "$config_tlds" "$tlds_arg")"
+			# find which tlds were specified for removal but don't exist
+			good_tlds="$(find_lists_intersection "$tlds_to_change" "$tlds_arg")"
+			wrong_tlds="$(find_lists_difference "$tlds_arg" "$good_tlds")"
+			[ "$wrong_tlds" != "" ] && echo "NOTE: countries '$wrong_tlds' have not been added, so can not remove." >&2
 
-		# find which tlds were specified for removal but don't exist
-		wrong_tlds="$(find_lists_difference "$tlds_to_change" "$tlds_arg")"
-		[ -n "$wrong_tlds" ] && echo "NOTE: countries '$wrong_tlds' have not been added, so can not remove." >&2
-
-		# remove any entries found in tlds_to_change from config_tlds and assign to new_tlds
-		new_tlds="$(remove_a_from_b "$tlds_to_change" "$config_tlds")"
-		# trim leading, trailing, and extra in-between whitespaces
-		new_tlds="$(awk '{$1=$1};1' <<< "$new_tlds")"
+		else
+			tlds_to_change="$tlds_arg"
+		fi
+		# remove any entries found in tlds_to_change from config_tlds and assign to planned_tlds
+		planned_tlds="$(subtract_list_a_from_b "$tlds_to_change" "$config_tlds")"
 	;;
 esac
 
-# TODO: Add checks for discrepancy between the config and actual existing ipsets and iptables rules
 
 if [ "$action" != "add" ] && [ "$action" != "remove" ]; then
 	debugprint "Skipping the *run script call because specified action was '$action'."
 else
 
-	if [ -z "$tlds_to_change" ] && [ -z "$forceadd" ]; then
+	if [ -z "$tlds_to_change" ] && [ -z "$force_action" ]; then
 		config_tlds="$(getconfig "Countries")"
 		echo "Countries in final config: '$config_tlds'."
 		die 254 "Nothing to do, exiting."
 	fi
 
-	debugprint "planned tlds after '$action': '$new_tlds'"
+	debugprint "planned tlds after '$action': '$planned_tlds'"
 
-	# if new_tlds list is empty
-	[ -z "$new_tlds" ] && \
-		die 1 "Planned final countries list is empty! If you really want to block evrything, do this manually."
+	# if planned_tlds list is empty
+	if [ -z "$planned_tlds" ] && [ -z "$force_action" ]; then
+		die 1 "Planned final countries list is empty! Disallowing this to prevent accidental lockout of a remote server."
+	fi
 
 
 	### Call the *run script
 	$run_command -o -a "$action" -c "$tlds_to_change"; rv=$?
 
-	# 254 return code means fetch failure
-	if [ $rv -eq 254 ]; then
-		# read failed tlds from file
-		failed_tlds="$(getconfig "FailedTLDs" "$tlds_status_file")"
-		echo "Error performing action '$action' for countries '$failed_tlds'." >&2
-
 	# positive return code means apply failure or another permanent error, except for 254
-	elif [ $rv -gt 0 ] && [ $rv -ne 254 ]; then
+	if [ $rv -gt 0 ] && [ $rv -ne 254 ]; then
 		echo "Error performing action '$action' for countries '$tlds_to_change'." >&2
 
-		if [ -z "$config_tlds" ]; then
+		if [ "$config_tlds" = "" ]; then
 			die 1 "Can not restore previous countries set because it is not found in the config file."
 		fi
 
-		# restore old countries set in the config file
-		echo "Re-applying previous countries set: '$config_tlds'... "
-		$run_command -a "update"; rv=$?
-		if [ $rv -eq 0 ]; then
-			die 0 "Successfully re-applied previous countries set."
-		else
-			echo "Failed to re-apply previous countries set." >&2
-			# call the *backup script to initiate recovery from fault
-			${suite_name}-backup -a restore; rv=$?
-
-			# exit with the same exit code as backup-restore operation
-			die "$?" ""
-		fi
+		restore_from_config
 	fi
 
-	if [ "$action" = "add" ]; then
-			# read action results from the status file
-			ok_tlds="$(getconfig "OkTLDs" "$tlds_status_file")"
-			failed_tlds="$(getconfig "FailedTLDs" "$tlds_status_file")"
-
-			# get actual new tld's from old + successfully fetched&applied tlds
-			new_tlds="$config_tlds $ok_tlds"
-	fi
-
-	# remove duplicates and trim leading, trailing, and extra in-between whitespaces
-	new_tlds="$(echo "$new_tlds" | tr " " "\n" | sort -ibu |  tr "\n" " " | awk '{$1=$1};1' )"
+	new_verified_tlds="$(find_active_tlds)"
+	failed_tlds="$(find_lists_difference "$new_verified_tlds" "$planned_tlds")"
 
 	# if all 'add' actions failed
 	if [ -z "$(find_lists_difference "$tlds_to_change" "$failed_tlds")" ]; then
-		debugprint "tlds_arg: '$tlds_arg'"
 		debugprint "failed_tlds: '$failed_tlds'"
 		die 1 "All actions failed."
 	fi
 
-	setconfig "Countries" "$new_tlds"; rv=$?
-	[ "$rv" -ne 0 ] && die 1 "Failed to write new set of tlds '$new_tlds' to config file '$conf_file'."
+	if [ "$failed_tlds" != "" ]; then
+		echo "Warning: failed to apply new rules for countries: $failed_tlds." >&2
+	fi
+
+	setconfig "Countries" "$new_verified_tlds"; rv=$?
+	[ "$rv" -ne 0 ] && die 1 "Failed to write updated set of tlds '$new_verified_tlds' to config file '$conf_file'."
 
 	config_tlds="$(getconfig "Countries")"
+	debugprint "New tlds after updating config: '$config_tlds'"
+
+####### Fault recovery test: inject unrequested tld
+[ "$test" ] &&	$run_command -o -a "add" -c "ge"; rv=$?
+#######
+
+
+	# double-check coherency after applying new tlds
+	unwanted_tlds="$(check_tlds_coherency)"; rv=$?
+	if [ $rv -eq 0 ]; then
+		debugprint "Successfully double-checked tlds coherency."
+	else
+		echo "Warning: actual firewall config differs from what it's supposed to be!"
+		[ "$unwanted_tlds" != "" ] && echo "Found unwanted tlds: $unwanted_tlds"
+		echo "Attempting to re-apply the rules." >&2
+		tlds_to_change=""
+		restore_from_config
+	fi
+
 	echo "Countries in final config: '$config_tlds'."
 	echo
 	echo "View iptables rules with 'sudo iptables -L'"
 	echo
 	## call the backup script
+	debugprint "Calling the backup script"
 	${suite_name}-backup -a backup
 fi
 

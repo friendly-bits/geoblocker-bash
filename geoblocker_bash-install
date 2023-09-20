@@ -21,9 +21,9 @@
 me=$(basename "$0")
 suite_name="geoblocker_bash"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-[ -n "$script_dir" ] && cd "$script_dir" || { echo "Error: Couldn't cd into '$script_dir'."; exit 1; }
+[ -n "$script_dir" ] && cd "$script_dir" || { echo "Error: *install: Couldn't cd into '$script_dir'."; exit 1; }
 
-source "$script_dir/${suite_name}-common" || { echo "Error: Can't find ${suite_name}-common."; exit 1; }
+source "$script_dir/${suite_name}-common" || { echo "Error: *install: Can't source '${suite_name}-common'."; exit 1; }
 # NOTE that some functions and variables are sourced from the *common script
 
 # sanitize arguments
@@ -233,16 +233,18 @@ mkdir -p "$conf_dir"
 
 # write some config to the config file
 echo -n "Setting initial config... "
-setconfig "Installdir" "$install_dir"; rv=$(( rv + $?))
-setconfig "Datadir" "$datadir"; rv=$(( rv + $?))
-[ "$cron_schedule" != "disable" ] && { setconfig "CronSchedule" "$cron_schedule"; rv=$(( rv + $?)); }
-setconfig "DefaultSchedule" "0 4 * * *"; rv=$(( rv + $?))
-setconfig "RebootSleep" "$sleeptime"; rv=$(( rv + $?))
-setconfig "Backup_script" "$backup_script"; rv=$(( rv + $?))
-setconfig "NoPersistence" "$no_persistence"; rv=$(( rv + $?))
-setconfig "NoDrop" "$nodrop"; rv=$(( rv + $?))
+setconfig "Installdir" "$install_dir"; rv1=$?; rv=$(( rv + rv1 ))
+setconfig "Datadir" "$datadir"; rv1=$?; rv=$(( rv + rv1 ))
+[ "$cron_schedule" != "disable" ] && \
+		{ setconfig "CronSchedule" "$cron_schedule"; rv1=$?; rv=$(( rv + rv1 )); }
+setconfig "DefaultSchedule" "0 4 * * *"; rv1=$?; rv=$(( rv + rv1 ))
+setconfig "RebootSleep" "$sleeptime"; rv1=$?; rv=$(( rv + rv1 ))
+setconfig "Backup_script" "$backup_script"; rv1=$?; rv=$(( rv + rv1 ))
+setconfig "NoPersistence" "$no_persistence"; rv1=$?; rv=$(( rv + rv1 ))
+setconfig "NoDrop" "$nodrop"; rv1=$?; rv=$(( rv + rv1 ))
 if [ "$rv" -ne 0 ]; then
 	echo "Failed."
+	echo "Errors encountered while setting config for: $err"
 	install_failed
 else echo "Ok."
 fi

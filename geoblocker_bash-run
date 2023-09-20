@@ -96,7 +96,6 @@ debugentermsg
 datadir="$(getconfig "Datadir")"
 knowngood_file="$datadir/iptables_knowngood.bak"
 whitelist_dir="$datadir/ip_lists"
-tlds_status_file="$datadir/tlds_status"
 
 if [ -z "$arg_tlds" ] || [ "$action" = "update" ]; then
 	# read tlds from the config file
@@ -166,6 +165,8 @@ if [ ! "$skipfetch" ] && [ "$action" != "remove" ]; then
 		${suite_name}-fetch -c "$tld" -p "$whitelist_dir"; rv=$?
 		if [ $rv -gt 0 ] && [ $rv -lt 254 ]; then
 			# (0 < $rv < 254) from fetch means fatal code error rather than fetch error
+			failed_tlds="$tlds"
+			echolog -err "Failed to fetch ip lists for country '$tld'."
 			die 1 "Error in *fetch script, something is broken."
 		elif [ $rv -eq 254 ]; then
 			errcnt=$(( errcnt + 1 ))
@@ -184,12 +185,10 @@ if [ ! "$skipfetch" ] && [ "$action" != "remove" ]; then
 
 	if [ "$errcnt" -gt 0 ]; then
 		echolog -err "Failed to fetch ip lists for countries '$failed_tlds'."
-		echo "FailedTLDs=$failed_tlds" >> "$tlds_status_file"
 	fi
 
 	if [ "$ok_cnt" -gt 0 ]; then
 		echolog "Successfully fetched the ip lists for countries '$ok_tlds'."
-		echo "OkTLDs=$ok_tlds" >> "$tlds_status_file"
 	else
 		err="All fetch attempts failed."
 		die 254 "$err"
@@ -213,7 +212,7 @@ else
 		debugprint "NOTE: *apply exited with error code 254."
 		echo ""
 		# if non-fatal errors occur in *apply, exit with an error
-		die 1 ""
+		die 1
 	elif [ $rv -gt 0 ] && [ $rv -ne 254 ]; then
 		debugprint "NOTE: *apply exited with error code $rv."
 		echo ""

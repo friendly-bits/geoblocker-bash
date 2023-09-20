@@ -88,20 +88,86 @@ setconfig() {
 	fieldname="$1"
 	field="$2"
 	configfile="${3:-$conf_file}"
-	[ -z "$fieldname" ] || [ -z "$configfile" ] && return 1
+	[ -z "$configfile" ] && { die "*common: setconfig: \$configfile is empty"; }
+	[ -z "$fieldname" ] && { die "*common: setconfig: \$fieldname is empty"; }
 
 	# create the config file if it doesn't exist
-	touch "$configfile" || return 1
+	touch "$configfile" || { die "*common: could not create configfile '$configfile'"; }
+
+	# check if config line already exists
+	grep "$fieldname=" "$configfile" > /dev/null; line_exists=$?
 
 	# remove corresponding config line
-	grep -v "$fieldname=" "$configfile" > "${configfile}.temp" || { rm "${configfile}.temp"; return 1; }
-	mv "${configfile}.temp" "$configfile" || { rm "${configfile}.temp"; return 1; }
+	grep -v "$fieldname=" "$configfile" > "${configfile}.temp" || {
+		[ "$line_exists" -eq 0 ] && { rm "${configfile}.temp"; die "*common: could not create temporary file '${configfile}.temp'"; }
+	}
+	mv "${configfile}.temp" "$configfile" || { rm "${configfile}.temp"; die "*common: could not rewrite file '$configfile'"; }
 
 	# add updated config line
-	echo -e "$fieldname=$field" >> "$configfile" || return 1
+	echo -e "$fieldname=$field" >> "$configfile" || { die "*common: could not add entry '$fieldname=$field' to conf file '$configfile'"; }
 
 	return 0
 }
+
+sanitize_string() {
+# trims leading, trailing, and extra in-between whitespaces in input string
+# replaces new lines (if any) with spaces
+# also sorts and removes duplicates
+	input_str="$*"
+	result_str="$(echo "$input_str" | tr ' ' '\n' | sort -ibu |  tr '\n' ' ' | awk '{$1=$1};1')"
+	echo "$result_str"
+}
+
+find_lists_intersection() {
+# finds duplicates-free intersection between space-delimited fields in input strings $1 and $2,
+#      and outputs the intersection as a string
+
+	# convert space-separated lists to newline-separated sorted lists
+	str1="$(echo "$1" | tr ' ' '\n' | sort -u)"
+	str2="$(echo "$2" | tr ' ' '\n' | sort -u)"
+
+
+	# piping into comm is not allowed so using the "<()" constructions
+	# result is space separated intersection list
+	intersect_str="$(comm -12 <(echo "$str1") <(echo "$str2"))"
+	result_str="$(sanitize_string "$intersect_str")"
+	echo "$result_str"
+}
+
+find_lists_difference() {
+# finds space-delimited fields that exist in strings $1 or $2 but not both
+#      and outputs the difference as a string
+
+	# convert space-separated lists to newline-separated sorted lists
+	str1="$(echo "$1" | tr ' ' '\n' | sort -u)"
+	str2="$(echo "$2" | tr ' ' '\n' | sort -u)"
+
+	# can't pipe into comm so using the "<()" constructions
+	# result is space separated difference list
+	diff_str="$(comm -3 <(echo "$str1") <(echo "$str2"))"
+	result_str="$(sanitize_string "$diff_str")"
+	echo "$result_str"
+}
+
+subtract_list_a_from_b() {
+# removes all space-delimited fields found in string $1 from string $2, outputs the result as a string
+
+	str1="$1"; str2="$2"
+	while read -r field_str; do
+		str2="${str2//$field_str/}"
+	done < <(echo "$str1" | tr ' ' '\n' )
+	result_str="$(sanitize_string "$str2")"
+	echo "$result_str"
+}
+
+merge_lists() {
+# merges 2 lists
+# then sanitizes the list by removing extra white spaces and replacing \n with " "
+	merged_list="$(echo "$1 $2")"
+	result_list="$(sanitize_string "$merged_list")"
+	echo "$result_list"
+}
+
 
 # this can't be used from a sourced script because it'll return the path to the sourced script and not to the caller
 # leaving it in for reference
