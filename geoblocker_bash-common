@@ -161,9 +161,8 @@ subtract_list_a_from_b() {
 }
 
 merge_lists() {
-# merges 2 lists
-# then sanitizes the list by removing extra white spaces and replacing \n with " "
-	merged_list="$(echo "$1 $2")"
+# merges 2 lists then sanitizes the list by removing extra white spaces and replacing \n with " "
+	merged_list="$1 $2"
 	result_list="$(sanitize_string "$merged_list")"
 	echo "$result_list"
 }
