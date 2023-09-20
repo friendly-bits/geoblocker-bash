@@ -118,6 +118,8 @@ family="inet"
 ipset_hashsizes=()
 ipset_maxelements=()
 
+exitvalue="0"
+
 
 #### CHECKS
 
@@ -273,7 +275,8 @@ if [ "$action" = "remove" ]; then
 		# Check if given ipset exists
 		matching_ipset="$(ipset list -n | grep "$perm_ipset")"
 		if [ "$matching_ipset" = "" ]; then
-			echo "Error removing ipset '$perm_ipset' because it doesn't appear to exist."
+			echo "Warning: Can't remove ipset '$perm_ipset' because it doesn't appear to exist."
+			exitvalue="254"
 		else
 			echo -n "Destroying ipset for country '$tld'... "
 			ipset destroy "$perm_ipset"; rv=$?
@@ -428,4 +431,4 @@ echo ""
 
 debugexitmsg
 
-exit 0
+exit "$exitvalue"
