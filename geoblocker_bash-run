@@ -212,6 +212,7 @@ else
 		debugprint "NOTE: *apply exited with error code 254."
 		echo ""
 		# if non-fatal errors occur in *apply, exit with an error
+		echolog "Error: *apply exited with code 254. Failed to apply action '$apply_action'."
 		die 1
 	elif [ $rv -gt 0 ] && [ $rv -ne 254 ]; then
 		debugprint "NOTE: *apply exited with error code $rv."
@@ -224,13 +225,33 @@ else
 	fi
 	echo
 
-	# call the backup script to create a known-good backup of ipsets and iptables state
-	[ -z "$nobackup" ] && ${suite_name}-backup -a backup
+	debugprint "Verifying config coherency..."
 
-	echolog "Successfully applied action '$action' for countries '$tlds'."
+	if [ -z "$nobackup" ]; then
+		# check config coherency vs active ipsets and firewall rules before performing any action
+		check_tlds_coherency; rv=$?
+		if [ $rv -eq 0 ]; then
+			debugprint "Successfully verified tlds coherency."
+
+			# call the backup script to create a known-good backup of ipsets and iptables state
+			${suite_name}-backup -a backup
+		else
+			echolog "Warning: actual firewall config differs from the config file! Skipping creating backup of current firewall state."
+			echolog "Please run the *manage script to restore config coherency!"
+			[ "$unexpected_tlds" != "" ] && echo "Unexpected tlds in the firewall: '$unexpected_tlds'" >&2
+			[ "$missing_tlds" != "" ] && echo "Missing tlds in the firewall: '$missing_tlds'" >&2
+		fi
+	else
+		debugprint "Skipping backup because nobackup was requested"
+	fi
 fi
 
-if [ "$errcnt" -ne 0 ]; then rv=254; else rv=0; fi
+if [ "$errcnt" -ne 0 ]; then
+	rv=254
+else
+	rv=0
+	echolog "Successfully applied action '$action' for countries '$tlds'."
+fi
 
 debugexitmsg
 
