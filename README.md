@@ -59,7 +59,7 @@ additional mandatory prerequisites: to install, run ```sudo apt install ipset wg
 
 ## **Notes**
 
-1) Only the *install, *manage and check_ip_in_ripe.sh scripts are intended as a user interface. The *manage script saves the config to a file and implements coherency checks between that file and the actual firewall state. While you can run the other scripts separately, if you make any changes to firewall geoblocking, next time you run the *manage script it will revert any such changes you made as they are not reflected in the config file.
+1) Only the *install, *uninstall, *manage and check_ip_in_ripe.sh scripts are intended as a user interface. The *manage script saves the config to a file and implements coherency checks between that file and the actual firewall state. While you can run the other scripts separately, if you make any changes to firewall geoblocking, next time you run the *manage script it will revert any such changes you made as they are not reflected in the config file.
 
 2) Changes applied to the firewall, as well as automatic ip list updates, are made persistent via cron jobs: a periodic job running by default on a daily schedule, and a job that runs at system reboot (after 30 seconds delay).
 
@@ -163,8 +163,8 @@ The scripts intended as user interface are **-install**, **-uninstall**, **-mana
 
 ## **Extra notes**
 
-- All scripts (except -common) display "usage" when called with the "-h" option. You can find out about some additional options specific for each script by running it with the "-h" option.
-- All scripts accept the "-d" option for debug
+- All scripts (except -common) display "usage" when called with the "-h" option. You can find out about some additional options specific for each script by running it with that option.
+- Most scripts accept the "-d" option for debug
 - The fetch script can be easily modified to get the lists from another source instead of RIPE, for example from ipdeny.com
 - If you live in a small country, the fetched list may be shorter than 100 subnets. If that's the case, the fetch and check_ip_in_ripe scripts will assume that the download failed and refuse to work. You can change the value of the "min_subnets_num" variable in both scripts to work around that.
 - If you remove your country's whitelist using the -manage script, you will probably get locked out of your remote server.
