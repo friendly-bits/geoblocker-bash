@@ -265,6 +265,9 @@ parent_short_cap="${parent_short^^}"
 conf_dir="/etc/${suite_name}"
 conf_file="${conf_dir}/${suite_name}.conf"
 
+# global variables to get coherency check results from check_tlds_coherency()
+unexpected_tlds=""
+missing_tlds=""
 
 ### Main
 arguments=("$@")
