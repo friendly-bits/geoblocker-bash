@@ -12,12 +12,12 @@ Intended use case is a server/computer that needs to be publicly accessible only
 Recommended to read the NOTES section below.
 
 **To install:**
-1) Install prerequisites. On Debian and derivatives run: sudo apt install ipset jq wget grepcidr
+1) Install prerequisites. On Debian and derivatives run: ```sudo apt install ipset jq wget grepcidr``` (other distributions may have slightly different package names)
 2) Download the latest realease:
 https://github.com/blunderful-scripts/geoblocker_bash/releases
 3) Put *all* scripts in this suite into the same folder
-4) Use the check_ip_in_ripe script to make sure that your public ip address is included in the list fetched from RIPE, so you do not get locked out of your server.
-- example: ```bash check_ip_in_ripe.sh -c DE -i <your_public_ip_address>``` (for Germany)
+4) Optional: Use the check_ip_in_ripe script to make sure that your public ip address is included in the list fetched from RIPE, so you do not get locked out of your server.
+- example (for Germany): ```bash check_ip_in_ripe.sh -c DE -i <your_public_ip_address>```
 5) Once verified that your public ip address is included in the list, run
 
 ```sudo bash geoblocker_bash-install -c <"country_codes">```
@@ -25,6 +25,8 @@ https://github.com/blunderful-scripts/geoblocker_bash/releases
 - example (for Germany and Netherlands): ```sudo bash geoblocker_bash-install -c "DE NL"```
 
 (when specifying multiple countries, put the list in double quotes)
+
+6) That's it! If no errors occured during installation (such as missing prerequisites), your computer should now only be accessible from the countries you specified during installation, and automatic list updates should just work. By default, ip lists will be updated daily at 4am - you can verify that updates do work next day by running something like ```cat /var/log/syslog | grep geoblocker_bash```
  
 **To change configuration:**
 run ```sudo geoblocker_bash-manage -a <action> [-c "country_codes"]```
@@ -155,7 +157,7 @@ The scripts intended as user interface are **-install**, **-uninstall**, **-mana
 
 **The check_ip_in_ripe.sh script** can be used to verify that a certain ip address belongs to a subnet found in RIPE's records for a given country. It is not called from other scripts.
 
-## **Extra notes for the curious**
+## **Extra notes**
 
 - All scripts (except -common) display "usage" when called with the "-h" option. You can find out about some additional options specific for each script by running it with the "-h" option.
 - All scripts accept the "-d" option for debug
