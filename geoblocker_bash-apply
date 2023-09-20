@@ -60,7 +60,7 @@ EOF
 
 #### PARSE ARGUMENTS
 
-while getopts "a:c:pdht" opt; do
+while getopts "a:c:dht" opt; do
 	case $opt in
 		a) action=$OPTARG;;
 		c) tlds=$OPTARG;;
@@ -99,7 +99,7 @@ round_up_to_power2() {
 }
 
 destroy_temp_ipsets() {
-	current_temp_ipsets="$(ipset list -n | grep "$suite_name" | grep "temp" | tr '\n' ' ' | awk '{$1=$1};1')"
+	curr_temp_ipsets="$(ipset list -n | grep "$suite_name" | grep "temp" | tr '\n' ' ' | awk '{$1=$1};1')"
 	for temp_ipset in $curr_temp_ipsets; do
 		ipset destroy "$temp_ipset" > /dev/null
 	done
