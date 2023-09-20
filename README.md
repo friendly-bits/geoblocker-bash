@@ -1,13 +1,13 @@
 # geoblocker_bash
 Automatic geoip blocker for Linux based on a whitelist for a country or multiple countries, written purely in Bash.
 
-Fetches an ipv4 whitelist for user-specified countries, then blocks (via iptables rules) incoming traffic from anywhere except whitelisted subnets and local subnet. Implements persistence and automatic update of the whitelist. Comes with built-in mechanisms for fault detection and recovery. Easy to install and configure (and easy to uninstall).
+Fetches an ipv4 whitelist for user-specified countries, then blocks (via iptables rules) incoming traffic from anywhere except whitelisted subnets and the local subnet. Implements persistence and automatic update of the whitelist. Comes with built-in mechanisms for fault detection and recovery. Easy to install and configure (and easy to uninstall).
 
 The ip lists are fetched from RIPE - regional Internet registry for Europe, the Middle East and parts of Central Asia. RIPE stores ip lists for countries in other regions as well, so currently this can be used for any country in the world.
 
 Intended use case is a server/computer that needs to be publicly accessible only in a certain country or countries.
 
-I created this project for running on my own server, and it's being doing its job since the early releases, reducing the bot scans/attacks (which I'd been seeing a lot in the logs) to virtually zero. As I wanted it to be useful for other people as well, I implemented many reliability features which should make it unlikely that the scripts will misbehave on systems other than my own. But of course, use at your own risk.
+I created this project for running on my own server, and it's being doing its job since the early releases, reducing the bot scans/attacks (which I'd been seeing a lot in the logs) to virtually zero. As I wanted it to be useful to other people as well, I implemented many reliability features which should make it unlikely that the scripts will misbehave on systems other than my own. But of course, use at your own risk. Before publishing a new release, I run the code through shellcheck to test for potential issues, and test the scripts on my server.
 
 ## **TL;DR**
 
@@ -17,7 +17,7 @@ Recommended to read the NOTES section below.
 1) Install prerequisites. On Debian and derivatives run: ```sudo apt install ipset jq wget grepcidr``` (other distributions may have slightly different package names)
 2) Download the latest realease:
 https://github.com/blunderful-scripts/geoblocker_bash/releases
-3) Put *all* scripts in this suite into the same folder
+3) Put all scripts in this suite into the same folder somewhere in your home directory
 4) Optional: Use the check_ip_in_ripe.sh script to make sure that your public ip address is included in the list fetched from RIPE, so you do not get locked out of your server.
 - example (for Germany): ```bash check_ip_in_ripe.sh -c DE -i <your_public_ip_address>```
 5) Once verified that your public ip address is included in the list, run
@@ -28,7 +28,7 @@ https://github.com/blunderful-scripts/geoblocker_bash/releases
 
 (when specifying multiple countries, put the list in double quotes)
 
-6) That's it! If no errors occured during installation (such as missing prerequisites), your computer should now only be accessible from the countries you specified during installation, and automatic list updates should just work. By default, ip lists will be updated daily at 4am - you can verify that updates do work next day by running something like ```cat /var/log/syslog | grep geoblocker_bash```
+6) That's it! If no errors occured during installation (such as missing prerequisites), your computer should now only be accessible from the countries you specified, and automatic list updates should just work. By default, ip lists will be updated daily at 4am - you can verify that updates do work next day by running something like ```cat /var/log/syslog | grep geoblocker_bash```
  
 **To change configuration:**
 run ```sudo geoblocker_bash-manage -a <action> [-c "country_codes"]```
@@ -59,25 +59,27 @@ additional mandatory prerequisites: to install, run ```sudo apt install ipset wg
 
 ## **Notes**
 
-1) Changes applied to iptables are made persistent via cron jobs: a periodic job running by default on a daily schedule, and a job that runs at system reboot (after 30 seconds delay).
+1) Only the *install, *manage and check_ip_in_ripe.sh scripts are intended as a user interface. The *manage script saves the config to a file and implements coherency checks between that file and the actual firewall state. While you can run the other scripts separately, if you make any changes to firewall geoblocking, next time you run the *manage script it will revert any such changes you made as they are not reflected in the config file.
 
-2) You can specify a custom schedule for the periodic cron job by passing an argument to the install script. Run it with the '-h' option for more info.
+2) Changes applied to the firewall, as well as automatic ip list updates, are made persistent via cron jobs: a periodic job running by default on a daily schedule, and a job that runs at system reboot (after 30 seconds delay).
 
-3) Note that cron jobs will be run as root.
+3) You can specify a custom schedule for the periodic cron job by passing an argument to the install script. Run it with the '-h' option for more info.
 
-4) To test before deployment, you can run the install script with the "-n" option to apply all actions except actually blocking incoming connections (will NOT set INPUT chain policy to DROP). This way, you can make sure no errors are encountered, and check resulting iptables config before commiting to actual blocking. To enable blocking later, reinstall without the "-n" option.
+4) Note that cron jobs will be run as root.
 
-5) To test before deployment, you can run the install script with the "-s disable" option to skip creating cron jobs. This way, a simple server restart will undo all changes made to the firewall. To enable persistence later, install again without the "-s disable" option or run ```geoblocker_bash-manage -a schedule -s <"your_cron_schedule">```.
+5) To test before deployment, you can run the install script with the "-n" option to apply all actions except actually blocking incoming connections (will NOT set INPUT chain policy to DROP). This way, you can make sure no errors are encountered, and check resulting iptables config before commiting to actual blocking. To enable blocking later, reinstall without the "-n" option.
 
-6) The run, fetch and apply scripts write to syslog in case an error occurs. The run script also writes to syslog upon success. To verify that cron jobs ran successfully, on Debian and derivatives run ```sudo cat /var/log/syslog | grep geoblocker_bash```
+6) To test before deployment, you can run the install script with the "-s disable" option to skip creating cron jobs. This way, a simple server restart will undo all changes made to the firewall. This also disables automatic updates of the ip lists. To enable persistence and auto-update later, install again without the "-s disable" option or run ```geoblocker_bash-manage -a schedule -s <"your_cron_schedule">```.
 
-7) In the near'ish future support for blacklists may get implemented as well.
+7) The run, fetch and apply scripts write to syslog in case an error occurs. The run script also writes to syslog upon success. To verify that cron jobs ran successfully, on Debian and derivatives run ```sudo cat /var/log/syslog | grep geoblocker_bash```
 
-8) If you want support for ipv6, please let me know using the Issues tab, and I may consider implementing it.
+8) In the near'ish future support for blacklists may get implemented as well.
 
-9) These scripts will not run in the background consuming resources (except for a short time when triggered by the cron jobs). All the actual blocking is done by the system firewall. The scripts offer an easy and relatively fool-proof interface with the firewall, and automated ip lists fetching, persistence and auto-update.
+9) If you want support for ipv6, please let me know using the Issues tab, and I may consider implementing it.
 
-10) I will appreciate a report of whether it works or doesn't work on your system (please specify which), or if you find a bug. If you have a suggestion for code improvement, please let me know as well. You can use the "Discussions" and "Issues" tabs for that.
+10) These scripts will not run in the background consuming resources (except for a short time when triggered by the cron jobs). All the actual blocking is done by the system firewall. The scripts offer an easy and relatively fool-proof interface with the firewall, and automated ip lists fetching, persistence and auto-update.
+
+11) I will appreciate a report of whether it works or doesn't work on your system (please specify which), or if you find a bug. If you have a suggestion for code improvement, please let me know as well. You can use the "Discussions" and "Issues" tabs for that.
 
 ## **In detail**
 
