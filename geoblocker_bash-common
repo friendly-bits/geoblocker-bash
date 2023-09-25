@@ -69,42 +69,57 @@ die() {
 getconfig() {
 # reads a field named $1 from the config file $conf_file (or from file $2 if specified)
 # outputs the resulting field
-# returns 0 if successful, 1 if not
-	fieldname="$1"
+# returns 0 if successful
+	key_conf="$1"
 	configfile="${2:-$conf_file}"
-	[ -z "$fieldname" ] || [ -z "$configfile" ] && return 1
+	[ -z "$key_conf" ] || [ -z "$configfile" ] && return 1
 
-	entry="$(grep "$fieldname=" "$configfile" 2>/dev/null)" || return 2
+	entry="$(grep "$key_conf=" "$configfile" 2>/dev/null)" || return 2
+	entry="$(sanitize_string "$entry")"
 
-	field="${entry//$fieldname=}"
-	echo "$field"
+	value_conf="${entry//$key_conf=}"
+	echo "$value_conf"
 
 	return 0
 }
 
 setconfig() {
-# changes a field named $1 in the config file $conf_file (or in file $3 if specified) to value $2
+# accepts key=value pairs and writes them to (or replaces in) config file specified in global variable $conf_file
 # returns 0 if successful, 1 if not
-	fieldname="$1"
-	field="$2"
-	configfile="${3:-$conf_file}"
-	[ -z "$configfile" ] && { die "*common: setconfig: \$configfile is empty"; }
-	[ -z "$fieldname" ] && { die "*common: setconfig: \$fieldname is empty"; }
+
+	### Parse arguments into associative array
+	declare -A arguments_arr
+	for argument_conf in "$@"; do
+   		key_conf="$(echo "$argument_conf" | cut -f1 -d=)"
+   		key_length=${#key_conf}
+   		value_conf="${argument_conf:$key_length+1}"
+   		arguments_arr["$key_conf"]="$value_conf"
+	done
+
+	# Check that $configfile variable is not empty
+	arguments_configfile="${arguments_arr[configfile]}"
+	configfile="${arguments_configfile:-$conf_file}"
+	[ -z "$configfile" ] && { die "*common: setconfig: '\$configfile' variable is not set!"; }
 
 	# create the config file if it doesn't exist
-	touch "$configfile" || { die "*common: could not create configfile '$configfile'"; }
+	touch "$configfile" || { die "*common: setconfig: could not create configfile '$configfile'"; }
 
-	# check if config line already exists
-	grep "$fieldname=" "$configfile" > /dev/null; line_exists=$?
+	# read config file into variable
+	config_var="$(<"$configfile")" || { die "*common: setconfig: could not read configfile '$configfile'"; }
 
-	# remove corresponding config line
-	grep -v "$fieldname=" "$configfile" > "${configfile}.temp" || {
-		[ "$line_exists" -eq 0 ] && { rm "${configfile}.temp"; die "*common: could not create temporary file '${configfile}.temp'"; }
-	}
-	mv "${configfile}.temp" "$configfile" || { rm "${configfile}.temp"; die "*common: could not rewrite file '$configfile'"; }
 
-	# add updated config line
-	echo -e "$fieldname=$field" >> "$configfile" || { die "*common: could not add entry '$fieldname=$field' to conf file '$configfile'"; }
+	for key_conf in "${!arguments_arr[@]}"; do
+		value_conf="${arguments_arr[$key_conf]}"
+
+		# remove corresponding config line if it exists
+		config_var="$(echo "$config_var" | grep -v "$key_conf=")"
+
+		# add updated config line
+		config_var+="\n$key_conf=$value_conf"
+	done
+
+	# write modified config file
+	echo -e "$config_var" > "$configfile" || { die "*common: setconfig: Error: could not write to file '$configfile'!"; }
 
 	return 0
 }
