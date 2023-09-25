@@ -5,13 +5,6 @@
 # Installer for geoip blocking suite of bash scripts
 # Must be run as root
 
-# Creates system folder structure for scripts, config and data.
-# Copies all scripts included in the suite to /usr/local/bin.
-# Creates backup of pre-install policies for INPUT and FORWARD chains.
-# Calls geoblocker_bash-manage to set up geoblocker.
-# If an error occurs during installation, calls the uninstall script to revert any changes made to the system.
-# Accepts a custom cron schedule expression as an argument. Default cron schedule is "0 4 * * *" - at 4:00 [am] every day.
-
 # Requires the following additional scripts (included in the distribution):
 # geoblocker_bash-fetch, geoblocker_bash-apply, geoblocker_bash-run, geoblocker_bash-uninstall, validate_cron_schedule.sh, check_ip_in_ripe.sh
 
@@ -46,14 +39,16 @@ This script:
 1) Creates system folder structure for scripts, config and data.
 2) Copies all scripts included in the suite to /usr/local/bin.
 3) Creates backup of pre-install policies for INPUT and FORWARD iptables chains.
-4) Calls ${suite_name}-manage to set up geoblocker and then call the -fetch and -apply scripts.
+4) Calls the *manage script to set up geoblocker and then call the -fetch and -apply scripts.
 5) If an error occurs during installation, calls the uninstall script to revert any changes made to the system.
-6) Accepts a custom cron schedule expression as an argument. Default cron schedule is "0 4 * * *" - at 4:00 [am] every day.
+6) Requires to specify whitelist or blacklist for installation with the '-l' option
+7) Accepts a custom cron schedule expression as an argument. Default cron schedule is "0 4 * * *" - at 4:00 [am] every day.
 
-Usage: $me -c <"tld [tld] ... [tld]"> [-s <"sch_expression">|disable] [-n] [-d] [-h]
+Usage: $me -c <"tld [tld] ... [tld]"> -l <list_type> [-s <"sch_expression">|disable] [-n] [-d] [-h]
 
 Options:
     -c <"tld(s)">                 : tld / country codes. if passing multiple country codes, use double quotes
+    -l <list_type>                : apply list type: whitelist|blacklist
     -s <"sch_expression">|disable : schedule expression for the periodic cron job, must be inside double quotes
                                            default: "0 4 * * *" (at 4:00 [am] every day)
                                     "disable" turns off persistence
@@ -67,9 +62,10 @@ EOF
 
 #### PARSE ARGUMENTS
 
-while getopts "c:s:ndh" opt; do
+while getopts "c:l:s:ndh" opt; do
 	case $opt in
 		c) tlds=$OPTARG;;
+		l) list_type=$OPTARG;;
 		s) cron_schedule=$OPTARG;;
 		n) nodrop="true";;
 		d) debugmode_args="true";;
@@ -143,6 +139,13 @@ sleeptime="30"
 if [ -z "$tlds" ]; then
 	usage
 	echo "Specify countries with \"-c <tlds>\"!"
+	echo ""
+	exit 1
+fi
+
+if [ -z "$list_type" ]; then
+	usage
+	echo "Specify list type with \"-l <list_type>\"!"
 	echo ""
 	exit 1
 fi
@@ -231,20 +234,15 @@ check_file_exists "check_ip_in_ripe.sh"
 # Create the directory for config and, if required, parent directories
 mkdir -p "$conf_dir"
 
-# write some config to the config file
+# write initial config to the config file
 echo -n "Setting initial config... "
-setconfig "Installdir" "$install_dir"; rv1=$?; rv=$(( rv + rv1 ))
-setconfig "Datadir" "$datadir"; rv1=$?; rv=$(( rv + rv1 ))
-[ "$cron_schedule" != "disable" ] && \
-		{ setconfig "CronSchedule" "$cron_schedule"; rv1=$?; rv=$(( rv + rv1 )); }
-setconfig "DefaultSchedule" "0 4 * * *"; rv1=$?; rv=$(( rv + rv1 ))
-setconfig "RebootSleep" "$sleeptime"; rv1=$?; rv=$(( rv + rv1 ))
-setconfig "Backup_script" "$backup_script"; rv1=$?; rv=$(( rv + rv1 ))
-setconfig "NoPersistence" "$no_persistence"; rv1=$?; rv=$(( rv + rv1 ))
-setconfig "NoDrop" "$nodrop"; rv1=$?; rv=$(( rv + rv1 ))
+
+setconfig "Installdir=$install_dir" "Datadir=$datadir" "DefaultSchedule=$defualtschedule" "Rebootsleep=$sleeptime" "Backup_script=$backup_script" \
+	"NoPersistence=$no_persistence" "NoDrop=$nodrop"; rv=$?
+
 if [ "$rv" -ne 0 ]; then
 	echo "Failed."
-	echo "Errors encountered while setting config for: $err"
+	echo "Errors encountered while writing initial config to file: '$err'."
 	install_failed
 else echo "Ok."
 fi
