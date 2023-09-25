@@ -143,12 +143,14 @@ if [ -z "$tlds" ]; then
 	exit 1
 fi
 
-if [ -z "$list_type" ]; then
-	usage
-	echo "Specify list type with \"-l <list_type>\"!"
-	echo ""
-	exit 1
-fi
+
+# commented out until blacklist functionality complete
+#if [ -z "$list_type" ]; then
+#	usage
+#	echo "Specify list type with \"-l <list_type>\"!"
+#	echo ""
+#	exit 1
+#fi
 
 # check for root
 if [ "$EUID" -ne 0 ]; then
