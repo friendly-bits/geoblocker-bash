@@ -11,6 +11,7 @@
 #     Calls the -run script to fetch and apply the ip lists.
 #     Sets up or disables persistence via the -cronsetup script.
 #     Calls the -backup script to create a backup of current config, ipsets and iptables state.
+#     Requires to specify whitelist or blacklist for installation with the '-l' option
 
 # 'geoblocker_bash-manage -a schedule -s <"schedule_expression">' : enables persistence
 #     and configures the schedule for the periodic cron job.
@@ -44,11 +45,12 @@ WARNING: if removing a whitelist: Geoblocking will remain active after removal.
          If you remove your country's whitelist, you may lose remote access to your system.
 
 
-Usage: $me -a <action> [-c "[tld] [tld] ... [tld]"] [-s <"sch_expression"|disable>] [-f] [-t] [-d] [-h]
+Usage: $me -a <action> [-l <list_type>] [-c "[tld] [tld] ... [tld]"] [-s <"sch_expression"|disable>] [-f] [-t] [-d] [-h]
 
 Options:
     -a add|remove|schedule        : action to perform: add or remove ipsets, iptables rules and cron jobs
                                        or "schedule" to change the cron schedule (has no effect on iptables rules).
+    -l <list_type>                : apply list type: whitelist|blacklist
 
     -c "tld(s)"                   : tld / country codes. if passing multiple country codes, use double quotes.
     -s <"sch_expression">|disable : schedule expression for the periodic cron job, must be inside double quotes.
@@ -65,9 +67,10 @@ EOF
 
 
 #### PARSE ARGUMENTS
-while getopts "a:c:s:ftdh" opt; do
+while getopts "a:l:c:s:ftdh" opt; do
 	case $opt in
 		a) action=$OPTARG;;
+		l) list_type=$OPTARG;;
 		c) tlds_arg=$OPTARG;;
 		s) cron_schedule=$OPTARG;;
 		f) force_action="true";;
@@ -256,6 +259,7 @@ else
 
 
 	### Call the *run script
+
 	$run_command -o -a "$action" -c "$tlds_to_change"; rv=$?
 
 	# positive return code means apply failure or another permanent error, except for 254
@@ -282,10 +286,12 @@ else
 		echo "Warning: failed to apply new rules for countries: $failed_tlds." >&2
 	fi
 
-	setconfig "Countries" "$new_verified_tlds"; rv=$?
+	debugprint "Writing new config to file: 'Countries=$new_verified_tlds'"
+	setconfig "Countries=$new_verified_tlds"; rv=$?
 	[ "$rv" -ne 0 ] && die 1 "Failed to write updated set of tlds '$new_verified_tlds' to config file '$conf_file'."
 
 	config_tlds="$(getconfig "Countries")"
+	debugprint "current countries in config file: '$config_tlds'"
 
 ####### Fault recovery test: inject unrequested tld
 [ "$test" ] &&	$run_command -o -a "add" -c "ge"; rv=$?
