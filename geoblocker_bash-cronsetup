@@ -134,7 +134,7 @@ esac
 if [[ "$action" = "disable" || ( "$no_persistence" = "true" && -z "$cron_schedule_args" ) ]]; then
 	debugprint "disabling cron jobs..."
 	# disable cron jobs in config
-	setconfig "NoPersistence" "true"
+	setconfig "NoPersistence=true"
 	remove_cron_jobs; rv=$?
 	exit $rv
 fi
@@ -204,8 +204,7 @@ debugprint "Reboot cron line: '$reboot_cron_line_result'"
 
 
 # write to the config file
-setconfig "NoPersistence" "false"
-setconfig "CronSchedule" "$cron_schedule"
+setconfig "NoPersistence=false" "CronSchedule=$cron_schedule"
 
 debugexitmsg
 
