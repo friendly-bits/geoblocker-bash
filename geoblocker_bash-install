@@ -334,9 +334,11 @@ if [ $rv -ne 0 ]; then
 	install_failed
 fi
 
+echo "View current iptables config with 'sudo iptables -L -v'."
+echo
 echo "Install done."
 
-echo ""
+echo
 
 unset nolog
 unset debugmode
