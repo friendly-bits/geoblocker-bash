@@ -72,7 +72,7 @@ while getopts ":a:c:dht" opt; do
 done
 shift $((OPTIND -1))
 
-[[ "$@" != "" ]] && {
+[[ "$*" != "" ]] && {
 	usage
 	echo "Error in arguments. First unrecognized argument: '$1'." >&2
 	echo "Note: If specifying multiple country codes, put them in double braces." >&2
