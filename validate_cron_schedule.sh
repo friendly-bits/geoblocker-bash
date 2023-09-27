@@ -54,7 +54,7 @@ EOF
 
 #### Parse arguments
 
-while getopts "x:hd" opt; do
+while getopts ":x:hd" opt; do
 	case $opt in
 	x) sourceline=$OPTARG;;
 	h) usage; exit 0;;
@@ -63,6 +63,13 @@ while getopts "x:hd" opt; do
 	esac
 done
 shift $((OPTIND -1))
+
+[[ "$*" != "" ]] && {
+	usage
+	echo "Error in arguments. First unrecognized argument: '$1'." >&2
+	echo "When specifying schedule, make sure to use double braces." >&2
+ 	exit 1
+}
 
 echo
 
