@@ -67,7 +67,7 @@ EOF
 
 
 #### PARSE ARGUMENTS
-while getopts "a:l:c:s:ftdh" opt; do
+while getopts ":a:l:c:s:ftdh" opt; do
 	case $opt in
 		a) action=$OPTARG;;
 		l) list_type=$OPTARG;;
@@ -77,10 +77,17 @@ while getopts "a:l:c:s:ftdh" opt; do
 		d) debugmode_args="true";;
 		h) usage; exit 0;;
 		t) test=true;;
-		\?) usage; exit 1;;
+		\?) usage; echo "Error: Unknown option: '-$OPTARG'." >&2; exit 1;;
 	esac
 done
 shift $((OPTIND -1))
+
+[[ "$@" != "" ]] && {
+	usage
+	echo "Error in arguments. First unrecognized argument: '$1'." >&2
+	echo "Note: If specifying multiple country codes, put them in double braces." >&2
+	exit 1
+}
 
 echo
 
@@ -100,7 +107,7 @@ restore_from_config() {
 
 	echo "Re-applying previous countries set: '$config_tlds'... "
 	$run_command -o -a "remove" -c "$config_tlds $unexpected_tlds $tlds_to_change"
-	$run_command -o -a "add" -c "$config_tlds"; rv=$?
+	[[ "$config_tlds" != "" ]] && $run_command -o -a "add" -c "$config_tlds"
 
 	check_tlds_coherency; rv=$?
 	if [ $rv -eq 0 ]; then
@@ -133,7 +140,7 @@ restore_from_config() {
 export nolog="true"
 
 # get install_dir from the config file
-install_dir="$(getconfig "Installdir")" || { die -nolog "Error: *manage: Couldn't read value for Installdir from the config file."; }
+install_dir="$(getconfig "Installdir")" || { die -nolog "Error: Couldn't read value for Installdir from the config file."; }
 
 # convert input country codes (tlds) to lower case
 tlds_arg="${tlds_arg,,}"
@@ -142,7 +149,7 @@ tlds_arg="${tlds_arg,,}"
 tlds_arg="$(sanitize_string "$tlds_arg")"
 
 ### Read current set of countries from the the config file into config_tlds
-config_tlds="$(getconfig "Countries")" || { die -nolog "Error: *manage: Couldn't read value for Countries from the config file."; }
+config_tlds="$(getconfig "Countries")" || { die -nolog "Error: Couldn't read value for Countries from the config file."; }
 
 action="${action,,}"
 
@@ -245,8 +252,7 @@ if [ "$action" != "add" ] && [ "$action" != "remove" ]; then
 else
 
 	if [ -z "$tlds_to_change" ] && [ -z "$force_action" ]; then
-		config_tlds="$(getconfig "Countries")" || \
-			{ die -nolog "Error: *manage: Couldn't read value for Countries from the config file."; }
+		config_tlds="$(getconfig "Countries")" || { die -nolog "Error: Couldn't read value for Countries from the config file."; }
 		echo; echo "Countries in final config: '$config_tlds'."
 		die 254 -nolog "Nothing to do, exiting."
 	fi
@@ -291,7 +297,7 @@ else
 	setconfig "Countries=$new_verified_tlds" || \
 		{ die -nolog "Failed to write updated tlds '$new_verified_tlds' to the config file"; }
 
-	config_tlds="$(getconfig "Countries")" || { die -nolog "Error: *manage: Couldn't read value for Countries from the config file."; }
+	config_tlds="$(getconfig "Countries")" || { die -nolog "Error: Couldn't read value for Countries from the config file."; }
 	debugprint "current countries in config file: '$config_tlds'"
 
 ####### Fault recovery test: inject unrequested tld
@@ -341,15 +347,19 @@ else
 	[ -z "$cron_schedule" ] && cron_schedule="disable"
 
 	# check that countries list in config is not empty
-	config_tlds="$(getconfig "Countries")" || { die -nolog "Error: *manage: Couldn't read value for Countries from the config file."; }
+	config_tlds="$(getconfig "Countries")" || { die -nolog "Error: Couldn't read value for Countries from the config file."; }
 
 	if [ -z "$config_tlds" ]; then
 		die -nolog "Error: Countries list in the config file is empty! No point in creating cron jobs."
 	else
-		${suite_name}-cronsetup -a "$cron_action" -s "$cron_schedule"
+		${suite_name}-cronsetup -a "$cron_action" -s "$cron_schedule"; rv=$?
+		echo
+		if [ "$rv" -eq 0 ]; then
+			echo "View current cron jobs with 'sudo crontab -l'"
+		else
+			echo "Error: Failed to create cron jobs!"
+		fi
 	fi
-	echo
-	echo "View current cron jobs with 'sudo crontab -l'"
 fi
 
 echo
