@@ -31,7 +31,7 @@ suite_name="geoblocker_bash"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 [ -n "$script_dir" ] && cd "$script_dir" || { echo "Error: Couldn't cd into '$script_dir'."; exit 1; }
 
-source "$script_dir/${suite_name}-common" || { echo "Error: Can't find ${suite_name}-common."; exit 1; }
+source "$script_dir/${suite_name}-common" || { echo "Error: Can't source ${suite_name}-common."; exit 1; }
 # NOTE that some functions and variables are sourced from the *common script
 
 # sanitize arguments
@@ -93,14 +93,14 @@ debugentermsg
 #### VARIABLES
 
 # get datadir from the config file
-datadir="$(getconfig "Datadir")"
+datadir="$(getconfig "Datadir")" || { die "Error: *manage: Couldn't read value for Datadir from the config file."; }
 knowngood_file="$datadir/iptables_knowngood.bak"
 whitelist_dir="$datadir/ip_lists"
 
 if [ -z "$arg_tlds" ] || [ "$action" = "update" ]; then
 	# read tlds from the config file
 	debugprint "Loading tlds from file..."
-	tlds="$(getconfig "Countries")"
+	tlds="$(getconfig "Countries")" || { die "Error: *manage: Couldn't read value for Countries from the config file."; }
 else
 	tlds="$arg_tlds"
 fi
