@@ -313,13 +313,13 @@ else
 		restore_from_config
 	fi
 
+	## call the backup script
+	debugprint "Calling the backup script"
+	${suite_name}-backup -a backup
 	echo "Countries in final config: '$config_tlds'."
 	echo
 	echo "View current iptables rules with 'sudo iptables -L -v'"
 	echo
-	## call the backup script
-	debugprint "Calling the backup script"
-	${suite_name}-backup -a backup
 fi
 
 
