@@ -60,17 +60,24 @@ EOF
 
 #### PARSE ARGUMENTS
 
-while getopts "a:c:dht" opt; do
+while getopts ":a:c:dht" opt; do
 	case $opt in
 		a) action=$OPTARG;;
 		c) tlds=$OPTARG;;
 		d) debugmode_args="true";;
 		h) usage; exit 0;;
 		t) test=true;;
-		\?) usage; exit 1;;
+		\?) usage; echo "Error: Unknown option: '-$OPTARG'." >&2; exit 1;;
 	esac
 done
 shift $((OPTIND -1))
+
+[[ "$@" != "" ]] && {
+	usage
+	echo "Error in arguments. First unrecognized argument: '$1'." >&2
+	echo "Note: If specifying multiple country codes, put them in double braces." >&2
+	exit 1
+}
 
 echo
 
