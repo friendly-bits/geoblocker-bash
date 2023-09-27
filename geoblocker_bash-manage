@@ -315,7 +315,7 @@ else
 
 	echo "Countries in final config: '$config_tlds'."
 	echo
-	echo "View iptables rules with 'sudo iptables -L'"
+	echo "View current iptables rules with 'sudo iptables -L -v'"
 	echo
 	## call the backup script
 	debugprint "Calling the backup script"
