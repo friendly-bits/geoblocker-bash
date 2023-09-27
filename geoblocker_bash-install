@@ -239,7 +239,7 @@ mkdir -p "$conf_dir"
 # write initial config to the config file
 echo -n "Setting initial config... "
 
-setconfig "Installdir=$install_dir" "Datadir=$datadir" "DefaultSchedule=$defualtschedule" "Rebootsleep=$sleeptime" "Backup_script=$backup_script" \
+setconfig "Countries=" "Installdir=$install_dir" "Datadir=$datadir" "DefaultSchedule=$defualtschedule" "Rebootsleep=$sleeptime" "Backup_script=$backup_script" \
 	"NoPersistence=$no_persistence" "NoDrop=$nodrop"; rv=$?
 
 if [ "$rv" -ne 0 ]; then
