@@ -14,8 +14,8 @@
 me=$(basename "$0")
 suite_name="geoblocker_bash"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-[ -n "$script_dir" ] && cd "$script_dir" || { echo "Error: Couldn't cd into '$script_dir'. Exiting."; exit 1; }
-source "$script_dir/${suite_name}-common" || { echo "Error: Can't find ${suite_name}-common. Exiting."; exit 1; }
+[ -n "$script_dir" ] && cd "$script_dir" || { echo "Error: Couldn't cd into '$script_dir'. Exiting." >&2; exit 1; }
+source "$script_dir/${suite_name}-common" || { echo "Error: Can't find ${suite_name}-common. Exiting." >&2; exit 1; }
 
 #### USAGE
 
@@ -91,14 +91,14 @@ while read -r preinstall_policy; do
 	chain_name=$(echo "$preinstall_policy" | cut -f 1 -d " ")
 	oldpolicy=$(echo "$preinstall_policy" | cut -f 2 -d " ")
 	if [ -n "$chain_name" ] && [ -n "$oldpolicy" ]; then
-		echo "Restoring pre-install iptables policy \"$oldpolicy\" for chain \"$chain_name\""
+		echo "Restoring pre-install iptables policy '$oldpolicy' for chain '$chain_name'"
 		iptables -P "$chain_name" "$oldpolicy"; rv=$?
 		if [ $rv -ne 0 ]; then
-			echo "Error $rv trying to change iptables policy with command \"iptables -P $chain_name $oldpolicy\". Exiting."
+			echo "Error $rv trying to change iptables policy with command 'iptables -P $chain_name $oldpolicy'. Exiting." >&2
 			exit 1
 			fi
 	else
-		echo "Could not restore pre-install iptables policies. Apparently the file $preinstall_policies_file is empty, missing or misconfigured."
+		echo "Could not restore pre-install iptables policies. Apparently the file '$preinstall_policies_file' is empty, missing or misconfigured." >&2
 	fi
 done < "$preinstall_policies_file"
 
@@ -132,14 +132,13 @@ if [ ! "$partial_uninstall" ]; then
 	rm "$install_dir/${suite_name}-manage"
 	rm "$install_dir/${suite_name}-cronsetup"
 	rm "$install_dir/${suite_name}-run"
-	rm "$install_dir/${suite_name}-install"
 	rm "$install_dir/${suite_name}-common"
 	rm "$install_dir/validate_cron_schedule.sh"
 	rm "$install_dir/check_ip_in_ripe.sh"
 	rm "$install_dir/${suite_name}-uninstall"
 	rm "$install_dir/${suite_name}-backup"
 
-	### Delete the config file
+	### Delete the config dir
 	echo "Deleting config..."
 	rm -rf "$conf_dir"
 
