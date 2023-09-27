@@ -23,9 +23,9 @@
 me=$(basename "$0")
 suite_name="geoblocker_bash"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-[ -n "$script_dir" ] && cd "$script_dir" || { echo "Error: Couldn't cd into '$script_dir'."; exit 1; }
+[ -n "$script_dir" ] && cd "$script_dir" || { echo "Error: Couldn't cd into '$script_dir'." >&2; exit 1; }
 
-source "$script_dir/${suite_name}-common" || { echo "Error: Can't find ${suite_name}-common."; exit 1; }
+source "$script_dir/${suite_name}-common" || { echo "Error: Can't find ${suite_name}-common." >&2; exit 1; }
 # **NOTE** that some functions and variables are sourced from the *common script
 
 # sanitize arguments
@@ -116,10 +116,10 @@ restore_from_config() {
 		if [ $rv -eq 0 ]; then
 			echo "Successfully re-applied previous countries set."
 		else
-			echo "Failed to restore firewall config from backup." >&2
+			echo "Failed to re-apply previous countries set." >&2
 			[ "$unexpected_tlds" != "" ] && echo "Unexpected tlds in the firewall: '$unexpected_tlds'" >&2
 			[ "$missing_tlds" != "" ] && echo "Missing tlds in the firewall: '$missing_tlds'" >&2
-			die "$rv" "Something is not working as it should. Consider fixing your firewall or your system. If it's a bug then please report it."
+			die "$rv" -nolog "Something is not working as it should. Consider fixing your firewall or your system. If it's a bug then please report it."
 		fi
 	fi
 }
@@ -133,7 +133,7 @@ restore_from_config() {
 export nolog="true"
 
 # get install_dir from the config file
-install_dir="$(getconfig "Installdir")"; rv=$?
+install_dir="$(getconfig "Installdir")" || { die -nolog "Error: *manage: Couldn't read value for Installdir from the config file."; }
 
 # convert input country codes (tlds) to lower case
 tlds_arg="${tlds_arg,,}"
@@ -142,7 +142,7 @@ tlds_arg="${tlds_arg,,}"
 tlds_arg="$(sanitize_string "$tlds_arg")"
 
 ### Read current set of countries from the the config file into config_tlds
-config_tlds="$(getconfig "Countries")"
+config_tlds="$(getconfig "Countries")" || { die -nolog "Error: *manage: Couldn't read value for Countries from the config file."; }
 
 action="${action,,}"
 
@@ -152,35 +152,35 @@ run_command="${install_dir}/${suite_name}-run"
 #### CHECKS
 
 # check for root
-[ "$EUID" -ne 0 ] && die 1 "This needs to be run as root."
+[ "$EUID" -ne 0 ] && die -nolog  "This needs to be run as root."
 
 # check that the config file exists
-[ ! -f "$conf_file" ] && die "Config file '$conf_file' doesn't exist! Run the installation script again."
+[ ! -f "$conf_file" ] && die -nolog "Config file '$conf_file' doesn't exist! Run the installation script again."
 
 ## Check arguments for sanity
 
 # check for valid action
 
-[ -z "$action" ] && { usage; die 1 "Specify action with '-a <action>'!"; }
+[ -z "$action" ] && { usage; die -nolog "Specify action with '-a <action>'!"; }
 
 case "$action" in
 	add) ;;
 	remove) ;;
 	schedule) ;;
-	*) die 1 "Error: unsupported action '$action'." ;;
+	*) die -nolog "Error: unsupported action '$action'." ;;
 esac
 
 [[ ("$action" == "add" || "$action" == "remove") && -z "$tlds_arg" ]] && \
-	die 1 "Error: action '$action' requires to specify countries with '-c <tlds>'!"
+	die -nolog "Error: action '$action' requires to specify countries with '-c <tlds>'!"
 
 [[ "$action" == "schedule" && ( -n "$tlds_arg" || -n "$force_action" ) ]] && \
-	die 1 "Action '$action' only supports changing the cron schedule! Do not use it with any option except '-s' or '-d' !"
+	die -nolog "Action '$action' only supports changing the cron schedule! Do not use it with any option except '-s' or '-d' !"
 
 [ "$action" != "schedule" ] && [ -n "$cron_schedule" ] && {
 	msg1="Error: the '-s <\"cron_schedule\">' option only works with the \"schedule\" action."
 	msg2="To set up cron schedule, use '$me -a schedule -s <\"cron_schedule\">'"
 	usage
-	die "$msg1" "$msg2";
+	die -nolog "$msg1" "$msg2";
 }
 
 
@@ -245,16 +245,17 @@ if [ "$action" != "add" ] && [ "$action" != "remove" ]; then
 else
 
 	if [ -z "$tlds_to_change" ] && [ -z "$force_action" ]; then
-		config_tlds="$(getconfig "Countries")"
+		config_tlds="$(getconfig "Countries")" || \
+			{ die -nolog "Error: *manage: Couldn't read value for Countries from the config file."; }
 		echo "Countries in final config: '$config_tlds'."
-		die 254 "Nothing to do, exiting."
+		die 254 -nolog "Nothing to do, exiting."
 	fi
 
 	debugprint "planned tlds after '$action': '$planned_tlds'"
 
 	# if planned_tlds list is empty
 	if [ -z "$planned_tlds" ] && [ -z "$force_action" ]; then
-		die 1 "Planned final countries list is empty! Disallowing this to prevent accidental lockout of a remote server."
+		die -nolog "Planned final countries list is empty! Disallowing this to prevent accidental lockout of a remote server."
 	fi
 
 
@@ -267,7 +268,7 @@ else
 		echo "Error performing action '$action' for countries '$tlds_to_change'." >&2
 
 		if [ "$config_tlds" = "" ]; then
-			die 1 "Can not restore previous countries set because it is not found in the config file."
+			die -nolog "Can not restore previous countries set because it is not found in the config file."
 		fi
 
 		restore_from_config
@@ -279,7 +280,7 @@ else
 	# if all 'add' actions failed
 	if [ -z "$(find_lists_difference "$tlds_to_change" "$failed_tlds")" ]; then
 		debugprint "failed_tlds: '$failed_tlds'"
-		die 1 "All actions failed."
+		die -nolog "All actions failed."
 	fi
 
 	if [ "$failed_tlds" != "" ]; then
@@ -287,10 +288,10 @@ else
 	fi
 
 	debugprint "Writing new config to file: 'Countries=$new_verified_tlds'"
-	setconfig "Countries=$new_verified_tlds"; rv=$?
-	[ "$rv" -ne 0 ] && die 1 "Failed to write updated set of tlds '$new_verified_tlds' to config file '$conf_file'."
+	setconfig "Countries=$new_verified_tlds" || \
+		{ die -nolog "Failed to write updated tlds '$new_verified_tlds' to the config file"; }
 
-	config_tlds="$(getconfig "Countries")"
+	config_tlds="$(getconfig "Countries")" || { die -nolog "Error: *manage: Couldn't read value for Countries from the config file."; }
 	debugprint "current countries in config file: '$config_tlds'"
 
 ####### Fault recovery test: inject unrequested tld
@@ -339,10 +340,10 @@ else
 	[ -z "$cron_schedule" ] && cron_schedule="disable"
 
 	# check that countries list in config is not empty
-	config_tlds="$(getconfig "Countries")"
+	config_tlds="$(getconfig "Countries")" || { die -nolog "Error: *manage: Couldn't read value for Countries from the config file."; }
 
 	if [ -z "$config_tlds" ]; then
-		die 1 "Error: Countries list in the config file is empty! No point in creating cron jobs."
+		die -nolog "Error: Countries list in the config file is empty! No point in creating cron jobs."
 	else
 		${suite_name}-cronsetup -a "$cron_action" -s "$cron_schedule"
 	fi
