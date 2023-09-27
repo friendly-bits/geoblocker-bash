@@ -14,9 +14,9 @@
 me=$(basename "$0")
 suite_name="geoblocker_bash"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-[ -n "$script_dir" ] && cd "$script_dir" || { echo "Error: *install: Couldn't cd into '$script_dir'."; exit 1; }
+[ -n "$script_dir" ] && cd "$script_dir" || { echo "Error: *install: Couldn't cd into '$script_dir'." >&2; exit 1; }
 
-source "$script_dir/${suite_name}-common" || { echo "Error: *install: Can't source '${suite_name}-common'."; exit 1; }
+source "$script_dir/${suite_name}-common" || { echo "Error: *install: Can't source '${suite_name}-common'." >&2; exit 1; }
 # NOTE that some functions and variables are sourced from the *common script
 
 # sanitize arguments
@@ -89,7 +89,7 @@ debugentermsg
 
 install_failed() {
 	echo "Installation failed." >&2
-	echo "Uninstalling ${suite_name}..."
+	echo "Uninstalling ${suite_name}..." >&2
 	bash ${suite_name}-uninstall
 	exit 1
 }
@@ -154,14 +154,14 @@ fi
 
 # check for root
 if [ "$EUID" -ne 0 ]; then
-	echo "This needs to be run as root."
+	echo "This needs to be run as root." >&2
 	echo ""
 	exit 1
 fi
 
 # check for systemd
 if [ "$(! ps -p 1 -o comm=)" != "systemd" ]; then
-	echo "Error: systemd is required but this sytem does not appear to be running systemd. Exiting."
+	echo "Error: systemd is required but this sytem does not appear to be running systemd. Exiting." >&2
 	echo ""
 	exit 1
 fi
@@ -169,55 +169,55 @@ fi
 # check for curl or wget
 curl_or_wget=$(if hash curl 2>/dev/null; then echo "curl -s"; elif hash wget 2>/dev/null; then echo "wget -qO-"; fi);
 if [ -z "$curl_or_wget" ]; then
-	echo "Error: Neither curl nor wget found. Exiting."
+	echo "Error: Neither curl nor wget found. Exiting." >&2
 	echo ""
 	exit 1
 fi
 
 # Check that we have the ipset utility
 if ! command -v "ipset" &> /dev/null; then
-	echo "Error: Can not find 'ipset'. Install it with 'apt install ipset' or similar. Exiting."
+	echo "Error: Can not find 'ipset'. Install it with 'apt install ipset' or similar. Exiting." >&2
 	echo ""
 	exit 1
 fi
 
 # Check for iptables-save utility
 if ! command -v "iptables-save" &> /dev/null; then
-	echo "Error: Can not find 'iptables-save'. Exiting."
+	echo "Error: Can not find 'iptables-save'. Exiting." >&2
 	echo ""
 	exit 1
 fi
 
 # Check for iptables-restore utility
 if ! command -v "iptables-restore" &> /dev/null; then
-	echo "Error: Can not find 'iptables-restore'. Exiting."
+	echo "Error: Can not find 'iptables-restore'. Exiting." >&2
 	echo ""
 	exit 1
 fi
 
 # check for jq
 if ! command -v jq &> /dev/null; then
-	echo "Error: Can not find the jq Json processor. Install it with 'apt install jq' or similar. Exiting"
+	echo "Error: Can not find the jq Json processor. Install it with 'apt install jq' or similar. Exiting" >&2
 	echo ""
 	exit 1
 fi
 
 # check for grepcidr
 if ! command -v grepcidr &> /dev/null; then
-	echo "Error: Can not find grepcidr. Install it with 'apt install grepcidr' or similar. Exiting"
+	echo "Error: Can not find grepcidr. Install it with 'apt install grepcidr' or similar. Exiting" >&2
 	echo ""
 	exit 1
 fi
 
 # check for bc
 if ! command -v bc &> /dev/null; then
-	echo "Error: Can not find bc. Exiting"
+	echo "Error: Can not find bc. Exiting" >&2
 	echo ""
 	exit 1
 fi
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-[ -n "$script_dir" ] && cd "$script_dir" || { echo "Error: Couldn't cd into '$script_dir'. Exiting."; exit 1; }
+[ -n "$script_dir" ] && cd "$script_dir" || { echo "Error: Couldn't cd into '$script_dir'. Exiting." >&2; exit 1; }
 
 check_file_exists "${suite_name}-fetch"
 check_file_exists "${suite_name}-common"
@@ -243,8 +243,8 @@ setconfig "Installdir=$install_dir" "Datadir=$datadir" "DefaultSchedule=$defualt
 	"NoPersistence=$no_persistence" "NoDrop=$nodrop"; rv=$?
 
 if [ "$rv" -ne 0 ]; then
-	echo "Failed."
-	echo "Errors encountered while writing initial config to file: '$err'."
+	echo "Failed." >&2
+	echo "Errors encountered while writing initial config to file: '$err'." >&2
 	install_failed
 else echo "Ok."
 fi
@@ -263,7 +263,7 @@ if [ -f "$knowngood_file" ]; then
 else
 	touch "$knowngood_file"; rv=$?
 	if [ $rv -ne 0 ]; then
-		echo "Error."
+		echo "Error." >&2
 		install_failed
 	fi
 	echo "Ok."
@@ -274,7 +274,6 @@ fi
 # if we are running from $install_dir, assume that all other necessary scripts have already been installed, skip copying
 if [ "$script_dir" != "$install_dir" ]; then
 	echo -n "Copying scripts to $install_dir... "
-	copyscript "${suite_name}-install" "${install_dir}/"
 	copyscript "${suite_name}-common" "${install_dir}/"
 	copyscript "${suite_name}-fetch" "${install_dir}/"
 	copyscript "${suite_name}-apply" "${install_dir}/"
@@ -300,7 +299,7 @@ else
 	preinstall_input_policy=$(iptables -nL | grep "Chain INPUT" | awk -F'policy |)' '{print $2}')
 	preinstall_forward_policy=$(iptables -nL | grep "Chain FORWARD" | awk -F'policy |)' '{print $2}')
 	if [ -z "$preinstall_input_policy" ] || [ -z "$preinstall_forward_policy" ]; then
-		echo "Error: failed to determine current policies."
+		echo "Error: failed to determine current policies." >&2
 		install_failed
 	fi
 	touch "$preinstall_policies_file"; rv=$?
@@ -311,19 +310,19 @@ else
 	echo "INPUT $preinstall_input_policy" >> "$preinstall_policies_file"
 	echo "FORWARD $preinstall_forward_policy" >> "$preinstall_policies_file"
 	echo "Ok."
-	debugprint "Current policies:   INPUT: $preinstall_input_policy, FORWARD: $preinstall_forward_policy"
+	debugprint "Pre-install policies:   INPUT: $preinstall_input_policy, FORWARD: $preinstall_forward_policy"
 fi
 
 # cd into the install directory
 # exit in case "cd" fails
-[ -n "$install_dir" ] && cd "$install_dir" || { echo "Error: Couldn't cd into '$install_dir'. Exiting."; install_failed; }
+[ -n "$install_dir" ] && cd "$install_dir" || { echo "Error: Couldn't cd into '$install_dir'." >&2; install_failed; }
 
 ### Add whitelist(s) for $tlds to managed whitelists, then fetch and apply the whitelist(s)
 ${suite_name}-manage -f -a "add" -c "$tlds"; rv=$?
 
 # the *manage script exits with return value 254 if requested country is already included in the config
 if [ $rv -ne 0 ] && [ $rv -ne 254 ]; then
-	echo "Failed to create and apply the whitelist."
+	echo "Failed to create and apply the whitelist." >&2
 	install_failed
 fi
 
@@ -331,7 +330,7 @@ fi
 ${suite_name}-manage -a "schedule" -s "$cron_schedule"; rv=$?
 
 if [ $rv -ne 0 ]; then
-	echo "Failed to create and apply the whitelist."
+	echo "Failed to create and apply the whitelist." >&2
 	install_failed
 fi
 
