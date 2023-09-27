@@ -53,16 +53,22 @@ EOF
 
 #### Parse arguments
 
-while getopts "c:p:dh" opt; do
+while getopts ":c:p:dh" opt; do
 	case $opt in
-	c) country=$OPTARG;;
-	p) iplist_path=$OPTARG;;
-	d) debugmode_args="true";;
-	h) usage; exit 0;;
-	\?) usage; exit 1;;
+		c) country=$OPTARG;;
+		p) iplist_path=$OPTARG;;
+		d) debugmode_args="true";;
+		h) usage; exit 0;;
+		\?) usage; echo "Error: Unknown option: '-$OPTARG'." >&2; exit 1;;
 	esac
 done
 shift $((OPTIND -1))
+
+[[ "$@" != "" ]] && {
+	usage
+	echo "Error in arguments. First unrecognized argument: '$1'." >&2
+	exit 1
+}
 
 echo
 
