@@ -100,7 +100,7 @@ debugentermsg
 #### VARIABLES
 
 # get datadir from the config file
-datadir="$(getconfig "Datadir")" || { die "Error: *manage: Couldn't read value for Datadir from the config file."; }
+datadir="$(getconfig "Datadir")" || { die "Error: Couldn't read value for Datadir from the config file."; }
 
 knowngood_file="$datadir/iptables_knowngood.bak"
 whitelist_dir="$datadir/ip_lists"
@@ -108,7 +108,7 @@ whitelist_dir="$datadir/ip_lists"
 if [ -z "$arg_tlds" ] || [ "$action" = "update" ]; then
 	# read tlds from the config file
 	debugprint "Loading tlds from file..."
-	tlds="$(getconfig "Countries")" || { die "Error: *manage: Couldn't read value for Countries from the config file."; }
+	tlds="$(getconfig "Countries")" || { die "Error: Couldn't read value for Countries from the config file."; }
 else
 	tlds="$arg_tlds"
 fi
