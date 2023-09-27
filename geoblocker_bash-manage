@@ -167,7 +167,7 @@ case "$action" in
 	add) ;;
 	remove) ;;
 	schedule) ;;
-	*) die -nolog "Error: unsupported action '$action'." ;;
+	*) usage; die -nolog "Error: unsupported action '$action'." ;;
 esac
 
 [[ ("$action" == "add" || "$action" == "remove") && -z "$tlds_arg" ]] && \
