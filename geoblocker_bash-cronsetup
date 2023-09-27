@@ -63,7 +63,7 @@ shift $((OPTIND -1))
 echo
 
 # get debugmode value from either the args or environment variable
-debugmode="${debug_args:-$debugmode}"
+debugmode="${debugmode_args:-$debugmode}"
 # set env var to match the result
 export debugmode="$debugmode"
 
