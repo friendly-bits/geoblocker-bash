@@ -93,15 +93,15 @@ fi
 # check if cron service is enabled
 (systemctl is-enabled cron.service) > /dev/null || crondisabled="true"
 
-cron_schedule_conf="$(getconfig CronSchedule)" || { die -nolog "Error: *manage: Couldn't read value for CronSchedule from the config file."; }
-cron_schedule_default="$(getconfig DefaultSchedule)" || { die -nolog "Error: *manage: Couldn't read value for Defaultschedule from the config file."; }
-no_persistence="$(getconfig NoPersistence)" || { die -nolog "Error: *manage: Couldn't read value for NoPersistence from the config file."; }
+cron_schedule_conf="$(getconfig CronSchedule)" || { die -nolog "Error: Couldn't read value for CronSchedule from the config file."; }
+cron_schedule_default="$(getconfig DefaultSchedule)" || { die -nolog "Error: Couldn't read value for Defaultschedule from the config file."; }
+no_persistence="$(getconfig NoPersistence)" || { die -nolog "Error: Couldn't read value for NoPersistence from the config file."; }
 
-install_dir="$(getconfig "Installdir")" || { die -nolog "Error: *manage: Couldn't read value for Installdir from the config file."; }
+install_dir="$(getconfig "Installdir")" || { die -nolog "Error: Couldn't read value for Installdir from the config file."; }
 run_command="${install_dir}/${suite_name}-run"
 
 # get sleeptime (for reboot) from the config file
-sleeptime="$(getconfig "RebootSleep")" || { die -nolog "Error: *manage: Couldn't read value for RebootSleep from the config file."; }
+sleeptime="$(getconfig "RebootSleep")" || { die -nolog "Error: Couldn't read value for RebootSleep from the config file."; }
 
 
 #### Checks
