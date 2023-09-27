@@ -42,16 +42,23 @@ EOF
 }
 
 #### PARSE ARGUMENTS
-while getopts "a:s:dh" opt; do
+while getopts ":a:s:dh" opt; do
 	case $opt in
 		a) action=$OPTARG;;
 		s) cron_schedule_args=$OPTARG;;
 		d) debugmode_args="true";;
 		h) usage; exit 0;;
-		\?) usage; exit 1;;
+		\?) usage; echo "Error: Unknown option: '-$OPTARG'." >&2; exit 1;;
 	esac
 done
 shift $((OPTIND -1))
+
+[[ "$@" != "" ]] && {
+	usage
+	echo "Error in arguments. First unrecognized argument: '$1'." >&2
+	echo "Note: When specifying cron schedule, put it in double braces." >&2
+	exit 1
+}
 
 echo
 
@@ -73,7 +80,7 @@ if [ "$crondisabled" != "true" ]; then
 	crontab -u root -l 2>/dev/null | grep -v "$run_command" | sudo crontab -u root -
 	rv=$?
 	if [ $rv -ne 0 ]; then
-		die 1 "Error running the crontab command."
+		die -nolog "Error running the crontab command."
 	else
 		echo "Ok."
 	fi
@@ -86,24 +93,22 @@ fi
 # check if cron service is enabled
 (systemctl is-enabled cron.service) > /dev/null || crondisabled="true"
 
-cron_schedule_conf="$(getconfig CronSchedule)"
-cron_schedule_default="$(getconfig DefaultSchedule)"
-no_persistence="$(getconfig NoPersistence)"
+cron_schedule_conf="$(getconfig CronSchedule)" || { die -nolog "Error: *manage: Couldn't read value for CronSchedule from the config file."; }
+cron_schedule_default="$(getconfig DefaultSchedule)" || { die -nolog "Error: *manage: Couldn't read value for Defaultschedule from the config file."; }
+no_persistence="$(getconfig NoPersistence)" || { die -nolog "Error: *manage: Couldn't read value for NoPersistence from the config file."; }
 
-# debugprint "no_persistence: $no_persistence"
-
-install_dir="$(getconfig "Installdir")"; rv=$?
+install_dir="$(getconfig "Installdir")" || { die -nolog "Error: *manage: Couldn't read value for Installdir from the config file."; }
 run_command="${install_dir}/${suite_name}-run"
 
 # get sleeptime (for reboot) from the config file
-sleeptime="$(getconfig "RebootSleep")"
+sleeptime="$(getconfig "RebootSleep")" || { die -nolog "Error: *manage: Couldn't read value for RebootSleep from the config file."; }
 
 
 #### Checks
 
 # check for valid action
 
-[ -z "$action" ] && { usage; die 1 "Specify action with '-a <action>'!"; }
+[ -z "$action" ] && { usage; die -nolog "Specify action with '-a <action>'!"; }
 
 # convert action to lower case
 action="${action,,}"
@@ -111,7 +116,7 @@ action="${action,,}"
 case "$action" in
 	apply) ;;
 	disable) ;;
-	*) die 1 "Error: unsupported action '$action'." ;;
+	*) die -nolog "Error: unsupported action '$action'." ;;
 esac
 
 # translate arguments received from *manage
@@ -119,14 +124,10 @@ esac
 
 # check for conflicting arguments
 [[ "$action" = "disable" && -n "$cron_schedule_args" ]] && \
-	die 1 "Error: Conflicting arguments. Don't use '-a disable' with '-s <\"sch_expression\">'."
+	die -nolog "Error: Conflicting arguments. Don't use '-a disable' with '-s <\"sch_expression\">'."
 
 
 #### Main
-
-## Read current cron jobs into variable
-#curr_cron_jobs="$(crontab -u root -l 2>/dev/null | grep "\"$run_command\"")"
-#debugprint "Current cron jobs: $curr_cron_jobs"
 
 # if (action is "disable") OR
 # (NoPersistence is set to "true" in the config file AND new schedule was not provided in args)
@@ -134,7 +135,9 @@ esac
 if [[ "$action" = "disable" || ( "$no_persistence" = "true" && -z "$cron_schedule_args" ) ]]; then
 	debugprint "disabling cron jobs..."
 	# disable cron jobs in config
-	setconfig "NoPersistence=true"
+	setconfig "NoPersistence=true" || \
+		{ die -nolog "Failed to write 'NoPersistence=true' to the config file"; }
+
 	remove_cron_jobs; rv=$?
 	exit $rv
 fi
@@ -145,7 +148,7 @@ fi
 if [ "$crondisabled" = "true" ]; then
 	err1="Error: cron service seems to be disabled. Can not create cron jobs!"
 	err2="On Debian and derivatives, enable the cron service with 'systemctl enable cron.service'. Exiting."
-	die 1 "$err1" "$err2"
+	die -nolog "$err1" "$err2"
 fi
 
 # if cron_schedule wasn't provided in args, use the schedule from the config file
@@ -153,14 +156,14 @@ cron_schedule="${cron_schedule_args:-$cron_schedule_conf}"
 # if current schedule in the config file is empty, use the default schedule
 cron_schedule="${cron_schedule:-$cron_schedule_default}"
 
-[ -z "$cron_schedule" ] && die "Could not read cron schedule from the config file '$conf_file' !"
+[ -z "$cron_schedule" ] && die -nolog "Could not read cron schedule from the config file '$conf_file' !"
 
 
 ### Validate cron schedule
 debugprint "Validating cron schedule: '$cron_schedule'."
 validate_cron_schedule.sh -x "$cron_schedule"; rv=$?
 if [ "$rv" -ne 0 ]; then
-	die 1 "Error validating cron schedule '$cron_schedule'."
+	die -nolog "Error validating cron schedule '$cron_schedule'."
 else
 	debugprint "Successfully validated cron schedule: '$cron_schedule'."
 fi
@@ -177,7 +180,7 @@ echo -e "$(sudo crontab -u root -l 2>/dev/null)\n$cron_schedule \"$run_command\"
 rv=$?
 
 if [ $rv -ne 0 ]; then
-	die 1 "Error running the crontab command."
+	die -nolog "Error running the crontab command."
 else
 	echo "Ok."
 	cron_line_result="$(crontab -u root -l 2>/dev/null |  grep  "\"$run_command\"")"
@@ -192,7 +195,7 @@ echo -e "$(sudo crontab -u root -l 2>/dev/null)\n@reboot sleep $sleeptime && \"$
 			sudo crontab -u root -; rv=$?
 
 if [ $rv -ne 0 ]; then
-	die 1 "Error running the crontab command."
+	die -nolog "Error running the crontab command."
 else
 	echo "Ok."
 	reboot_cron_line_result="$(crontab -u root -l 2>/dev/null |  grep "reboot sleep .* && \"$run_command\"")"
@@ -204,7 +207,9 @@ debugprint "Reboot cron line: '$reboot_cron_line_result'"
 
 
 # write to the config file
-setconfig "NoPersistence=false" "CronSchedule=$cron_schedule"
+setconfig "NoPersistence=false" "CronSchedule=$cron_schedule" || \
+		{ die -nolog "Failed to write updated cron schedule to the config file"; }
+
 
 debugexitmsg
 
