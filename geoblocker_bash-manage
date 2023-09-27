@@ -247,7 +247,7 @@ else
 	if [ -z "$tlds_to_change" ] && [ -z "$force_action" ]; then
 		config_tlds="$(getconfig "Countries")" || \
 			{ die -nolog "Error: *manage: Couldn't read value for Countries from the config file."; }
-		echo "Countries in final config: '$config_tlds'."
+		echo; echo "Countries in final config: '$config_tlds'."
 		die 254 -nolog "Nothing to do, exiting."
 	fi
 
@@ -316,6 +316,7 @@ else
 	## call the backup script
 	debugprint "Calling the backup script"
 	${suite_name}-backup -a backup
+	echo
 	echo "Countries in final config: '$config_tlds'."
 	echo
 	echo "View current iptables rules with 'sudo iptables -L -v'"
