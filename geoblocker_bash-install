@@ -62,7 +62,7 @@ EOF
 
 #### PARSE ARGUMENTS
 
-while getopts "c:l:s:ndh" opt; do
+while getopts ":c:l:s:ndh" opt; do
 	case $opt in
 		c) tlds=$OPTARG;;
 		l) list_type=$OPTARG;;
@@ -70,9 +70,17 @@ while getopts "c:l:s:ndh" opt; do
 		n) nodrop="true";;
 		d) debugmode_args="true";;
 		h) usage; exit 0;;
-		\?) usage; exit 1;;
+		\?) usage; echo "Error: Unknown option: '-$OPTARG'." >&2; exit 1;;
 	esac
 done
+shift $((OPTIND -1))
+
+[[ "$@" != "" ]] && {
+	usage
+	echo "Error in arguments. First unrecognized argument: '$1'." >&2
+	echo "Note: If specifying multiple country codes, put them in double braces." >&2
+	exit 1
+}
 
 echo
 
@@ -239,7 +247,7 @@ mkdir -p "$conf_dir"
 # write initial config to the config file
 echo -n "Setting initial config... "
 
-setconfig "Countries=" "Installdir=$install_dir" "Datadir=$datadir" "DefaultSchedule=$defualtschedule" "Rebootsleep=$sleeptime" "Backup_script=$backup_script" \
+setconfig "Countries=" "Installdir=$install_dir" "Datadir=$datadir" "CronSchedule=" "DefaultSchedule=$defualtschedule" "RebootSleep=$sleeptime" "Backup_script=$backup_script" \
 	"NoPersistence=$no_persistence" "NoDrop=$nodrop"; rv=$?
 
 if [ "$rv" -ne 0 ]; then
@@ -316,6 +324,7 @@ fi
 # cd into the install directory
 # exit in case "cd" fails
 [ -n "$install_dir" ] && cd "$install_dir" || { echo "Error: Couldn't cd into '$install_dir'." >&2; install_failed; }
+
 
 ### Add whitelist(s) for $tlds to managed whitelists, then fetch and apply the whitelist(s)
 ${suite_name}-manage -f -a "add" -c "$tlds"; rv=$?
