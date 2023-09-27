@@ -21,9 +21,9 @@
 me=$(basename "$0")
 suite_name="geoblocker_bash"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-[ -n "$script_dir" ] && cd "$script_dir" || { echo "Error: Couldn't cd into '$script_dir'."; exit 1; }
+[ -n "$script_dir" ] && cd "$script_dir" || { echo "Error: Couldn't cd into '$script_dir'." >&2; exit 1; }
 
-source "$script_dir/${suite_name}-common" || { echo "Error: Can't find ${suite_name}-common."; exit 1; }
+source "$script_dir/${suite_name}-common" || { echo "Error: Can't find ${suite_name}-common." >&2; exit 1; }
 # **NOTE** that some functions and variables are sourced from the *common script
 
 # sanitize arguments
@@ -133,7 +133,7 @@ restore_from_file() {
 #			if [ "$restoretarget" = "iptables" ]; then restart_fail2ban; fi
 			return 0
 		else
-			echo "Failure."
+			echo "Failure." >&2
 			err1="Failed to restore $restoretarget known-good state from backup."
 		fi
 	else
@@ -148,9 +148,9 @@ restore_from_file() {
 	if [ ! "$test" ]; then
 		knowngood_failed "$err1" "$err2"
 	else
-		echo "$err1"
-		echo "-t switch was specified, which means we are in test mode. Skipping uninstall."
-		echo "WARNING: RECOVERY TEST FAILED AND GEOBLOCKER IS CURRENTLY INACTIVE"
+		echo "$err1" >&2
+		echo "-t switch was specified, which means we are in test mode. Skipping uninstall." >&2
+		echo "WARNING: RECOVERY TEST FAILED AND GEOBLOCKER IS CURRENTLY INACTIVE" >&2
 
 		if [ "$restoretarget" = "iptables" ]; then
 # not needed anymore
@@ -191,9 +191,8 @@ restoreknowngood() {
 		fi
 	done
 
-	msg1="NOTE: Restoring last known-good ipset and iptables from backup... "
-	echo "$msg1" >&2
-	echo "Backup file: $restorefile"
+	echo "NOTE: Restoring last known-good ipset and iptables from backup... " >&2
+	echo "Backup file: $restorefile" >&2
 	echo ""
 
 	restore_from_file "ipset" "$restorefile"
