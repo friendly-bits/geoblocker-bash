@@ -252,7 +252,7 @@ setconfig "Countries=" "Installdir=$install_dir" "Datadir=$datadir" "CronSchedul
 
 if [ "$rv" -ne 0 ]; then
 	echo "Failed." >&2
-	echo "Errors encountered while writing initial config to file: '$err'." >&2
+	echo "Error writing initial config to the config file." >&2
 	install_failed
 else echo "Ok."
 fi
