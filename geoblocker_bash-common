@@ -99,23 +99,25 @@ setconfig() {
 	# Check that $configfile variable is not empty
 	arguments_configfile="${arguments_arr[configfile]}"
 	configfile="${arguments_configfile:-$conf_file}"
-	[ -z "$configfile" ] && { die "*common: setconfig: '\$configfile' variable is not set!"; }
+	[[ "$configfile" = "" ]] && { die "*common: setconfig: '\$configfile' variable is not set!"; }
 
 	# create the config file if it doesn't exist
-	touch "$configfile" || { die "*common: setconfig: could not create configfile '$configfile'"; }
+	if [ ! -f "$configfile" ]; then
+		touch "$configfile" || { die "*common: setconfig: could not create configfile '$configfile'"; }
+	fi
 
 	# read config file into variable
 	config_var="$(<"$configfile")" || { die "*common: setconfig: could not read configfile '$configfile'"; }
-
 
 	for key_conf in "${!arguments_arr[@]}"; do
 		value_conf="${arguments_arr[$key_conf]}"
 
 		# remove corresponding config line if it exists
-		config_var="$(echo "$config_var" | grep -v "$key_conf=")"
+		config_var="$(echo "$config_var" | awk "!/$key_conf/")"
 
 		# add updated config line
-		config_var+="\n$key_conf=$value_conf"
+		config_var="$config_var
+$key_conf=$value_conf"
 	done
 
 	# write modified config file
@@ -267,6 +269,7 @@ done
 }
 
 ### Variables
+
 me="$(basename "$0")"
 me_short="${me//${suite_name}-/}"
 me_short_cap="${me_short^^}"
