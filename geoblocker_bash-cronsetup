@@ -53,7 +53,7 @@ while getopts ":a:s:dh" opt; do
 done
 shift $((OPTIND -1))
 
-[[ "$@" != "" ]] && {
+[[ "$*" != "" ]] && {
 	usage
 	echo "Error in arguments. First unrecognized argument: '$1'." >&2
 	echo "Note: When specifying cron schedule, put it in double braces." >&2
