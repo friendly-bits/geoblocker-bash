@@ -64,7 +64,7 @@ EOF
 
 #### PARSE ARGUMENTS
 
-while getopts "a:c:osdh" opt; do
+while getopts ":a:c:osdh" opt; do
 	case $opt in
 		a) action=$OPTARG;;
 		c) arg_tlds=$OPTARG;;
@@ -72,10 +72,17 @@ while getopts "a:c:osdh" opt; do
 		o) nobackup="true";;
 		d) debugmode_args="true";;
 		h) usage; exit 0;;
-		\?) usage; exit 1;;
+		\?) usage; echo "Error: Unknown option: '-$OPTARG'." >&2; exit 1;;
 	esac
 done
 shift $((OPTIND -1))
+
+[[ "$@" != "" ]] && {
+	usage
+	echo "Error in arguments. First unrecognized argument: '$1'." >&2
+	echo "Note: If specifying multiple country codes, put them in double braces." >&2
+	exit 1
+}
 
 echo
 
@@ -94,6 +101,7 @@ debugentermsg
 
 # get datadir from the config file
 datadir="$(getconfig "Datadir")" || { die "Error: *manage: Couldn't read value for Datadir from the config file."; }
+
 knowngood_file="$datadir/iptables_knowngood.bak"
 whitelist_dir="$datadir/ip_lists"
 
