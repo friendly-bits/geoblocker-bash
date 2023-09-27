@@ -42,15 +42,21 @@ EOF
 
 #### PARSE ARGUMENTS
 
-while getopts "phd" opt; do
+while getopts ":phd" opt; do
 	case $opt in
 		p) partial_uninstall="true";;
 		d) debugmode_args="true";;
 		h) usage; exit 0;;
-		\?) usage; exit 1;;
+		\?) usage; echo "Error: Unknown option: '-$OPTARG'." >&2; exit 1;;
 	esac
 done
 shift $((OPTIND -1))
+
+[[ "$@" != "" ]] && {
+	usage
+	echo "Error in arguments. First unrecognized argument: '$1'." >&2
+	exit 1
+}
 
 echo
 
