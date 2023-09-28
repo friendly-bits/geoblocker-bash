@@ -75,7 +75,6 @@ getconfig() {
 	[ -z "$key_conf" ] || [ -z "$configfile" ] && return 1
 
 	entry="$(grep "$key_conf=" "$configfile" 2>/dev/null)" || return 2
-	entry="$(sanitize_string "$entry")"
 
 	value_conf="${entry//$key_conf=}"
 	echo "$value_conf"
