@@ -1,7 +1,7 @@
 # geoblocker_bash
 Automatic geoip blocker for Linux based on a whitelist for a country or multiple countries, written purely in Bash.
 
-Fetches an ipv4 whitelist for user-specified countries, then blocks (via iptables rules) incoming traffic from anywhere except whitelisted subnets and the local subnet. Implements persistence and automatic update of the whitelist. When creating iptables rules, employs ipsets for best performance. Comes with built-in mechanisms for fault detection and recovery. Easy to install and configure (and easy to uninstall).
+Fetches an ipv4 whitelist for user-specified countries, then blocks (via iptables rules) incoming traffic from anywhere except whitelisted subnets and the local subnet. Implements persistence and automatic update of the ip lists. When creating iptables rules, employs ipsets for best performance. Comes with built-in mechanisms for fault detection and recovery. Easy to install and configure (and easy to uninstall).
 
 The ip lists are fetched from RIPE - regional Internet registry for Europe, the Middle East and parts of Central Asia. RIPE stores ip lists for countries in other regions as well, so currently this can be used for any country in the world.
 
@@ -37,10 +37,10 @@ where 'action' is either 'add', 'remove' or 'schedule'.
 - example (to add whitelists for Germany and Netherlands): ```sudo geoblocker_bash-manage -a add -c "DE NL"```
 - example (to remove whitelist for Germany): ```sudo geoblocker_bash-manage -a remove -c DE```
 
- To disable/enable/change the schedule, use the '-s' option followed by either cron schedule expression in doulbe quotes, or 'disable':
+ To disable/enable/change the autoupdate schedule, use the '-s' option followed by either cron schedule expression in doulbe quotes, or 'disable':
  ```sudo geoblocker_bash-manage -a schedule -s <cron_schdedule_expression>|disable```
 - example (to enable or change periodic cron job schedule): ```sudo geoblocker_bash-manage -a schedule -s "1 4 * * *"```
-- example (to disable cron jobs entirely, meaning there will be no persistence): ```sudo geoblocker_bash-manage -a schedule -s disable```
+- example (to disable ip lists autoupdate entirely): ```sudo geoblocker_bash-manage -a schedule -s disable```
  
 **To uninstall:**
 - run ```sudo geoblocker_bash-uninstall```
@@ -67,9 +67,9 @@ additional mandatory prerequisites: to install, run ```sudo apt install ipset wg
 
 4) Note that cron jobs will be run as root.
 
-5) To test before deployment, you can run the install script with the "-n" option to apply all actions except actually blocking incoming connections (will NOT set INPUT chain policy to DROP). This way, you can make sure no errors are encountered, and check resulting iptables config before commiting to actual blocking. To enable blocking later, reinstall without the "-n" option.
+5) To test before deployment, you can run the install script with the "-p" option to apply all actions except actually blocking incoming connections (will NOT set INPUT chain policy to DROP). This way, you can make sure no errors are encountered, and check resulting iptables config before commiting to actual blocking. To enable blocking later, reinstall without the "-n" option.
 
-6) To test before deployment, you can run the install script with the "-s disable" option to skip creating cron jobs. This way, a simple server restart will undo all changes made to the firewall. This also disables automatic updates of the ip lists. To enable persistence and auto-update later, install again without the "-s disable" option or run ```geoblocker_bash-manage -a schedule -s <"your_cron_schedule">```.
+6) To test before deployment, you can run the install script with the "-n" option to skip creating the reboot cron job which implements persistence. This way, a simple machine restart will undo all changes made to the firewall. To enable persistence later, install again without the "-n" option.
 
 7) The run, fetch and apply scripts write to syslog in case an error occurs. The run script also writes to syslog upon success. To verify that cron jobs ran successfully, on Debian and derivatives run ```sudo cat /var/log/syslog | grep geoblocker_bash```
 
@@ -105,6 +105,7 @@ The scripts intended as user interface are **-install**, **-uninstall**, **-mana
 - Calls geoblocker_bash-manage to set up geoblocker and then call the -fetch and -apply scripts.
 - If an error occurs during the installation, calls the uninstall script to revert any changes made to the system.
 - Accepts optional custom cron schedule expression as an argument. Default cron schedule is "0 4 * * *" - at 4:00 [am] every day.
+- Accepts the '-n' option switch to disable persistence
 
 **The -uninstall script**
 - Doesn't require any arguments
@@ -121,9 +122,9 @@ The scripts intended as user interface are **-install**, **-uninstall**, **-mana
 * Calls the -run script to fetch and apply the ip lists
 * Calls the -backup script to create a backup of current config, ipsets and iptables state.
 
-```geoblocker_bash-manage -a schedule -s <"schedule_expression">``` : enables persistence and configures the schedule for the periodic cron job.
+```geoblocker_bash-manage -a schedule -s <"schedule_expression">``` : enables automatic ip lists update and configures the schedule for the periodic cron job which implements this feature.
 
-```geoblocker_bash-manage -a schedule -s disable``` : disables persistence.
+```geoblocker_bash-manage -a schedule -s disable``` : disables ip lists autoupdate.
 
 **The -run script**: Serves as a proxy to call the -fetch, -apply and -backup scripts with arguments required for each action.
 
@@ -145,7 +146,7 @@ The scripts intended as user interface are **-install**, **-uninstall**, **-mana
 ```geoblocker_bash-apply -a remove -c <"country_codes">``` :
 - removes ipsets and associated iptables rules for specified countries.
 
-**The -cronsetup script** exists to manage all the cron-related logic in one place. Called by the -manage script to enable/disable persistence and schedule cron jobs.
+**The -cronsetup script** exists to manage all the cron-related logic in one place. Called by the -manage script. Applies settings stored in the config file.
 
 **The -backup script**: Creates a backup of the current iptables state and geoblocker-associated ipsets, or restores them from backup.
 
@@ -157,7 +158,7 @@ The scripts intended as user interface are **-install**, **-uninstall**, **-mana
 
 **The -common script:** : Stores common functions and variables for geoblocker_bash suite. Does nothing if called directly.
 
-**The validate_cron_schedule.sh script** is used by the -cronsetup script. It accepts a cron schedule expression and attempts to make sure that it conforms to cron format.
+**The validate_cron_schedule.sh script** is used by the -cronsetup script. It accepts a cron schedule expression and attempts to make sure that it conforms to the crontab format.
 
 **The check_ip_in_ripe.sh script** can be used to verify that a certain ip address belongs to a subnet found in RIPE's records for a given country. It is not called from other scripts.
 
