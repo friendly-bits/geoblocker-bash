@@ -4,20 +4,6 @@
 
 # Provides an interface to configure geoblocking.
 
-# Supported actions: add, remove, schedule.
-
-# 'geoblocker_bash-manage -a add|remove -c <country_code>' :
-#     Adds or removes the specified country codes (tld's) to/from the config file.
-#     Calls the -run script to fetch and apply the ip lists.
-#     Sets up or disables persistence via the -cronsetup script.
-#     Calls the -backup script to create a backup of current config, ipsets and iptables state.
-#     Requires to specify whitelist or blacklist for installation with the '-l' option
-
-# 'geoblocker_bash-manage -a schedule -s <"schedule_expression">' : enables persistence
-#     and configures the schedule for the periodic cron job.
-# 'geoblocker_bash-manage -a schedule -s disable' : disables persistence.
-
-
 #### Initial setup
 
 me=$(basename "$0")
@@ -50,12 +36,12 @@ Usage: $me -a <action> [-l <list_type>] [-c "[tld] [tld] ... [tld]"] [-s <"sch_e
 Options:
     -a <add|remove|schedule>        : action to perform: add or remove ipsets, iptables rules and cron jobs
                                           or "schedule" to change the cron schedule (has no effect on iptables rules).
-    -l <list_type>                  : apply list type: whitelist|blacklist
+    -l <whitelist|blacklist>        : list type to manage (currently does nothing)
 
     -c "tld(s)"                     : tld / country codes. if passing multiple country codes, use double quotes.
     -s <"sch_expression"|disable>   : schedule expression for the periodic cron job implementing auto-updates of the ip lists,
                                           must be inside double quotes.
-                                    -- default: "0 4 * * *" (at 4:00 [am] every day)
+                                    -- default schedule is "0 4 * * *" (at 4:00 [am] every day)
                                     -- "disable" will *skip* creating the cron job which is required for automatic updates of the ip list
 
     -f                              : Force the action even if it doesn't make sense or may cause remote server lockout.
