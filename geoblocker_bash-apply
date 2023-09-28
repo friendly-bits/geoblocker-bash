@@ -4,14 +4,6 @@
 
 # Creates or removes ipsets and iptables rules for specified country codes.
 
-# 'geoblocker_bash-apply -a add -c <"country_codes">' :
-#     Loads ip lists for the specified countries into ipsets
-#         and sets iptables rules to only allow connections
-#         from the local subnet and from subnets included in the ipsets.
-
-# 'geoblocker_bash-apply -a remove -c <"country_codes">' :
-#     removes ipsets and associated iptables rules for specified countries.
-
 # Requires the 'ipset' utility. To install it on Debian or derivatives, use the command:
 ## apt install ipset
 #
@@ -45,25 +37,27 @@ $me
 	If 'NoDrop' option is set to "true" in the config file, will perform all actions,
         except setting default iptables policies to DROP, which effectively leaves geoblocking disabled.
 
-Usage: $me -a <action> -c <"country_codes"> [-d] [-t] [-h]
+Usage: $me -a <action> -c <"country_codes"> [-l <list_type>] [-d] [-t] [-h]
 
 Options:
-    -a add|remove        : action to perform: "add" or "remove" associated ipsets and iptables rules
-    -c <"country_codes"> : tlds / country codes (if specifying multiple tlds, put them in double quotes)
+    -a add|remove              : action to perform: "add" or "remove" associated ipsets and iptables rules
+    -c <"country_codes">       : tlds / country codes (if specifying multiple tlds, put them in double quotes)
+    -l <whitelist|blacklist>   : list type to manage (currently does nothing, only whitelists are implemented for now)
 
-    -d                   : Debug
-    -t                   : Simulate fault and test recovery
-    -h                   : This help
+    -d                         : Debug
+    -t                         : Simulate fault and test recovery
+    -h                         : This help
 
 EOF
 }
 
 #### PARSE ARGUMENTS
 
-while getopts ":a:c:dht" opt; do
+while getopts ":a:c:l:dht" opt; do
 	case $opt in
 		a) action=$OPTARG;;
 		c) tlds=$OPTARG;;
+		l) list_type=$OPTARG;;
 		d) debugmode_args="true";;
 		h) usage; exit 0;;
 		t) test=true;;
