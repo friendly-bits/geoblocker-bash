@@ -167,14 +167,14 @@ restoreknowngood() {
 	iptables-save | sed -r "/INPUT.*comment.*${iptables_comment}/s/-A/iptables -D/e" &>/dev/null; rv=$?
 	if [ $rv -ne 0 ]; then
 		echo "Failed."
-		err1="Error removing existing iptables rules with command: iptables-save | sed -r \"/INPUT.*comment.*$iptables_comment/s/-A/iptables -D/e\"."
+		err1="Error removing existing iptables rules with command: iptables-save | sed -r '/INPUT.*comment.*$iptables_comment/s/-A/iptables -D/e'."
 		knowngood_failed "$err1"
 	else
 		echo "Ok."
 	fi
 
 	for curr_ipset in $(ipset list -n | grep "$ipset_tag"); do
-		echo -n "Destroying ipset \"$curr_ipset\"... "
+		echo -n "Destroying ipset '$curr_ipset'... "
 		ipset destroy "$curr_ipset"; rv=$?
 		if [ $rv -ne 0 ]; then
 			knowngood_failed "Error destroying ipset '$curr_ipset'."
@@ -205,10 +205,10 @@ iptables_comment="$suite_name"
 ipset_tag="$suite_name"
 
 # get datadir from the config file
-datadir="$(getconfig "Datadir")"
+datadir="$(getconfig "Datadir")" || { die "Error: Couldn't read value for Datadir from the config file."; }
 
 # get emergencydisable from the config file
-emergencydisable="$(getconfig "EmergencyDisable")"
+emergencydisable="$(getconfig "EmergencyDisable")" || { die "Error: Couldn't read value for EmergencyDisable from the config file."; }
 
 conf_file_backup="$datadir/${suite_name}.conf.bak"
 knowngood_file="$datadir/iptables_knowngood.bak"
@@ -264,7 +264,7 @@ if [ "$action" = "backup" ]; then
 	touch "${knowngood_file}.new"
 
 	iptables-save > "${knowngood_file}.new"; rv=$?
-	[ "$rv" -ne 0 ] && die "Error creating backup of iptables state with command: \"iptables-save > ${knowngood_file}.new\"."
+	[ "$rv" -ne 0 ] && die "Error creating backup of iptables state with command: 'iptables-save > ${knowngood_file}.new'."
 	echo "Ok."
 
 		# we use the same file for iptables and ipset backup
@@ -272,15 +272,13 @@ if [ "$action" = "backup" ]; then
 		echo "[IPSET]" >> "${knowngood_file}.new"
 
 	# get tlds from the config file
-	config_tlds="$(getconfig "Countries")"
-
-	debugprint "got tlds from config: '$config_tlds'"
+	config_tlds="$(getconfig "Countries")" || { die "Error: Couldn't read value for Countries from the config file."; }
 
 	for curr_tld in $config_tlds; do
 		curr_ipset="${suite_name}_${curr_tld}"
-		echo -n "Creating backup of ipset \"$curr_ipset\"... "
+		echo -n "Creating backup of ipset '$curr_ipset'... "
 		ipset save "$curr_ipset" >> "${knowngood_file}.new"; rv=$?
-		[ "$rv" -ne 0 ] && die "Error creating backup of ipset \"$curr_ipset\"."
+		[ "$rv" -ne 0 ] && die "Error creating backup of ipset '$curr_ipset'."
 	echo "Ok."
 	done
 
@@ -292,7 +290,7 @@ if [ "$action" = "backup" ]; then
 
 	echo ""
 	echo "Successfully created backup of config, ipsets and iptables rules."
-	echo "Backup file: \"$knowngood_file\""
+	echo "Backup file: '$knowngood_file'"
 fi
 
 if [ "$action" = "restore" ]; then
