@@ -44,7 +44,7 @@ This script:
 6) Requires to specify whitelist or blacklist for installation with the '-l' option
 7) Accepts a custom cron schedule expression as an argument. Default cron schedule is "0 4 * * *" - at 4:00 [am] every day.
 
-Usage: $me -c <"tld [tld] ... [tld]"> -l <list_type> [-s <"sch_expression"|disable>] [-n] [-p] [-d] [-h]
+Usage: $me -c <"tld [tld] ... [tld]"> -l <list_type> [-s <"sch_expression"|disable>] [-e] [-n] [-p] [-d] [-h]
 
 Options:
     -c <"tld(s)">                   : tld / country codes. if passing multiple country codes, use double quotes
@@ -54,6 +54,9 @@ Options:
                                       -- default: "0 4 * * *" (at 4:00 [am] every day)
                                       -- "disable" will *skip* creating the cron job which is required for automatic updates of the ip list
 
+    -e                              : Enable Emergency Deactivation. Means that if an unrecoverable error is encountered,
+                                             geoblocking will be automatically deactivated until the problem is manually fixed.
+                                             Disabled by default.
     -n                              : No persistence. Will *skip* creating the cron job which is required for geoblocking to work upon reboot.
     -p                              : No Drop: installs and configures the scripts but skips setting INPUT chain default policy to DROP
                                             (everything will be installed and configured but geoblocking won't be enabled)
@@ -65,12 +68,13 @@ EOF
 
 #### PARSE ARGUMENTS
 
-while getopts ":c:l:s:npdh" opt; do
+while getopts ":c:l:s:enpdh" opt; do
 	case $opt in
 		c) tlds=$OPTARG;;
 		l) list_type=$OPTARG;;
 		s) cron_schedule=$OPTARG;;
-		n) no_persistence=true;;
+		e) emergency_deactivation="true";;
+		n) no_persistence="true";;
 		p) nodrop="true";;
 		d) debugmode_args="true";;
 		h) usage; exit 0;;
@@ -250,7 +254,8 @@ mkdir -p "$conf_dir"
 # write initial config to the config file
 echo -n "Setting initial config... "
 
-setconfig "Countries=" "Installdir=$install_dir" "Datadir=$datadir" "CronSchedule=$cron_schedule" "DefaultSchedule=$defualtschedule" "RebootSleep=$sleeptime" "Backup_script=$backup_script" \
+setconfig "Countries=" "Installdir=$install_dir" "Datadir=$datadir" "CronSchedule=$cron_schedule" "DefaultSchedule=$defualtschedule" \
+	"RebootSleep=$sleeptime" "Backup_script=$backup_script" "EmergencyDeactivation=$emergency_deactivation" \
 	"NoPersistence=$no_persistence" "NoDrop=$nodrop"; rv=$?
 
 if [ "$rv" -ne 0 ]; then
