@@ -6,7 +6,9 @@
 # Must be run as root
 
 # Requires the following additional scripts (included in the distribution):
-# geoblocker_bash-fetch, geoblocker_bash-apply, geoblocker_bash-run, geoblocker_bash-uninstall, validate_cron_schedule.sh, check_ip_in_ripe.sh
+# geoblocker_bash-apply, geoblockder_bash-backup, geoblocker_bash-common, geoblocker_bash-cronsetup,
+# geoblocker_bash-fetch, geoblocker_bash-manage, geoblocker_bash-run, geoblocker_bash-uninstall, 
+# validate_cron_schedule.sh, check_ip_in_ripe.sh
 
 
 #### Initial setup
