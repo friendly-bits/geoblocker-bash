@@ -167,7 +167,7 @@ restoreknowngood() {
 	iptables-save | sed -r "/INPUT.*comment.*${iptables_comment}/s/-A/iptables -D/e" &>/dev/null; rv=$?
 	if [ $rv -ne 0 ]; then
 		echo "Failed."
-		err1="Error removing existing iptables rules with command: iptables-save | sed -r '/INPUT.*comment.*$iptables_comment/s/-A/iptables -D/e'."
+		err1="Error removing existing iptables rules with command: 'iptables-save | sed -r \"/INPUT.*comment.*$iptables_comment/s/-A/iptables -D/e\" '."
 		knowngood_failed "$err1"
 	else
 		echo "Ok."
