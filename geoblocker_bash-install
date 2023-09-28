@@ -44,30 +44,34 @@ This script:
 6) Requires to specify whitelist or blacklist for installation with the '-l' option
 7) Accepts a custom cron schedule expression as an argument. Default cron schedule is "0 4 * * *" - at 4:00 [am] every day.
 
-Usage: $me -c <"tld [tld] ... [tld]"> -l <list_type> [-s <"sch_expression">|disable] [-n] [-d] [-h]
+Usage: $me -c <"tld [tld] ... [tld]"> -l <list_type> [-s <"sch_expression"|disable>] [-n] [-p] [-d] [-h]
 
 Options:
-    -c <"tld(s)">                 : tld / country codes. if passing multiple country codes, use double quotes
-    -l <list_type>                : apply list type: whitelist|blacklist
-    -s <"sch_expression">|disable : schedule expression for the periodic cron job, must be inside double quotes
-                                           default: "0 4 * * *" (at 4:00 [am] every day)
-                                    "disable" turns off persistence
+    -c <"tld(s)">                   : tld / country codes. if passing multiple country codes, use double quotes
+    -l <list_type>                  : apply list type: whitelist|blacklist
+    -s <"sch_expression"|disable>   : schedule expression for the periodic cron jobimplementing auto-updates of the ip lists,
+                                            must be inside double quotes
+                                      -- default: "0 4 * * *" (at 4:00 [am] every day)
+                                      -- "disable" will *skip* creating the cron job which is required for automatic updates of the ip list
 
-    -n                            : No Drop: applies the config but skips setting INPUT chain default policy to DROP
-    -d                            : Debug
-    -h                            : This help
+    -n                              : No persistence. Will *skip* creating the cron job which is required for geoblocking to work upon reboot.
+    -p                              : No Drop: installs and configures the scripts but skips setting INPUT chain default policy to DROP
+                                            (everything will be installed and configured but geoblocking won't be enabled)
+    -d                              : Debug
+    -h                              : This help
 
 EOF
 }
 
 #### PARSE ARGUMENTS
 
-while getopts ":c:l:s:ndh" opt; do
+while getopts ":c:l:s:npdh" opt; do
 	case $opt in
 		c) tlds=$OPTARG;;
 		l) list_type=$OPTARG;;
 		s) cron_schedule=$OPTARG;;
-		n) nodrop="true";;
+		n) no_persistence=true;;
+		p) nodrop="true";;
 		d) debugmode_args="true";;
 		h) usage; exit 0;;
 		\?) usage; echo "Error: Unknown option: '-$OPTARG'." >&2; exit 1;;
@@ -140,7 +144,6 @@ default_schedule="0 4 * * *"
 cron_schedule="${cron_schedule:-$default_schedule}"
 sleeptime="30"
 
-[ "$cron_schedule" = "disable" ] && no_persistence="true"
 
 #### CHECKS
 
@@ -247,7 +250,7 @@ mkdir -p "$conf_dir"
 # write initial config to the config file
 echo -n "Setting initial config... "
 
-setconfig "Countries=" "Installdir=$install_dir" "Datadir=$datadir" "CronSchedule=" "DefaultSchedule=$defualtschedule" "RebootSleep=$sleeptime" "Backup_script=$backup_script" \
+setconfig "Countries=" "Installdir=$install_dir" "Datadir=$datadir" "CronSchedule=$cron_schedule" "DefaultSchedule=$defualtschedule" "RebootSleep=$sleeptime" "Backup_script=$backup_script" \
 	"NoPersistence=$no_persistence" "NoDrop=$nodrop"; rv=$?
 
 if [ "$rv" -ne 0 ]; then
@@ -339,7 +342,7 @@ fi
 ${suite_name}-manage -a "schedule" -s "$cron_schedule"; rv=$?
 
 if [ $rv -ne 0 ]; then
-	echo "Failed to create and apply the whitelist." >&2
+	echo "Error: failed to set up cron jobs." >&2
 	install_failed
 fi
 
