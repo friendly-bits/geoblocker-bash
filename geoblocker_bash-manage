@@ -138,6 +138,7 @@ tlds_arg="$(sanitize_string "$tlds_arg")"
 ### Read current set of countries from the the config file into config_tlds
 config_tlds="$(getconfig "Countries")" || { die -nolog "Error: Couldn't read value for Countries from the config file."; }
 
+# convert the string to lower case
 action="${action,,}"
 
 run_command="${install_dir}/${suite_name}-run"
