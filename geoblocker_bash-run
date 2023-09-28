@@ -5,17 +5,6 @@
 # Serves as a proxy to call the -fetch, -apply and -backup scripts with arguments required for each action.
 # Intended for easy triggering from the -manage script and from cron jobs.
 
-# Supported actions: add, remove, update
-
-# 'geoblocker_bash-run -a add -c <"country_codes">' :
-#        Fetches iplist and applies ipset and iptables rules for specified countries.
-
-# 'geoblocker_bash-run -a remove -c <"country_codes">' :
-#        Removes iplist, ipset and iptables rules for specified countries.
-
-# 'geoblocker_bash-run -a update' : intended for triggering from periodic cron jobs.
-#        Updates the ipsets for all country codes that had been previously configured.
-
 # all actions:
 #     If successful, calls the backup script to create backup of the current iptables state and current ipset.
 #     If an error is enountered, classifies it as a temporary or a permanent error.
@@ -107,7 +96,6 @@ whitelist_dir="$datadir/ip_lists"
 
 if [ -z "$arg_tlds" ] || [ "$action" = "update" ]; then
 	# read tlds from the config file
-	debugprint "Loading tlds from file..."
 	tlds="$(getconfig "Countries")" || { die "Error: Couldn't read value for Countries from the config file."; }
 else
 	tlds="$arg_tlds"
@@ -160,7 +148,6 @@ esac
 
 
 #### MAIN
-debugprint "tlds to process: $tlds"
 
 ### Fetch ip lists
 errcnt=0
