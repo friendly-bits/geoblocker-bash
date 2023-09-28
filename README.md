@@ -14,7 +14,7 @@ I created this project for running on my own server, and it's being doing its jo
 Recommended to read the NOTES section below.
 
 **To install:**
-1) Install prerequisites. On Debian and derivatives run: ```sudo apt install ipset jq wget grepcidr``` (other distributions may have slightly different package names)
+1) Install prerequisites. On Debian, Ubuntu and derivatives run: ```sudo apt install ipset jq wget grepcidr``` (other distributions may have slightly different package names)
 2) Download the latest realease:
 https://github.com/blunderful-scripts/geoblocker_bash/releases
 3) Put all scripts in this suite into the same folder somewhere in your home directory
