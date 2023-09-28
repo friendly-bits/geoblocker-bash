@@ -4,7 +4,7 @@
 
 # Creates a backup of the current iptables state and geoblocker-associated ipsets, or restores them from backup.
 
-#  if restore from backup fails, and if "EmergencyDisable" option is enabled in the config file
+#  if restore from backup fails, and if "EmergencyDeactivation" option is enabled in the config file
 #  (disabled by default; can be set set during installation with the '-e' option switch),
 #  assumes a fundamental issue and disables geoblocking completely via the uninstall script
 #  (removes associated ipsets and iptables rules, restores pre-install policies for INPUT and FORWARD chains,
@@ -194,7 +194,7 @@ restoreknowngood() {
 knowngood_failed() {
 	echo ""
 	echolog -err "$1" "$2"
-	if [[ "$emergencydisable" != "" ]; then ${suite_name}-uninstall -p; fi
+	if [[ "$emergency_deactivation" != "" ]; then ${suite_name}-uninstall -p; fi
 	debugexitmsg
 	exit 1
 }
@@ -207,8 +207,8 @@ ipset_tag="$suite_name"
 # get datadir from the config file
 datadir="$(getconfig "Datadir")" || { die "Error: Couldn't read value for Datadir from the config file."; }
 
-# get emergencydisable from the config file
-emergencydisable="$(getconfig "EmergencyDisable")" || { die "Error: Couldn't read value for EmergencyDisable from the config file."; }
+# get EmergencyDeactivation from the config file
+emergency_deactivation="$(getconfig "EmergencyDeactivation")" || { die "Error: Couldn't read value for EmergencyDeactivation from the config file."; }
 
 conf_file_backup="$datadir/${suite_name}.conf.bak"
 knowngood_file="$datadir/iptables_knowngood.bak"
