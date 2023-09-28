@@ -4,17 +4,11 @@
 
 # Creates a backup of the current iptables state and geoblocker-associated ipsets, or restores them from backup.
 
-# 'geoblocker_bash-backup -a backup' :
-#     Creates a backup of the current iptables state and geoblocker-associated ipsets
-
-# 'geoblocker_bash-backup -a restore' : Used for automatic recovery from fault conditions
-#         (should not happen but implemented just in case)
-#     Restores ipsets and iptables state from backup.
-#     If restore from backup fails, assumes a fundamental issue and calls the uninstall script
-#         to perform a partial uninstall (removes associated ipsets and iptables rules,
-#         restores pre-install policies for INPUT and FORWARD iptables chains,
-#         does not remove installed files, config and data).
-
+#  if restore from backup fails, and if "EmergencyDisable" option is enabled in the config file
+#  (disabled by default; can be set set during installation with the '-e' option switch),
+#  assumes a fundamental issue and disables geoblocking completely via the uninstall script
+#  (removes associated ipsets and iptables rules, restores pre-install policies for INPUT and FORWARD chains,
+#  does not remove installed scripts, config and data).
 
 #### Initial setup
 
@@ -82,14 +76,6 @@ debugentermsg
 
 
 #### FUNCTIONS
-
-knowngood_failed() {
-	echo ""
-	echolog -err "$1" "$2"
-	${suite_name}-uninstall -p
-	debugexitmsg
-	exit 1
-}
 
 # not needed anymore but leaving it in for now
 restart_fail2ban() {
@@ -180,8 +166,9 @@ restoreknowngood() {
 	# sed executes iptables -D (delete) command on matching rules. execution is promtped by the switch /e (only available in GNU sed)
 	iptables-save | sed -r "/INPUT.*comment.*${iptables_comment}/s/-A/iptables -D/e" &>/dev/null; rv=$?
 	if [ $rv -ne 0 ]; then
-		echo "Failure."
-		die "Error removing existing rules with command: iptables-save | sed -r \"/INPUT.*comment.*$iptables_comment/s/-A/iptables -D/e\"."
+		echo "Failed."
+		err1="Error removing existing iptables rules with command: iptables-save | sed -r \"/INPUT.*comment.*$iptables_comment/s/-A/iptables -D/e\"."
+		knowngood_failed "$err1"
 	else
 		echo "Ok."
 	fi
@@ -190,8 +177,7 @@ restoreknowngood() {
 		echo -n "Destroying ipset \"$curr_ipset\"... "
 		ipset destroy "$curr_ipset"; rv=$?
 		if [ $rv -ne 0 ]; then
-			echo ""
-			die "Error destroying ipset \"$curr_ipset\"."
+			knowngood_failed "Error destroying ipset '$curr_ipset'."
 		else
 			echo "Ok."
 		fi
@@ -205,6 +191,13 @@ restoreknowngood() {
 	restore_from_file "iptables" "$restorefile"
 }
 
+knowngood_failed() {
+	echo ""
+	echolog -err "$1" "$2"
+	if [[ "$emergencydisable" != "" ]; then ${suite_name}-uninstall -p; fi
+	debugexitmsg
+	exit 1
+}
 
 #### VARIABLES
 
@@ -213,6 +206,9 @@ ipset_tag="$suite_name"
 
 # get datadir from the config file
 datadir="$(getconfig "Datadir")"
+
+# get emergencydisable from the config file
+emergencydisable="$(getconfig "EmergencyDisable")"
 
 conf_file_backup="$datadir/${suite_name}.conf.bak"
 knowngood_file="$datadir/iptables_knowngood.bak"
