@@ -3,7 +3,7 @@
 # geoblocker_bash-cron
 
 # Provides an interface to configure cron jobs for geoblocking.
-# Supported actions: apply, disable.
+# Parameters are communicated via the config file
 
 
 #### Initial setup
@@ -25,16 +25,9 @@ usage() {
 $me
 Provides interface to configure cron jobs for geoblocking.
 
-Usage: $me -a <action> [-s "<sch_expression>"] [-c <"command">] [-d] [-h]
+Usage: $me [-d] [-h]
 
 Options:
-    -a apply|disable       : action to perform:
-                                 "apply" configures cron using the schedule provided with the -s option
-                                        if -s option is omitted, applies the settings from the config file
-                                        (including enabled/disabled state).
-                                 "disable" removes cron jobs and turns off persistence.
-    -s <"sch_expression">  : specifies the schedule expression (must be inside double quotes).
-
     -d                     : Debug
     -h                     : This help
 
@@ -42,10 +35,8 @@ EOF
 }
 
 #### PARSE ARGUMENTS
-while getopts ":a:s:dh" opt; do
+while getopts ":dh" opt; do
 	case $opt in
-		a) action=$OPTARG;;
-		s) cron_schedule_args=$OPTARG;;
 		d) debugmode_args="true";;
 		h) usage; exit 0;;
 		\?) usage; echo "Error: Unknown option: '-$OPTARG'." >&2; exit 1;;
@@ -73,16 +64,86 @@ debugentermsg
 
 #### Functions
 
-remove_cron_jobs() {
-# remove existing cron jobs for geoblocker_bash
-if [ "$crondisabled" != "true" ]; then
-	echo -n "Removing cron jobs for ${suite_name}... "
-	crontab -u root -l 2>/dev/null | grep -v "$run_command" | sudo crontab -u root -
+create_cron_job() {
+
+	job_type="$1"
+
+	# check that countries list in config is not empty
+	config_tlds="$(getconfig "Countries")" || { die -nolog "Error: Couldn't read value for Countries from the config file."; }
+
+	if [ -z "$config_tlds" ]; then
+		die -nolog "Error: Countries list in the config file is empty! No point in creating autoupdate job."
+	fi
+
+	case "$job_type" in
+
+		autoupdate)
+
+			[ -z "$cron_schedule" ] && die -nolog "Error: cron schedule in the config file is empty!"
+			# Validate cron schedule
+			debugprint "Validating cron schedule: '$cron_schedule'."
+			validate_cron_schedule.sh -x "$cron_schedule"; rv=$?
+			if [ "$rv" -ne 0 ]; then
+				die -nolog "Error validating cron schedule '$cron_schedule'."
+			else
+				debugprint "Successfully validated cron schedule: '$cron_schedule'."
+			fi
+
+			# Remove existing autoupdate cron job before creating new one
+			remove_cron_job "autoupdate"
+			cron_command="$cron_schedule \"$run_command\" -a update &>/dev/null # ${suite_name}-autoupdate"
+			debugprint "Creating autoupdate cron job with schedule '$cron_schedule'... "
+		;;
+
+		persistence)
+
+			debugprint "Creating persistence cron job... "
+
+			# using the -s switch for the *run script to skip fetching at reboot
+			## otherwise if there was no internet connection at reboot time, *fetch would fail which would cause *run to fail,
+			## so *apply wouldn't run, which would leave the system without geoblocking rules
+			cron_command="@reboot sleep $sleeptime && \"$run_command\" -a update -s &>/dev/null # ${suite_name}-persistence"
+		;;
+
+		*) die -nolog "Unrecognized type of cron job: '$job_type'." ;;
+
+	esac
+
+	#### Create new cron job
+
+	echo -e "$(sudo crontab -u root -l 2>/dev/null)\n$cron_command" | sudo crontab -u root -
 	rv=$?
+
 	if [ $rv -ne 0 ]; then
-		die -nolog "Error running the crontab command."
+		die -nolog "Error creating $job_type cron job!"
 	else
-		echo "Ok."
+		debugprint "Ok."
+	fi
+}
+
+
+remove_cron_job() {
+# remove existing cron job for geoblocker_bash
+# first argument should be either 'autoupdate' or 'persistence', indicating which cron job to remove
+# cron jobs are identified by the comment at the end of each job in crontab
+
+	job_type="$1"
+
+	if [[ "$crondisabled" != "true" && -n "$job_type" ]] ; then
+
+	if [[ "$job_type" != "autoupdate" && "$job_type" != "persistence" ]]; then
+			die -nolog "Error running the crontab command."
+	fi
+
+
+	debugprint "Removing $job_type cron job for ${suite_name}... "
+	crontab -u root -l 2>/dev/null | grep -v "${suite_name}-${job_type}" | sudo crontab -u root -
+	rv=$?
+
+	if [ $rv -ne 0 ]; then
+		die -nolog "Error: failed to remove $job_type cron job!"
+	else
+		debugprint "Ok."
 	fi
 fi
 }
@@ -95,6 +156,10 @@ fi
 
 cron_schedule_conf="$(getconfig CronSchedule)" || { die -nolog "Error: Couldn't read value for CronSchedule from the config file."; }
 cron_schedule_default="$(getconfig DefaultSchedule)" || { die -nolog "Error: Couldn't read value for Defaultschedule from the config file."; }
+
+# if current schedule in the config file is empty, use the default schedule
+cron_schedule="${cron_schedule_conf:-$cron_schedule_default}"
+
 no_persistence="$(getconfig NoPersistence)" || { die -nolog "Error: Couldn't read value for NoPersistence from the config file."; }
 
 install_dir="$(getconfig "Installdir")" || { die -nolog "Error: Couldn't read value for Installdir from the config file."; }
@@ -104,111 +169,50 @@ run_command="${install_dir}/${suite_name}-run"
 sleeptime="$(getconfig "RebootSleep")" || { die -nolog "Error: Couldn't read value for RebootSleep from the config file."; }
 
 
+
 #### Checks
 
-# check for valid action
-
-[ -z "$action" ] && { usage; die -nolog "Specify action with '-a <action>'!"; }
-
-# convert action to lower case
-action="${action,,}"
-
-case "$action" in
-	apply) ;;
-	disable) ;;
-	*) die -nolog "Error: unsupported action '$action'." ;;
-esac
-
-# translate arguments received from *manage
-[[ "$action" = "disable" && "$cron_schedule_args" = "disable" ]] && cron_schedule_args=""
-
-# check for conflicting arguments
-[[ "$action" = "disable" && -n "$cron_schedule_args" ]] && \
-	die -nolog "Error: Conflicting arguments. Don't use '-a disable' with '-s <\"sch_expression\">'."
+if [ "$crondisabled" = "true" ]; then
+	err1="Error: cron service seems to be disabled."
+	err2="On Debian and derivatives, enable the cron service with 'systemctl enable cron.service' before using this script."
+	die -nolog "$err1" "$err2"
+fi
 
 
 #### Main
 
-# if (action is "disable") OR
-# (NoPersistence is set to "true" in the config file AND new schedule was not provided in args)
-# then disable cron jobs
-if [[ "$action" = "disable" || ( "$no_persistence" = "true" && -z "$cron_schedule_args" ) ]]; then
-	debugprint "disabling cron jobs..."
-	# disable cron jobs in config
-	setconfig "NoPersistence=true" || \
-		{ die -nolog "Failed to write 'NoPersistence=true' to the config file"; }
-
-	remove_cron_jobs; rv=$?
-	exit $rv
-fi
-
-
-# here we know that the action is apply schedule either from config or from the args
-
-if [ "$crondisabled" = "true" ]; then
-	err1="Error: cron service seems to be disabled. Can not create cron jobs!"
-	err2="On Debian and derivatives, enable the cron service with 'systemctl enable cron.service'. Exiting."
-	die -nolog "$err1" "$err2"
-fi
-
-# if cron_schedule wasn't provided in args, use the schedule from the config file
-cron_schedule="${cron_schedule_args:-$cron_schedule_conf}"
-# if current schedule in the config file is empty, use the default schedule
-cron_schedule="${cron_schedule:-$cron_schedule_default}"
-
-[ -z "$cron_schedule" ] && die -nolog "Could not read cron schedule from the config file '$conf_file' !"
-
-
-### Validate cron schedule
-debugprint "Validating cron schedule: '$cron_schedule'."
-validate_cron_schedule.sh -x "$cron_schedule"; rv=$?
-if [ "$rv" -ne 0 ]; then
-	die -nolog "Error validating cron schedule '$cron_schedule'."
-else
-	debugprint "Successfully validated cron schedule: '$cron_schedule'."
-fi
-
-#### Remove existing cron jobs
-remove_cron_jobs; rv=$?
-
-
-#### Create cron jobs
-
-echo ""
-echo -n "Creating periodic cron job with schedule '$cron_schedule'... "
-echo -e "$(sudo crontab -u root -l 2>/dev/null)\n$cron_schedule \"$run_command\" -a update &>/dev/null" | sudo crontab -u root -
-rv=$?
-
-if [ $rv -ne 0 ]; then
-	die -nolog "Error running the crontab command."
-else
-	echo "Ok."
-	cron_line_result="$(crontab -u root -l 2>/dev/null |  grep  "\"$run_command\"")"
-fi
-
-echo -n "Creating reboot cron job... "
-
-# using the -s switch for the *run script to skip fetching at reboot
-## otherwise if there was no internet connection at reboot time, *fetch would fail which would cause *run to fail,
-## so *apply wouldn't run, which would leave the system without geoblocking rules
-echo -e "$(sudo crontab -u root -l 2>/dev/null)\n@reboot sleep $sleeptime && \"$run_command\" - a update -s &>/dev/null" | \
-			sudo crontab -u root -; rv=$?
-
-if [ $rv -ne 0 ]; then
-	die -nolog "Error running the crontab command."
-else
-	echo "Ok."
-	reboot_cron_line_result="$(crontab -u root -l 2>/dev/null |  grep "reboot sleep .* && \"$run_command\"")"
-fi
-
+echo -n "Updating crontab..."
 [ "$debugmode" ] && echo
-debugprint "Cron line: '$cron_line_result'"
-debugprint "Reboot cron line: '$reboot_cron_line_result'"
 
+### remove the persistence cron job before any other action since this will be done anyway
+remove_cron_job "persistence"
 
-# write to the config file
-setconfig "NoPersistence=false" "CronSchedule=$cron_schedule" || \
-		{ die -nolog "Failed to write updated cron schedule to the config file"; }
+# only remove the autoupdate cron job now if we know that autoupdate should be disabled
+if [ "$cron_schedule" = "disable" ]; then
+	remove_cron_job "autoupdate"
+fi
+
+### create new persistence cron job
+if [[ "$no_persistence" != "true" ]]; then
+	create_cron_job "persistence"
+fi
+
+### create new autoupdate cron job
+if [ "$cron_schedule" != "disable" ]; then
+	create_cron_job "autoupdate"
+fi
+
+cron_lines="$(crontab -u root -l 2>/dev/null | grep "${suite_name}")"
+[ "$debugmode" ] && echo
+debugprint "Updated crontab: \n$cron_lines\n"
+
+echo "Ok."
+
+if [[ "$no_persistence" = "true" ]]; then
+	echo
+	echo "Note: no persistence was configured during installation. Geoblocking will be deactivated upon reboot!"
+	echo "To enable persistence, run the *install script again without the '-n' option."
+fi
 
 
 debugexitmsg
