@@ -29,19 +29,19 @@ https://github.com/blunderful-scripts/geoblocker-bash/releases
 6) That's it! If no errors occured during installation (such as missing prerequisites), geoblocking should be active, and automatic list updates should just work. By default, ip lists will be updated daily at 4am - you can verify that updates do work next day by running something like ```sudo cat /var/log/syslog | grep geoblocker-bash```
  
 **To change configuration:**
-run ```sudo geoblocker-bash-manage -a <action> [-c "country_codes"]```
+run ```sudo geoblocker-bash <action> [-c "country_codes"]```
 
 where 'action' is either 'add', 'remove' or 'schedule'.
-- example (to add whitelists for Germany and Netherlands): ```sudo geoblocker-bash-manage -a add -c "DE NL"```
-- example (to remove whitelist for Germany): ```sudo geoblocker-bash-manage -a remove -c DE```
+- example (to add whitelists for Germany and Netherlands): ```sudo geoblocker-bash add -c "DE NL"```
+- example (to remove whitelist for Germany): ```sudo geoblocker-bash remove -c DE```
 
  To disable/enable/change the autoupdate schedule, use the '-s' option followed by either cron schedule expression in doulbe quotes, or 'disable':
- ```sudo geoblocker-bash-manage -a schedule -s <cron_schdedule_expression>|disable```
-- example (to enable or change periodic cron job schedule): ```sudo geoblocker-bash-manage -a schedule -s "1 4 * * *"```
-- example (to disable ip lists autoupdate entirely): ```sudo geoblocker-bash-manage -a schedule -s disable```
+ ```sudo geoblocker-bash schedule -s <cron_schdedule_expression>|disable```
+- example (to enable or change periodic cron job schedule): ```sudo geoblocker-bash schedule -s "1 4 * * *"```
+- example (to disable ip lists autoupdate entirely): ```sudo geoblocker-bash schedule -s disable```
  
-**To check current geoblocking status:**
-- run ```sudo geoblocker-bash-manage status```
+**To check on current geoblocking status:**
+- run ```sudo geoblocker-bash status```
 
 **To uninstall:**
 - run ```sudo geoblocker-bash-uninstall```
@@ -63,7 +63,7 @@ additional mandatory prerequisites: to install, run ```sudo apt install ipset wg
 
 ## **Notes**
 
-1) Only the *install, *uninstall, *manage and check_ip_in_ripe.sh scripts are intended as a user interface. The *manage script saves the config to a file and implements coherency checks between that file and the actual firewall state. While you can run the other scripts separately, if you make any changes to firewall geoblocking, next time you run the *manage script it will insist on reverting any such changes as they are not reflected in the config file.
+1) Only the *install, *uninstall, *manage (also called by running 'geoblocker-bash' after installation) and check_ip_in_ripe.sh scripts are intended as a user interface. The *manage script saves the config to a file and implements coherency checks between that file and the actual firewall state. While you can run the other scripts separately, if you make any changes to firewall geoblocking, next time you run the *manage script it will insist on reverting any such changes as they are not reflected in the config file.
 
 2) Firewall config, as well as automatic ip list updates, is made persistent via cron jobs: a periodic job running by default on a daily schedule, and a job that runs at system reboot (after 30 seconds delay). Either or both cron jobs can be disabled (run the *install script with the -h switch to find out how).
 
@@ -100,6 +100,7 @@ The suite currently includes 12 scripts:
 12. check_ip_in_ripe.sh
 
 The scripts intended as user interface are **-install**, **-uninstall**, **-manage** and **check_ip_in_ripe.sh**. All the other scripts are intended as a back-end, although they can be run by the user as well. If you just want to install and move on, you only need to run the -install script, specify mode with the -m option and specify country codes with the "-c" option. Provided you are not missing any prerequisites, it should be as easy as that.
+After installation, the user interface is provided by simply running "geoblocker-bash", which is a symlink to the -manage script.
 
 **The -install script**
 - Creates system folder structure for scripts, config and data.
@@ -120,22 +121,22 @@ The scripts intended as user interface are **-install**, **-uninstall**, **-mana
 
 **The -manage script**: provides an interface to configure geoblocking.
 
-```geoblocker-bash-manage -a add|remove -c <country_code>``` :
+```geoblocker-bash-manage <add|remove|status> [-c <country_code>]``` :
 * Adds or removes the specified country codes (tld's) to/from the config file
 * Calls the -run script to fetch and apply the ip lists
 * Calls the -backup script to create a backup of current config, ipsets and iptables state.
 
-```geoblocker-bash-manage -a schedule -s <"schedule_expression">``` : enables automatic ip lists update and configures the schedule for the periodic cron job which implements this feature.
+```geoblocker-bash-manage schedule -s <"schedule_expression">``` : enables automatic ip lists update and configures the schedule for the periodic cron job which implements this feature.
 
-```geoblocker-bash-manage -a schedule -s disable``` : disables ip lists autoupdate.
+```geoblocker-bash-manage schedule -s disable``` : disables ip lists autoupdate.
 
 **The -run script**: Serves as a proxy to call the -fetch, -apply and -backup scripts with arguments required for each action.
 
-```geoblocker-bash-run -a add -c <"country_codes">``` : Fetches iplists and loads ipsets and iptables rules for specified countries.
+```geoblocker-bash-run add -c <"country_codes">``` : Fetches iplists and loads ipsets and iptables rules for specified countries.
 
-```geoblocker-bash-run -a remove -c <"country_codes">``` : Removes iplists, ipsets and iptables rules for specified countries.
+```geoblocker-bash-run remove -c <"country_codes">``` : Removes iplists, ipsets and iptables rules for specified countries.
 
-```geoblocker-bash-run -a update``` : intended for triggering from periodic cron jobs. Updates the ipsets for all country codes that had been previously configured. Also used by the reboot cron job to implement persistence.
+```geoblocker-bash-run update``` : intended for triggering from periodic cron jobs. Updates the ipsets for all country codes that had been previously configured. Also used by the reboot cron job to implement persistence.
 
 **The -fetch script**
 - Fetches ipv4 subnets list for a given country code from RIPE.
@@ -143,19 +144,19 @@ The scripts intended as user interface are **-install**, **-uninstall**, **-mana
 
 **The -apply script**:  directly interfaces with iptables. Creates or removes ipsets and iptables rules for specified country codes.
 
-```geoblocker-bash-apply -a add -c <"country_codes">``` :
+```geoblocker-bash-apply add -c <"country_codes">``` :
 - Loads an ip list file for specified countries into ipsets and sets iptables rules to only allow connections from the local subnet and from subnets included in the ipsets.
 
-```geoblocker-bash-apply -a remove -c <"country_codes">``` :
+```geoblocker-bash-apply remove -c <"country_codes">``` :
 - removes ipsets and associated iptables rules for specified countries.
 
 **The -cronsetup script** exists to manage all the cron-related logic in one place. Called by the -manage script. Applies settings stored in the config file.
 
 **The -backup script**: Creates a backup of the current iptables state and geoblocker-associated ipsets, or restores them from backup.
 
-```geoblocker-bash-backup -a backup``` : Creates a backup of the current iptables state and geoblocker-associated ipsets.
+```geoblocker-bash-backup backup``` : Creates a backup of the current iptables state and geoblocker-associated ipsets.
 
-```geoblocker-bash-backup -a restore``` : Used for automatic recovery from fault conditions (should not happen but implemented just in case)
+```geoblocker-bash-backup restore``` : Used for automatic recovery from fault conditions (should not happen but implemented just in case)
 - Restores ipsets and iptables state from backup
 - If restore from backup fails, assumes a fundamental issue and disables geoblocking entirely
 
