@@ -250,7 +250,6 @@ if [ -z "$nobackup" ]; then
 
 	check_tlds_coherency; rv=$?
 	if [ $rv -eq 0 ]; then
-		debugprint "Successfully verified $list_type tlds coherency."
 		# call the backup script to create a known-good backup of ipsets and iptables state
 		${suite_name}-backup -a backup
 	else
