@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 
-# geoblocker_bash-install
+# geoblocker-bash-install
 
 # Installer for geoip blocking suite of bash scripts
 # Must be run as root
 
 # Requires the following additional scripts (included in the distribution):
-# geoblocker_bash-apply, geoblockder_bash-backup, geoblocker_bash-common, geoblocker_bash-cronsetup,
-# geoblocker_bash-fetch, geoblocker_bash-manage, geoblocker_bash-run, geoblocker_bash-uninstall, 
-# validate_cron_schedule.sh, check_ip_in_ripe.sh
+# geoblocker-bash-apply, geoblockder_bash-backup, geoblocker-bash-common, geoblocker-bash-cronsetup,
+# geoblocker-bash-fetch, geoblocker-bash-manage, geoblocker-bash-run, geoblocker-bash-uninstall,
+# geoblocker-bash-reset, validate_cron_schedule.sh, check_ip_in_ripe.sh
 
 
 #### Initial setup
@@ -22,7 +22,7 @@ me=$(basename "$0")
 	exit 1
 }
 
-suite_name="geoblocker_bash"
+suite_name="geoblocker-bash"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 [ -n "$script_dir" ] && cd "$script_dir" || { echo "Error: *install: Couldn't cd into '$script_dir'." >&2; exit 1; }
 

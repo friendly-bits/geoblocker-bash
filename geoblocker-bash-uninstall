@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# geoblocker_bash-uninstall
+# geoblocker-bash-uninstall
 
-# uninstalls the geoblocker_bash suite
+# uninstalls the geoblocker-bash suite
 
 
 #### Initial setup
@@ -16,7 +16,7 @@ me=$(basename "$0")
 	exit 1
 }
 
-suite_name="geoblocker_bash"
+suite_name="geoblocker-bash"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 [ -n "$script_dir" ] && cd "$script_dir" || { echo "Error: Couldn't cd into '$script_dir'. Exiting." >&2; exit 1; }
 source "$script_dir/${suite_name}-common" || { echo "Error: Can't find ${suite_name}-common. Exiting." >&2; exit 1; }
@@ -31,7 +31,7 @@ $me
 1) Deletes associated cron jobs
 2) Restores pre-install state of default policies for INPUT and FORWARD chains
 3) Deletes associated iptables rules and removes associated ipset
-4) Deletes scripts' data folder /var/lib/geoblocker_bash
+4) Deletes scripts' data folder /var/lib/geoblocker-bash
 5) Deletes the scripts from /usr/local/bin
 
 
