@@ -100,15 +100,17 @@ debugprint "Deleting cron jobs for ${suite_name}..."
 crontab -u root -l 2>/dev/null |  grep -v "${suite_name}-run" | sudo crontab -u root -
 
 
-### Restore iptables policies to pre-install state
-while read -r preinstall_policy; do
-	chain_name=$(echo "$preinstall_policy" | cut -f 1 -d " ")
-	oldpolicy=$(echo "$preinstall_policy" | cut -f 2 -d " ")
-	if [ -n "$chain_name" ] && [ -n "$oldpolicy" ]; then
-		debugprint "Restoring pre-install iptables policy '$oldpolicy' for chain '$chain_name'"
-		iptables -P "$chain_name" "$oldpolicy" &> /dev/null
-	fi
-done < "$preinstall_policies_file"
+if [ -f "$preinstall_policies_file" ]; then
+	### Restore iptables policies to pre-install state
+	while read -r preinstall_policy; do
+		chain_name=$(echo "$preinstall_policy" | cut -f 1 -d " ")
+		oldpolicy=$(echo "$preinstall_policy" | cut -f 2 -d " ")
+		if [ -n "$chain_name" ] && [ -n "$oldpolicy" ]; then
+			debugprint "Restoring pre-install iptables policy '$oldpolicy' for chain '$chain_name'"
+			iptables -P "$chain_name" "$oldpolicy" &> /dev/null
+		fi
+	done < "$preinstall_policies_file"
+fi
 
 ### Delete associated iptables rules
 
