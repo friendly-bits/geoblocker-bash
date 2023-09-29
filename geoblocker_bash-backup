@@ -6,13 +6,21 @@
 
 #  if restore from backup fails, and if "EmergencyDeactivation" option is enabled in the config file
 #  (disabled by default; can be set set during installation with the '-e' option switch),
-#  assumes a fundamental issue and disables geoblocking completely via the uninstall script
+#  assumes a fundamental issue and disables geoblocking completely via the *reset script
 #  (removes associated ipsets and iptables rules, restores pre-install policies for INPUT and FORWARD chains,
 #  does not remove installed scripts, config and data).
 
 #### Initial setup
 
 me=$(basename "$0")
+
+# check for root
+[ "$EUID" -ne 0 ] && {
+	err="Error: $me needs to be run as root."
+	echo "$err" >&2
+	exit 1
+}
+
 suite_name="geoblocker_bash"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 [ -n "$script_dir" ] && cd "$script_dir" || { echo "Error: Couldn't cd into '$script_dir'." >&2; exit 1; }
@@ -34,7 +42,8 @@ usage() {
 $me
 - Creates a backup of the current iptables states and current ipsets,
 - or restores them from backup
-- if restore from backup fails, calls the uninstall script to perform a partial uninstall
+- if restore from backup fails, in case the suite was installed with the -e option (for emergency deactivation),
+     calls the *reset script to deactivate geoblocking
 
 Usage: $me -a <action> [-d] [-h]
 
@@ -133,15 +142,15 @@ restore_from_file() {
 	fi
 
 	# if we are here then something is seriously broken (unless the script ran in test mode with the -t switch)
-	# run the uninstall script with -p switch to restore iptables to pre-install state but leave files in place
-	err2="*** Reverting iptables to pre-install state and removing cron jobs ***"
+	# run the reset script to deactivate geoblocking and remove associated cron jobs
+	err2="*** Deactivating geoblocking and removing cron jobs ***"
 
 	# if -t switch wasn't specified at launch then it's not a test
 	if [ ! "$test" ]; then
 		knowngood_failed "$err1" "$err2"
 	else
 		echo "$err1" >&2
-		echo "-t switch was specified, which means we are in test mode. Skipping uninstall." >&2
+		echo "-t switch was specified, which means we are in test mode. Skipping emergency deactivation." >&2
 		echo "WARNING: RECOVERY TEST FAILED AND GEOBLOCKER IS CURRENTLY INACTIVE" >&2
 
 		if [ "$restoretarget" = "iptables" ]; then
@@ -194,7 +203,7 @@ restoreknowngood() {
 knowngood_failed() {
 	echo ""
 	echolog -err "$1" "$2"
-	if [[ "$emergency_deactivation" != "" ]; then ${suite_name}-uninstall -p; fi
+	if [[ "$emergency_deactivation" != "" ]]; then ${suite_name}-reset; fi
 	debugexitmsg
 	exit 1
 }
@@ -215,11 +224,6 @@ knowngood_file="$datadir/iptables_knowngood.bak"
 
 
 #### CHECKS
-
-# check for root
-if [ "$EUID" -ne 0 ]; then
-	die "This needs to be run as root."
-fi
 
 # check that the config file exists
 [ ! -f "$conf_file" ] && die "Config file '$conf_file' doesn't exist! Run the installation script again."
