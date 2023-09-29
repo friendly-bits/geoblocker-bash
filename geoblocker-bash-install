@@ -321,6 +321,11 @@ if [ "$script_dir" != "$install_dir" ]; then
 	echo "Ok."
 fi
 
+## Create a symlink from ${suite_name}-manage to ${suite_name}
+ln -s "${install_dir}/${suite_name}-manage" "${install_dir}/${suite_name}" || {
+	echo "Failed to create symlink from ${suite_name}-manage to ${suite_name}" >&2
+	install_failed
+}
 
 ### Back up pre-install policies for INPUT and FORWARD chains
 
