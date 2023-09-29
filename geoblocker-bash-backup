@@ -45,21 +45,26 @@ $me
 - if restore from backup fails, in case the suite was installed with the -e option (for emergency deactivation),
      calls the *reset script to deactivate geoblocking
 
-Usage: $me -a <action> [-d] [-h]
+Usage: $me <action> [-d] [-h]
+
+Actions:
+    create-backup|restore    : create backup or restore config, associated ipsets and iptables rules
 
 Options:
-    -a backup|restore  : action to perform: "backup" or "restore" config, associated ipsets and iptables rules
-
-    -d                 : Debug
-    -h                 : This help
+    -d                       : Debug
+    -h                       : This help
 
 EOF
 }
 
 #### PARSE ARGUMENTS
-while getopts ":a:dh" opt; do
+
+# 1st argument should be the requested action
+action="$1"
+shift 1
+
+while getopts ":dh" opt; do
 	case $opt in
-		a) action=$OPTARG;;
 		d) debugmode_args="true";;
 		h) usage; exit 0;;
 		\?) usage; echo "Error: Unknown option: '-$OPTARG'." >&2; exit 1;;
@@ -250,10 +255,10 @@ fi
 
 # check for valid action
 
-[ -z "$action" ] && { usage; die 1 "Specify action with '-a <action>'!"; }
+[ -z "$action" ] && { usage; die 1 "Specify action!"; }
 
 case "$action" in
-	backup) ;;
+	create-backup) ;;
 	restore) ;;
 	*) usage; die "Error: unsupported action '$action'" ;;
 esac
@@ -261,7 +266,7 @@ esac
 
 #### MAIN
 
-if [ "$action" = "backup" ]; then
+if [ "$action" = "create-backup" ]; then
 ### Create backup file for known-good iptables state and save current state to the file
 
 	echo -n "Creating backup of current iptables state... "
