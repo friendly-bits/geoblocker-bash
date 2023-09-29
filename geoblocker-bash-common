@@ -187,7 +187,7 @@ merge_lists() {
 check_tlds_coherency() {
 # checks whether current ipsets and iptables rules match ones in the config file
 
-	debugprint "Checking tlds coherency..."
+	debugprint "Verifying config coherency..."
 
 	# initialize variables
 	unexpected_tlds=""; missing_tlds=""
@@ -204,7 +204,13 @@ check_tlds_coherency() {
 	missing_tlds="$(subtract_list_a_from_b "$active_tlds" "$config_tlds")"
 	tlds_difference="$(find_lists_difference "$active_tlds" "$config_tlds")"
 
-	[ "$tlds_difference" = "" ] && return 0 || return 1
+	if [ "$tlds_difference" = "" ]; then
+		debugprint "Successfully verified config coherency."
+		return 0
+	else
+		debugprint "Failed to verify config coherency."
+		return 1
+	fi
 }
 
 find_active_tlds() {
