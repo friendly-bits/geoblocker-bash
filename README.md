@@ -1,11 +1,11 @@
 # geoblocker-bash
 Automatic geoip blocker for Linux, written purely in Bash.
 
-Fetches ipv4 ip lists for user-specified countries, then uses them for either a whitelist or a blacklist (selected during installation) to either block all connections from those countries (blacklist), or only allow connections from them (whitelist).
+Fetches ipv4 subnet lists for user-specified countries, then uses them for either a whitelist or a blacklist (selected during installation) to either block all connections from those countries (blacklist), or only allow connections from them (whitelist).
 
 Currently employs iptables as the backend (nftables support will probably get added eventually). Implements persistence and automatic update of the ip lists. When creating iptables rules, employs ipsets for best performance. Implements many reliability features. Allows for quite a bit of customization but easy to install and configure (and easy to uninstall).
 
-The ip lists are fetched from RIPE - regional Internet registry for Europe, the Middle East and parts of Central Asia. RIPE stores ip lists for countries in other regions as well, so currently this can be used for any country in the world.
+The subnet lists are fetched from RIPE - regional Internet registry for Europe, the Middle East and parts of Central Asia. RIPE stores subnet lists for countries in other regions as well, so currently this can be used for any country in the world.
 
 Intended use case is a server/computer that needs to be publicly accessible only in a certain country or countries (whitelist), or should not be accessible from certain countries (blacklist).
 
@@ -28,19 +28,19 @@ https://github.com/blunderful-scripts/geoblocker-bash/releases
 
 (when specifying multiple countries, put the list in double quotes)
 
-6) That's it! If no errors occured during installation (such as missing prerequisites), geoblocking should be active, and automatic list updates should just work. By default, ip lists will be updated daily at 4am - you can verify that updates do work next day by running something like ```sudo cat /var/log/syslog | grep geoblocker-bash```
+6) That's it! If no errors occured during installation (such as missing prerequisites), geoblocking should be active, and automatic list updates should just work. By default, subnet lists will be updated daily at 4am - you can verify that updates do work next day by running something like ```sudo cat /var/log/syslog | grep geoblocker-bash```
  
 **To change configuration:**
 run ```sudo geoblocker-bash <action> [-c "country_codes"]```
 
 where 'action' is either 'add', 'remove' or 'schedule'.
-- example (to add ip lists for Germany and Netherlands): ```sudo geoblocker-bash add -c "DE NL"```
-- example (to remove the ip list for Germany): ```sudo geoblocker-bash remove -c DE```
+- example (to add subnet lists for Germany and Netherlands): ```sudo geoblocker-bash add -c "DE NL"```
+- example (to remove the subnet list for Germany): ```sudo geoblocker-bash remove -c DE```
 
  To disable/enable/change the autoupdate schedule, use the '-s' option followed by either cron schedule expression in doulbe quotes, or 'disable':
  ```sudo geoblocker-bash schedule -s <cron_schdedule_expression>|disable```
 - example (to enable or change periodic cron job schedule): ```sudo geoblocker-bash schedule -s "1 4 * * *"```
-- example (to disable ip lists autoupdate): ```sudo geoblocker-bash schedule -s disable```
+- example (to disable subnet lists autoupdate): ```sudo geoblocker-bash schedule -s disable```
  
 **To check on current geoblocking status:**
 - run ```sudo geoblocker-bash status```
@@ -68,7 +68,7 @@ additional mandatory prerequisites: to install, run ```sudo apt install ipset wg
 
 1) Only the *install, *uninstall, *manage (also called by running 'geoblocker-bash' after installation) and check_ip_in_ripe.sh scripts are intended as a user interface. The *manage script saves the config to a file and implements coherency checks between that file and the actual firewall state. While you can run the other scripts separately, if you make any changes to firewall geoblocking, next time you run the *manage script it will insist on reverting any such changes as they are not reflected in the config file.
 
-2) Firewall config, as well as automatic ip list updates, is made persistent via cron jobs: a periodic job running by default on a daily schedule, and a job that runs at system reboot (after 30 seconds delay). Either or both cron jobs can be disabled (run the *install script with the -h switch to find out how).
+2) Firewall config, as well as automatic subnet list updates, is made persistent via cron jobs: a periodic job running by default on a daily schedule, and a job that runs at system reboot (after 30 seconds delay). Either or both cron jobs can be disabled (run the *install script with the -h switch to find out how).
 
 3) You can specify a custom schedule for the periodic cron job by passing an argument to the install script. Run it with the '-h' option for more info.
 
@@ -82,11 +82,13 @@ additional mandatory prerequisites: to install, run ```sudo apt install ipset wg
 
 8) If you want support for ipv6, please let me know using the Issues tab, and I may consider implementing it.
 
-9) These scripts will not run in the background consuming resources (except for a short time when triggered by the cron jobs). All the actual blocking is done by the system firewall. The scripts offer an easy and relatively fool-proof interface with the firewall, and automated ip lists fetching, persistence and auto-update.
+9) These scripts will not run in the background consuming resources (except for a short time when triggered by the cron jobs). All the actual blocking is done by the system firewall. The scripts offer an easy and relatively fool-proof interface with the firewall, config persistence, automated subnet lists fetching and auto-update.
 
 10) If downloading huge ip lists (for example for China or US), fetching may take quite some time. Please be patient. If network bandwidth is an issue, consider changing the autoupdate schedule to weekly or monthly. Also, sometimes RIPE server is temporarily unavailable and if you're unlucky enough to attempt installation during that time frame, the fetch script will fail which will cause the installation to fail as well. Try again after an hour or so. Once installation succeeds, an occasional fetch failure during autoupdate won't cause any issues as last successfully fetched ip list will be used until the next autoupdate cycle succeeds.
 
-11) I will appreciate a report of whether it works or doesn't work on your system (please specify which), or if you find a bug. If you have a suggestion for code improvement, please let me know as well. You can use the "Discussions" and "Issues" tabs for that.
+11) If you want to change the autoupdate schedule but you don't know the crontab expression syntax, check out https://crontab.guru/
+
+12) I will appreciate a report of whether it works or doesn't work on your system (please specify which), or if you find a bug. If you have a suggestion for code improvement, please let me know as well. You can use the "Discussions" and "Issues" tabs for that.
 
 ## **In detail**
 
