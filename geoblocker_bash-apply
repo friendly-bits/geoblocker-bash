@@ -13,6 +13,15 @@
 #### Initial setup
 
 me=$(basename "$0")
+
+# check for root
+[ "$EUID" -ne 0 ] && {
+	err="Error: $me needs to be run as root."
+	echo "$err" >&2
+	logger "$err"
+	exit 1
+}
+
 suite_name="geoblocker_bash"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 [ -n "$script_dir" ] && cd "$script_dir" || { echo "Error: Couldn't cd into '$script_dir'." >&2; exit 1; }
@@ -37,12 +46,11 @@ $me
 	If 'NoDrop' option is set to "true" in the config file, will perform all actions,
         except setting default iptables policies to DROP, which effectively leaves geoblocking disabled.
 
-Usage: $me -a <action> -c <"country_codes"> [-l <list_type>] [-d] [-t] [-h]
+Usage: $me -a <action> -c <"country_codes"> [-d] [-t] [-h]
 
 Options:
-    -a add|remove              : action to perform: "add" or "remove" associated ipsets and iptables rules
+    -a <add|remove>            : action to perform: "add" or "remove" associated ipsets and iptables rules
     -c <"country_codes">       : tlds / country codes (if specifying multiple tlds, put them in double quotes)
-    -l <whitelist|blacklist>   : list type to manage (currently does nothing, only whitelists are implemented for now)
 
     -d                         : Debug
     -t                         : Simulate fault and test recovery
@@ -53,11 +61,10 @@ EOF
 
 #### PARSE ARGUMENTS
 
-while getopts ":a:c:l:dht" opt; do
+while getopts ":a:c:dht" opt; do
 	case $opt in
 		a) action=$OPTARG;;
 		c) tlds=$OPTARG;;
-		l) list_type=$OPTARG;;
 		d) debugmode_args="true";;
 		h) usage; exit 0;;
 		t) test=true;;
@@ -110,22 +117,29 @@ destroy_temp_ipsets() {
 #### VARIABLES
 
 # get datadir from the config file
-datadir="$(getconfig "Datadir")"
+datadir="$(getconfig "Datadir")" || { die "Error: Couldn't read value for Datadir from the config file."; }
 
-nodrop="$(getconfig "NoDrop")"
-whitelist_dir="${datadir}/ip_lists"
+# get list_type from the config file
+list_type="$(getconfig "ListType")" || { die "Error: Couldn't read value for ListType from the config file."; }
+
+# set global variable
+export list_type="$list_type"
+
+nodrop="$(getconfig "NoDrop")" || { die "Error: Couldn't read value for NoDrop from the config file."; }
+iplist_dir="${datadir}/ip_lists"
 iptables_comment_global="${suite_name}_global"
 family="inet"
 ipset_hashsizes=()
 ipset_maxelements=()
 
+# convert to lower case
+action="${action,,}"
+
+
 exitvalue="0"
 
 
 #### CHECKS
-
-# check for root
-[ "$EUID" -ne 0 ] && die 254 "This needs to be run as root."
 
 # check that the config file exists
 [ ! -f "$conf_file" ] && die "Config file '$conf_file' doesn't exist! Run the installation script again."
@@ -156,27 +170,29 @@ case "$action" in
 	*) usage; die 254 "Error: unsupported action '$action'" ;;
 esac
 
+[ -z "$list_type" ] && die "\$list_type variable should not be empty! Something is wrong!"
+
 
 #### MAIN
 
-
-### create temporary ipsets and load ip lists into them
 if [ "$action" = "add" ]; then
+### create temporary ipsets and load ip lists into them
+
 	for tld in $tlds; do
-		whitelist_file="${whitelist_dir}/ipv4_${tld}"
+		iplist_file="${iplist_dir}/ipv4_${tld}"
 		temp_ipset="${suite_name}_${tld}_temp"
 
-		# check that the whitelist file exists
-		[ ! -f "$whitelist_file" ] && die 254 "Error: Can not find the whitelist file in path: '$whitelist_file'."
+		# check that the iplist file exists
+		[ ! -f "$iplist_file" ] && die 254 "Error: Can not find the iplist file in path: '$iplist_file'."
 
 		### Create a temporary ipset and load subnets from file into it
 
 		# destroy temporary ipset in case it exists
 		ipset destroy "$temp_ipset" &>/dev/null
 
-		# count lines in the whitelist file
-		ip_cnt=$(wc -l < "$whitelist_file")
-	#	debugprint "ip count in the whitelist file '$whitelist_file': $ip_cnt"
+		# count lines in the iplist file
+		ip_cnt=$(wc -l < "$iplist_file")
+	#	debugprint "ip count in the iplist file '$iplist_file': $ip_cnt"
 
 		# calculate necessary ipset size = (next high power of 2 > $ip_cnt)
 		ipset_maxelem=$(round_up_to_power2 "$ip_cnt")
@@ -201,20 +217,20 @@ if [ "$action" = "add" ]; then
 		fi
 		debugprint "Ok."
 
-		# import the whitelist into temporary ipset from file
-		echo -n "Importing the whitelist for country '$tld' into temporary ipset... "
+		# import the iplist into temporary ipset from file
+		echo -n "Importing the iplist for country '$tld' into temporary ipset... "
 
-		# reads $whitelist_file, transforms each line into 'ipset add' command and redirects the result into "ipset restore"
+		# reads $iplist_file, transforms each line into 'ipset add' command and redirects the result into "ipset restore"
 		# this is about 50x faster than issuing discrete "ipset add" commands in a loop
 		# the '-exist' option prevents the restore command from getting stuck when encountering duplicates
 		while read -r subnet; do
 			echo "add \"$temp_ipset\" $subnet";
-		done < "$whitelist_file" |\
+		done < "$iplist_file" |\
 			ipset restore -exist; rv=$?
 
 		if [ $rv -ne 0 ]; then
 			destroy_temp_ipsets
-			die 254 "Error when importing the list from '$whitelist_file' into ipset '$temp_ipset'."
+			die 254 "Error when importing the list from '$iplist_file' into ipset '$temp_ipset'."
 		fi
 
 		echo "Ok."
@@ -231,17 +247,19 @@ fi
 
 ### Remove existing geoblocker rules for iptables
 
-## Temporarily set the policy for the INPUT chain to ACCEPT, in order to prevent user lock out in case of an error
-echo -n "Setting INPUT chain policy to ACCEPT... "
-iptables -P INPUT ACCEPT; rv=$?
-[ $rv -ne 0 ] && die "Error trying to change iptables policy with command 'iptables -P INPUT ACCEPT'."
-echo "Ok."
-echo
+if [ "$list_type" = "whitelist" ]; then
+	## Temporarily set the policy for the INPUT chain to ACCEPT, in order to prevent user lock out in case of an error
+	echo -n "Setting INPUT chain policy to ACCEPT... "
+	iptables -P INPUT ACCEPT; rv=$?
+	[ $rv -ne 0 ] && die "Error trying to change iptables policy with command 'iptables -P INPUT ACCEPT'."
+	echo "Ok."
+	echo
+fi
 
 ## delete existing iptables rules matching comment "$iptables_comment"
 for tld in $tlds; do
 	iptables_comment="${suite_name}_${tld}"
-	echo -n "Removing existing iptables rules for country '$tld'... "
+	echo -n "Removing existing $list_type iptables rules for country '$tld'... "
 
 	# sed looks for rules with the comment which we use to stamp our rules
 	# sed executes iptables -D (delete) command on matching rules. execution is promtped by the switch /e (only available in GNU sed)
@@ -253,6 +271,7 @@ for tld in $tlds; do
 	fi
 	echo "Ok."
 done
+
 echo
 
 
@@ -269,6 +288,7 @@ echo
 
 
 ### Apply the "remove" action
+
 if [ "$action" = "remove" ]; then
 	for tld in $tlds; do
 		perm_ipset="${suite_name}_${tld}"
@@ -294,46 +314,50 @@ if [ "$action" = "remove" ]; then
 fi
 
 
-### Set global iptables rules
+# global rules are only used for whitelists. when working with blacklists, don't touch these
+if [ "$list_type" = "whitelist" ]; then
 
-# Add rule to allow connections from the local subnet
-localsubnet="$(getlocalsubnet)"
-if [ -z "$localsubnet" ]; then
-	destroy_temp_ipsets
-	die "Error: couldn't determine local subnet."
-else
-	echo "Found local subnet: '$localsubnet'."
-	echo -n "Appending rule to allow all traffic from the local subnet... "
-	iptables -A INPUT -s "$localsubnet" -j ACCEPT -m comment --comment "${iptables_comment_global}"; rv=$?
+	### Set global iptables rules
+
+	# Add rule to allow connections from the local subnet
+	localsubnet="$(getlocalsubnet)"
+	if [ -z "$localsubnet" ]; then
+		destroy_temp_ipsets
+		die "Error: couldn't determine local subnet."
+	else
+		echo "Found local subnet: '$localsubnet'."
+		echo -n "Appending rule to allow all traffic from the local subnet... "
+		iptables -A INPUT -s "$localsubnet" -j ACCEPT -m comment --comment "${iptables_comment_global}"; rv=$?
+
+		if [ $rv -ne 0 ]; then
+			destroy_temp_ipsets
+			die "Failed to append rule with command 'iptables -A INPUT -s \"$localsubnet\" -j ACCEPT'."
+		fi
+		echo "Ok."
+	fi
+
+	# Add rule to allow connections from the loopback interface
+	echo -n "Inserting rule to allow all traffic from the loopback interface... "
+	iptables -I INPUT -i lo -j ACCEPT -m comment --comment "${iptables_comment_global}"; rv=$?
 
 	if [ $rv -ne 0 ]; then
 		destroy_temp_ipsets
-		die "Failed to append rule with command 'iptables -A INPUT -s \"$localsubnet\" -j ACCEPT'."
+		die "Failed to insert rule with command 'iptables -I INPUT -i lo -j ACCEPT'."
 	fi
 	echo "Ok."
+
+	# Add rule to allow established/related connections
+	echo -n "Inserting rule to allow established/related connections... "
+	iptables -I INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT -m comment --comment "${iptables_comment_global}"; rv=$?
+
+	if [ $rv -ne 0 ]; then
+		destroy_temp_ipsets
+		die "Failed to insert rules with command 'iptables -I INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT'."
+	fi
+	echo "Ok."
+
+	echo
 fi
-
-# Add rule to allow connections from the loopback interface
-echo -n "Inserting rule to allow all traffic from the loopback interface... "
-iptables -I INPUT -i lo -j ACCEPT -m comment --comment "${iptables_comment_global}"; rv=$?
-
-if [ $rv -ne 0 ]; then
-	destroy_temp_ipsets
-	die "Failed to insert rule with command 'iptables -I INPUT -i lo -j ACCEPT'."
-fi
-echo "Ok."
-
-# Add rule to allow established/related connections
-echo -n "Inserting rule to allow established/related connections... "
-iptables -I INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT -m comment --comment "${iptables_comment_global}"; rv=$?
-
-if [ $rv -ne 0 ]; then
-	destroy_temp_ipsets
-	die "Failed to insert rules with command 'iptables -I INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT'."
-fi
-echo "Ok."
-
-echo
 
 
 ### Create permanent ipsets if they don't exist, add iptables rules for them, then swap them with temp ipsets
@@ -377,20 +401,23 @@ if [ "$action" = "add" ]; then
 			debugprint "Ok."
 		fi
 
-		## append the whitelist rule to the INPUT chain
+		## append the iplist rule to the INPUT chain
 
-		echo -n "Appending the whitelist rule for country '$tld' to the INPUT chain... "
-		iptables -A INPUT -m set --match-set "$perm_ipset" src -j ACCEPT -m comment --comment "$iptables_comment"; rv=$?
+
+		if [ "$list_type" = "whitelist" ]; then iptables_action="ACCEPT"; else iptables_action="DROP"; fi
+
+		echo -n "Appending $list_type iplist rule for country '$tld' to the INPUT chain... "
+		iptables -A INPUT -m set --match-set "$perm_ipset" src -j "$iptables_action" -m comment --comment "$iptables_comment"; rv=$?
 
 		if [ $rv -ne 0 ]; then
 			ipset destroy "$perm_ipset"
 			destroy_temp_ipsets
-			die "Failed to append ipset rules with command: iptables -I INPUT -m set --match-set \"$perm_ipset\" src -j ACCEPT."
+			die "Failed to append ipset rules with command: iptables -I INPUT -m set --match-set \"$perm_ipset\" src -j \"$iptables_action\"."
 		fi
 		echo "Ok."
 
 		## swap the new (temporary) ipset with the old (permanent) ipset
-		echo -n "Making the new ipset for country '$tld' permanent... "
+		echo -n "Making the new $list_type ipset for country '$tld' permanent... "
 		ipset swap "$temp_ipset" "$perm_ipset"; rv=$?
 		if [ $rv -ne 0 ]; then
 			destroy_temp_ipsets
@@ -411,17 +438,26 @@ echo
 
 ### Configure iptables policies
 
-if [ "$nodrop" != "true" ]; then
-	# set policy on INPUT and FORWARD chains to DROP
-	echo -n "Setting default iptables policies for INPUT and FORWARD chains to DROP... "
-	iptables -P INPUT DROP; rv=$?
-	[ $rv -ne 0 ] && die "Failed to change iptables policy with command 'iptables -P INPUT DROP'."
+# DROP policies are only used for whitelists
+if [ "$list_type" = "whitelist" ]; then
+	if [ "$nodrop" != "true" ]; then
+		# set policy on INPUT and FORWARD chains to DROP
+		echo -n "Setting default iptables policies for INPUT and FORWARD chains to DROP... "
+		iptables -P INPUT DROP; rv=$?
+		[ $rv -ne 0 ] && die "Failed to change iptables policy with command 'iptables -P INPUT DROP'."
 
-	iptables -P FORWARD DROP; rv=$?
-	[ $rv -ne 0 ] && die "Failed to change iptables policy with command 'iptables -P FORWARD DROP'."
-	echo "Ok."
+		iptables -P FORWARD DROP; rv=$?
+		[ $rv -ne 0 ] && die "Failed to change iptables policy with command 'iptables -P FORWARD DROP'."
+		echo "Ok."
+	else
+		echo "WARNING: nodrop was requested. Leaving INPUT and FORWARD chains with ACCEPT policies (geoblocking is inactive)."
+	fi
 else
-	echo "WARNING: nodrop was requested. Leaving INPUT and FORWARD chains with ACCEPT policies (geoblocking is inactive)."
+	# set policy on INPUT chain to ACCEPT
+	echo -n "Setting default iptables policy for INPUT chains to ACCEPT... "
+	iptables -P INPUT ACCEPT; rv=$?
+	[ $rv -ne 0 ] && die "Failed to change iptables policy with command 'iptables -P INPUT ACCEPT'."
+
 fi
 
 # This line is to simulate a simple fault and test recovery from backup
