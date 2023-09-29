@@ -114,7 +114,7 @@ setconfig() {
 		# remove corresponding config line if it exists
 		config_var="$(echo "$config_var" | awk "!/$key_conf/")"
 
-		# add updated config line
+		# add updated config line - new line is here on purpose!
 		config_var="$config_var
 $key_conf=$value_conf"
 	done
@@ -186,30 +186,46 @@ merge_lists() {
 
 check_tlds_coherency() {
 # checks whether current ipsets and iptables rules match ones in the config file
-	active_tlds="$(find_active_tlds)"
 
-	debugprint "active_tlds: '$active_tlds'"
-	debugprint "config_tlds: '$config_tlds'"
+	debugprint "Checking tlds coherency..."
+
+	# initialize variables
+	unexpected_tlds=""; missing_tlds=""
+
+	config_tlds="$(getconfig "Countries")" || { die -nolog "Error: Couldn't read value for Countries from the config file."; }
+
+	active_tlds="$(find_active_tlds)" || return 1
+
+#	debugprint "active_tlds: '$active_tlds'"
+#	debugprint "config_tlds: '$config_tlds'"
 
 	# reflect discrepancies in global variables $unexpected_tlds and $missing_tlds
 	unexpected_tlds="$(subtract_list_a_from_b "$config_tlds" "$active_tlds")"
 	missing_tlds="$(subtract_list_a_from_b "$active_tlds" "$config_tlds")"
-
 	tlds_difference="$(find_lists_difference "$active_tlds" "$config_tlds")"
-	[ "$tlds_difference" == "" ] && return 0 || return 1
+
+	[ "$tlds_difference" = "" ] && return 0 || return 1
 }
 
 find_active_tlds() {
 # checks current ipsets and iptables rules for geoblocker
 # returns a list of active tlds (country codes)
+# if $1 is "all" then returns all tlds even when there is a difference between ipset tlds and iptables rules tlds
 
-	current_ipset_tlds="$(ipset list -n | grep "$suite_name" | grep -o '..$' | tr '\n' ' ' | awk '{$1=$1};1')"
-	current_iprules_tlds="$(iptables -L | grep -oP "(?<=src /\* $suite_name\_).*?(?= \*/)" | tr '\n' ' ' | awk '{$1=$1};1')"
+	current_ipset_tlds="$(ipset list -n | grep "${suite_name}" | grep -o '..$' | tr '\n' ' ' | awk '{$1=$1};1')"
+	current_iprules_tlds="$(iptables -L | grep -oP "(?<=src /\* ${suite_name}\_).*?(?= \*/)" | tr '\n' ' ' | awk '{$1=$1};1')"
 
 	tlds_intersection="$(find_lists_intersection "$current_ipset_tlds" "$current_iprules_tlds")"
 	tlds_difference="$(find_lists_difference "$current_ipset_tlds" "$current_iprules_tlds")"
-	echo "$tlds_intersection"
-	[ "$tlds_difference" == "" ] && return 0 || return 1
+	tlds_merged="$(merge_lists "$current_ipset_tlds" "$current_iprules_tlds")"
+
+	if [ "$1" = "all" ]; then
+		echo "$tlds_merged"
+	else
+		echo "$tlds_intersection"
+	fi
+
+	[ "$tlds_difference" == "" ] && return 0 || { ipsets_incoherent="true"; return 1; }
 }
 
 
@@ -285,6 +301,7 @@ conf_file="${conf_dir}/${suite_name}.conf"
 # global variables to get coherency check results from check_tlds_coherency()
 unexpected_tlds=""
 missing_tlds=""
+ipsets_incoherent=""
 
 ### Main
 arguments=("$@")
