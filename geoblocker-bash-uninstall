@@ -120,30 +120,31 @@ for ipset_name in $(ipset list -n | grep "${suite_name}"); do
 	ipset destroy "$ipset_name"
 done
 
-if [ ! "$partial_uninstall" ]; then
 	echo "Deleting script's data folder $datadir..."
 	### Delete app data and directory
 	rm -rf "$datadir"
 
-	### Delete scripts
-	echo "Deleting scripts from $install_dir..."
-	rm "$install_dir/${suite_name}-fetch"
-	rm "$install_dir/${suite_name}-apply"
-	rm "$install_dir/${suite_name}-manage"
-	rm "$install_dir/${suite_name}-cronsetup"
-	rm "$install_dir/${suite_name}-run"
-	rm "$install_dir/${suite_name}-common"
-	rm "$install_dir/validate_cron_schedule.sh"
-	rm "$install_dir/check_ip_in_ripe.sh"
-	rm "$install_dir/${suite_name}-reset"
-	rm "$install_dir/${suite_name}-uninstall"
-	rm "$install_dir/${suite_name}-backup"
+### remove symlink
+unlink "${install_dir}/${suite_name}"
 
-	### Delete the config dir
-	echo "Deleting config..."
-	rm -rf "$conf_dir"
+### Delete scripts
+echo "Deleting scripts from $install_dir..."
+rm "$install_dir/${suite_name}-fetch"
+rm "$install_dir/${suite_name}-apply"
+rm "$install_dir/${suite_name}-manage"
+rm "$install_dir/${suite_name}-cronsetup"
+rm "$install_dir/${suite_name}-run"
+rm "$install_dir/${suite_name}-common"
+rm "$install_dir/validate_cron_schedule.sh"
+rm "$install_dir/check_ip_in_ripe.sh"
+rm "$install_dir/${suite_name}-reset"
+rm "$install_dir/${suite_name}-uninstall"
+rm "$install_dir/${suite_name}-backup"
 
-	echo "Uninstall complete."
-fi
+### Delete the config dir
+echo "Deleting config..."
+rm -rf "$conf_dir"
+
+echo "Uninstall complete."
 
 echo ""
