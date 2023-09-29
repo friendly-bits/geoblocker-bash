@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# geoblocker_bash-manage
+# geoblocker-bash-manage
 
 # Provides an interface to configure geoblocking.
 
@@ -15,7 +15,7 @@ me=$(basename "$0")
 	exit 1
 }
 
-suite_name="geoblocker_bash"
+suite_name="geoblocker-bash"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 [ -n "$script_dir" ] && cd "$script_dir" || { echo "Error: Couldn't cd into '$script_dir'." >&2; exit 1; }
 
