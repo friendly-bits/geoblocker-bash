@@ -42,6 +42,9 @@ where 'action' is either 'add', 'remove' or 'schedule'.
 - example (to enable or change periodic cron job schedule): ```sudo geoblocker_bash-manage -a schedule -s "1 4 * * *"```
 - example (to disable ip lists autoupdate entirely): ```sudo geoblocker_bash-manage -a schedule -s disable```
  
+**To check current geoblocking status:**
+- run ```sudo geoblocker_bash-manage status```
+
 **To uninstall:**
 - run ```sudo geoblocker_bash-uninstall```
 
