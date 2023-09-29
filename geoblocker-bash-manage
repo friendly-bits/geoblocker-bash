@@ -102,7 +102,7 @@ report_status() {
 	echo
 	echo "Geoblocking status report:"
 	echo
-	echo "Active firewall mode: $list_type."
+	echo "Geoblocking mode: $list_type."
 	echo
 
 	current_input_policy=$(iptables -nL | grep "Chain INPUT" | awk -F'policy |)' '{print $2}')
@@ -111,18 +111,31 @@ report_status() {
 	if [ -z "$current_input_policy" ] || [ -z "$current_forward_policy" ]; then
 		echo "Error: failed to determine current policies." >&2
 	else
-		echo -e "Active iptables policies: \nINPUT: $current_input_policy, FORWARD: $current_forward_policy"
+		echo -e "Active default iptables policies: \nINPUT: $current_input_policy, FORWARD: $current_forward_policy"
 	fi
+
+	# check INPUT chain default policy compatibility with list_type
+	echo
+	case "$list_type" in
+		whitelist) [[ "$current_input_policy" != "DROP" ]] && {
+			echo "WARNING: whitelist functionality requires INPUT chain policy to be 'DROP' but it is '$current_input_policy'."
+			echo "Essentially, connections from all countries are allowed and whitelist is not working.";
+			} || echo "Current INPUT chain policy is compatible with whitelist." ;;
+		blacklist) [[ "$current_input_policy" != "ACCEPT" ]] && {
+			echo "WARNING: blacklist functionality requires INPUT chain policy to be 'ACCEPT' but it is '$current_input_policy'."
+			echo "Essentially, connections from all countries are being blocked which is probably not what you want.";
+			} || echo "Current INPUT chain policy is compatible with blacklist." ;;
+	esac
 
 	if [ "$list_type" = "whitelist" ]; then
 		echo
-		echo "Active global iptables rules for $suite_name:"
+		echo "Global iptables rules for $suite_name:"
 		global_rules="$(iptables-save | grep "${suite_name}_global")"
 		[ "$global_rules" = "" ] && echo "None." || echo "$global_rules"
 	fi
 
 	echo
-	echo "Active $list_type iptables rules for $suite_name:"
+	echo "$list_type iptables rules for $suite_name:"
 	geoblocking_rules="$(iptables -L -v | grep "match-set ${suite_name}")"
 	[ "$geoblocking_rules" = "" ] && echo "None." || echo "$geoblocking_rules"
 	echo
@@ -132,32 +145,42 @@ report_status() {
 		echo "Warning: discrepancy detected between the config file and iptables rules!" >&2
 		[ "$ipsets_incoherent" = "true" ] && echo "Warning: discrepancy detected between existing geoblocking ipsets and geoblocking firewall rules!" >&2
 	else
-		echo "Coherency check: Active firewall config is coherent with the config file."
+		echo "Coherency check: Countries in the firewall config are coherent with the config file."
 	fi
 
-	# check cron jobs
+	# check if cron service is enabled
 	echo
-	persistence_job="$(crontab -u root -l 2>/dev/null | grep "${suite_name}-persistence")"
-	[ "$persistence_job" != "" ] && echo "Persistence cron job is active." || echo "Persistence cron job is *inactive*."
-
-	echo
-	autoupdate_job="$(crontab -u root -l 2>/dev/null | grep "${suite_name}-autoupdate")"
-	if [ "$autoupdate_job" != "" ]; then
-		echo "Autoupdate cron job is active."
-		update_schedule="$(echo "$autoupdate_job" | cut -f1 -d\")"
-		if [[ "$update_schedule" != "" && "$update_schedule" != " " ]]; then
-			echo "Autoupdate schedule: $update_schedule"
-		else
-			echo "Could not determine autoupdate schedule. Complete cron line:"; echo "${autoupdate_job}"
-		fi
+	(systemctl is-enabled cron.service) > /dev/null || crondisabled="true"
+	if [ -n "$crondisabled" ]; then
+		echo "WARNING: cron service appears to be disabled. If that's the case, both persistence across reboots and autoupdates will not work."
 	else
-		echo "Autoupdate cron job is *inactive*."
+		echo "Cron system service is enabled, so persistence and ip lists autoupdates are possible."
+
+		# check cron jobs
+		echo
+		persistence_job="$(crontab -u root -l 2>/dev/null | grep "${suite_name}-persistence")"
+		[ "$persistence_job" != "" ] && echo "Persistence cron job is active." || \
+			echo "WARNING: Persistence cron job is *not set up*. Geoblocking will not work after reboot."
+
+		echo
+		autoupdate_job="$(crontab -u root -l 2>/dev/null | grep "${suite_name}-autoupdate")"
+		if [ "$autoupdate_job" != "" ]; then
+			echo "Autoupdate cron job is active."
+			update_schedule="$(echo "$autoupdate_job" | cut -f1 -d\")"
+			if [[ "$update_schedule" != "" && "$update_schedule" != " " ]]; then
+				echo "Autoupdate schedule: $update_schedule"
+			else
+				echo "Could not determine autoupdate schedule. Complete cron line:"; echo "${autoupdate_job}"
+			fi
+		else
+			echo "NOTE: Autoupdate cron job is *not set up*. Automatic ip list updates are disabled."
+		fi
 	fi
 
 	# check ipsets and iptables rules for active tlds
 	echo
 	active_tlds="$(find_active_tlds)"; rv=$?
-	echo "$list_type is active for country codes: '$active_tlds'."
+	echo "$list_type is configured for country codes: '$active_tlds'."
 	echo
 }
 
