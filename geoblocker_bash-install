@@ -14,6 +14,14 @@
 #### Initial setup
 
 me=$(basename "$0")
+
+# check for root
+[ "$EUID" -ne 0 ] && {
+	err="Error: $me needs to be run as root."
+	echo "$err" >&2
+	exit 1
+}
+
 suite_name="geoblocker_bash"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 [ -n "$script_dir" ] && cd "$script_dir" || { echo "Error: *install: Couldn't cd into '$script_dir'." >&2; exit 1; }
@@ -46,34 +54,37 @@ This script:
 6) Requires to specify whitelist or blacklist for installation with the '-l' option
 7) Accepts a custom cron schedule expression as an argument. Default cron schedule is "0 4 * * *" - at 4:00 [am] every day.
 
-Usage: $me -c <"tld [tld] ... [tld]"> -l <list_type> [-s <"sch_expression"|disable>] [-e] [-n] [-p] [-d] [-h]
+Usage: $me -c <"tld [tld] ... [tld]"> -m <whitelist|blacklist> [-s <"sch_expression"|disable>] [-e] [-n] [-p] [-d] [-h]
 
-Options:
-    -c <"tld(s)">                   : tld / country codes. if passing multiple country codes, use double quotes
-    -l <list_type>                  : apply list type: whitelist|blacklist
-    -s <"sch_expression"|disable>   : schedule expression for the periodic cron jobimplementing auto-updates of the ip lists,
-                                            must be inside double quotes
-                                      -- default: "0 4 * * *" (at 4:00 [am] every day)
-                                      -- "disable" will *skip* creating the cron job which is required for automatic updates of the ip list
+Core Options:
+    -c <"tld(s)">                  : tld / country codes to fetch and apply the iplists for.
+                                           (if passing multiple country codes, use double quotes)
+    -m <whitelist|blacklist>       : firewall mode to install: whitelist or blacklist
+                                           (to change mode after installation, run the *install script again)
+    -s <"sch_expression"|disable>  : schedule expression for the periodic cron jobimplementing auto-updates of the ip lists,
+                                           must be inside double quotes
+                                           default is "0 4 * * *" (at 4:00 [am] every day)
+                                     "disable" will *skip* creating the autoupdate cron job so there will be no automatic updates of the ip lists
 
-    -e                              : Enable Emergency Deactivation. Means that if an unrecoverable error is encountered,
-                                             geoblocking will be automatically deactivated until the problem is manually fixed.
-                                             Disabled by default.
-    -n                              : No persistence. Will *skip* creating the cron job which is required for geoblocking to work upon reboot.
-    -p                              : No Drop: installs and configures the scripts but skips setting INPUT chain default policy to DROP
-                                            (everything will be installed and configured but geoblocking won't be enabled)
-    -d                              : Debug
-    -h                              : This help
+Extra Options:
+    -e                             : Enable Emergency Deactivation. When enabled, if a severe error is encountered in operation,
+                                            geoblocking will be automatically deactivated until the problem is manually fixed.
+                                            Disabled by default.
+    -n                             : No persistence. Will *skip* creating the cron job which is required for geoblocking to work upon reboot.
+    -p                             : No Drop: installs and configures the scripts but skips setting INPUT chain default policy to DROP
+                                           (everything will be installed and configured but geoblocking won't be enabled)
+    -d                             : Debug
+    -h                             : This help
 
 EOF
 }
 
 #### PARSE ARGUMENTS
 
-while getopts ":c:l:s:enpdh" opt; do
+while getopts ":c:m:s:enpdh" opt; do
 	case $opt in
 		c) tlds=$OPTARG;;
-		l) list_type=$OPTARG;;
+		m) list_type=$OPTARG;;
 		s) cron_schedule=$OPTARG;;
 		e) emergency_deactivation="true";;
 		n) no_persistence="true";;
@@ -144,12 +155,19 @@ install_dir="/usr/local/bin"
 datadir="/var/lib/${suite_name}"
 preinstall_policies_file="${datadir}/preinstall_policies.bak"
 knowngood_file="${datadir}/iptables_knowngood.bak"
-whitelist_dir="${datadir}/ip_lists"
+iplist_dir="${datadir}/ip_lists"
 
 default_schedule="0 4 * * *"
 cron_schedule="${cron_schedule:-$default_schedule}"
 sleeptime="30"
 
+if [ -n "$list_type" ]; then
+	# convert to lower case
+	list_type="${list_type,,}"
+
+	# set global variable
+	export list_type="$list_type"
+fi
 
 #### CHECKS
 
@@ -160,18 +178,9 @@ if [ -z "$tlds" ]; then
 	exit 1
 fi
 
-
-# commented out until blacklist functionality complete
-#if [ -z "$list_type" ]; then
-#	usage
-#	echo "Specify list type with \"-l <list_type>\"!"
-#	echo ""
-#	exit 1
-#fi
-
-# check for root
-if [ "$EUID" -ne 0 ]; then
-	echo "This needs to be run as root." >&2
+if [ -z "$list_type" ]; then
+	usage
+	echo "Specify firewall mode with '-m whitelist' or '-m blacklist'!"
 	echo ""
 	exit 1
 fi
@@ -244,6 +253,7 @@ check_file_exists "${suite_name}-manage"
 check_file_exists "${suite_name}-cronsetup"
 check_file_exists "${suite_name}-backup"
 check_file_exists "${suite_name}-uninstall"
+check_file_exists "${suite_name}-reset"
 check_file_exists "validate_cron_schedule.sh"
 check_file_exists "check_ip_in_ripe.sh"
 
@@ -256,7 +266,7 @@ mkdir -p "$conf_dir"
 # write initial config to the config file
 echo -n "Setting initial config... "
 
-setconfig "Countries=" "Installdir=$install_dir" "Datadir=$datadir" "CronSchedule=$cron_schedule" "DefaultSchedule=$defualtschedule" \
+setconfig "Countries=" "ListType=$list_type" "Installdir=$install_dir" "Datadir=$datadir" "CronSchedule=$cron_schedule" "DefaultSchedule=$defualt_schedule" \
 	"RebootSleep=$sleeptime" "Backup_script=$backup_script" "EmergencyDeactivation=$emergency_deactivation" \
 	"NoPersistence=$no_persistence" "NoDrop=$nodrop"; rv=$?
 
@@ -268,7 +278,7 @@ else echo "Ok."
 fi
 
 # Create the directory for downloaded lists and, if required, parent directories
-mkdir -p "$whitelist_dir"
+mkdir -p "$iplist_dir"
 
 
 ## Create a backup file for known-good iptables state
@@ -287,6 +297,11 @@ else
 	echo "Ok."
 fi
 
+
+## run the *reset script to make sure no previous firewall rules and cron jobs exist
+bash ${suite_name}-reset
+
+
 ## Copy scripts to $install_dir
 
 # if we are running from $install_dir, assume that all other necessary scripts have already been installed, skip copying
@@ -300,6 +315,7 @@ if [ "$script_dir" != "$install_dir" ]; then
 	copyscript "${suite_name}-cronsetup" "${install_dir}/"
 	copyscript "${suite_name}-backup" "${install_dir}/"
 	copyscript "${suite_name}-uninstall" "${install_dir}/"
+	copyscript "${suite_name}-reset" "${install_dir}/"
 	copyscript "validate_cron_schedule.sh" "${install_dir}/"
 	copyscript "check_ip_in_ripe.sh" "${install_dir}/"
 	echo "Ok."
@@ -336,12 +352,12 @@ fi
 [ -n "$install_dir" ] && cd "$install_dir" || { echo "Error: Couldn't cd into '$install_dir'." >&2; install_failed; }
 
 
-### Add whitelist(s) for $tlds to managed whitelists, then fetch and apply the whitelist(s)
+### Add iplist(s) for $tlds to managed iplists, then fetch and apply the iplist(s)
 ${suite_name}-manage -f -a "add" -c "$tlds"; rv=$?
 
 # the *manage script exits with return value 254 if requested country is already included in the config
 if [ $rv -ne 0 ] && [ $rv -ne 254 ]; then
-	echo "Failed to create and apply the whitelist." >&2
+	echo "Failed to create and apply the iplist." >&2
 	install_failed
 fi
 
@@ -353,7 +369,8 @@ if [ $rv -ne 0 ]; then
 	install_failed
 fi
 
-echo "View current iptables config with 'sudo iptables -L -v'."
+echo "View current geoblocking status with 'sudo ${suite_name}-manage status'"
+
 echo
 echo "Install done."
 
