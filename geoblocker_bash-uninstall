@@ -2,20 +2,25 @@
 
 # geoblocker_bash-uninstall
 
-# Deletes associated cron jobs
-# Restores pre-install state of default policies for INPUT and FORWARD chains
-# Deletes associated iptables rules and removes the whitelist ipset
-# Deletes scripts' data folder /var/lib/geoblocker_bash
-# Deletes the scripts from /usr/local/bin
+# uninstalls the geoblocker_bash suite
 
 
 #### Initial setup
 
 me=$(basename "$0")
+
+# check for root
+[ "$EUID" -ne 0 ] && {
+	err="Error: $me needs to be run as root."
+	echo "$err" >&2
+	exit 1
+}
+
 suite_name="geoblocker_bash"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 [ -n "$script_dir" ] && cd "$script_dir" || { echo "Error: Couldn't cd into '$script_dir'. Exiting." >&2; exit 1; }
 source "$script_dir/${suite_name}-common" || { echo "Error: Can't find ${suite_name}-common. Exiting." >&2; exit 1; }
+
 
 #### USAGE
 
@@ -25,26 +30,24 @@ usage() {
 $me
 1) Deletes associated cron jobs
 2) Restores pre-install state of default policies for INPUT and FORWARD chains
-3) Deletes associated iptables rules and removes the whitelist ipset
+3) Deletes associated iptables rules and removes associated ipset
 4) Deletes scripts' data folder /var/lib/geoblocker_bash
 5) Deletes the scripts from /usr/local/bin
 
 
-Usage: $me [-p] [-d] [-h]
+Usage: $me [-d] [-h]
 
 Options:
-	-p     : partial uninstall: restores iptables to pre-install state and removes cron jobs but leaves files in place
     -d     : Debug
-	-h     : This help
+    -h     : This help
 
 EOF
 }
 
 #### PARSE ARGUMENTS
 
-while getopts ":phd" opt; do
+while getopts ":dh" opt; do
 	case $opt in
-		p) partial_uninstall="true";;
 		d) debugmode_args="true";;
 		h) usage; exit 0;;
 		\?) usage; echo "Error: Unknown option: '-$OPTARG'." >&2; exit 1;;
@@ -68,16 +71,6 @@ export debugmode="$debugmode"
 # Print script enter message for debug
 debugentermsg
 
-####Functions
-
-
-#### Checks
-
-# check for root
-if [ "$EUID" -ne 0 ]
-  then echo "This needs to be run as root."
-  exit
-fi
 
 ### Initialize variables
 install_dir="/usr/local/bin"
@@ -93,21 +86,22 @@ crontab -u root -l 2>/dev/null |  grep -v "${suite_name}-run" | sudo crontab -u 
 
 ### Restore pre-install state of default policies for INPUT and FORWARD chains
 
-while read -r preinstall_policy; do
-	chain_name=$(echo "$preinstall_policy" | cut -f 1 -d " ")
-	oldpolicy=$(echo "$preinstall_policy" | cut -f 2 -d " ")
-	if [ -n "$chain_name" ] && [ -n "$oldpolicy" ]; then
-		echo "Restoring pre-install iptables policy '$oldpolicy' for chain '$chain_name'"
-		iptables -P "$chain_name" "$oldpolicy"; rv=$?
-		if [ $rv -ne 0 ]; then
-			echo "Error $rv trying to change iptables policy with command 'iptables -P $chain_name $oldpolicy'. Exiting." >&2
-			exit 1
-			fi
-	else
-		echo "Could not restore pre-install iptables policies. Apparently the file '$preinstall_policies_file' is empty, missing or misconfigured." >&2
-	fi
-done < "$preinstall_policies_file"
-
+if [ -f "$preinstall_policies_file" ]; then
+	while read -r preinstall_policy; do
+		chain_name=$(echo "$preinstall_policy" | cut -f 1 -d " ")
+		oldpolicy=$(echo "$preinstall_policy" | cut -f 2 -d " ")
+		if [ -n "$chain_name" ] && [ -n "$oldpolicy" ]; then
+			echo "Restoring pre-install iptables policy '$oldpolicy' for chain '$chain_name'"
+			iptables -P "$chain_name" "$oldpolicy"; rv=$?
+			if [ $rv -ne 0 ]; then
+				echo "Error $rv trying to change iptables policy with command 'iptables -P $chain_name $oldpolicy'. Exiting." >&2
+				exit 1
+				fi
+		else
+			echo "Could not restore pre-install iptables policies. Apparently the file '$preinstall_policies_file' is empty or misconfigured." >&2
+		fi
+	done < "$preinstall_policies_file"
+fi
 
 ### Delete associated iptables rules
 
@@ -141,6 +135,7 @@ if [ ! "$partial_uninstall" ]; then
 	rm "$install_dir/${suite_name}-common"
 	rm "$install_dir/validate_cron_schedule.sh"
 	rm "$install_dir/check_ip_in_ripe.sh"
+	rm "$install_dir/${suite_name}-reset"
 	rm "$install_dir/${suite_name}-uninstall"
 	rm "$install_dir/${suite_name}-backup"
 
