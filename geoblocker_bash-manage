@@ -7,6 +7,14 @@
 #### Initial setup
 
 me=$(basename "$0")
+
+# check for root
+[ "$EUID" -ne 0 ] && {
+	err="Error: $me needs to be run as root."
+	echo "$err" >&2
+	exit 1
+}
+
 suite_name="geoblocker_bash"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 [ -n "$script_dir" ] && cd "$script_dir" || { echo "Error: Couldn't cd into '$script_dir'." >&2; exit 1; }
@@ -27,37 +35,44 @@ usage() {
 $me
     Provides an interface to configure geoblocking.
 
-WARNING: if removing a whitelist: Geoblocking will remain active after removal.
-         If you remove your country's whitelist, you may lose remote access to your system.
+Usage: $me [status|-a <action>] [-c "[tld] [tld] ... [tld]"] [-s <"sch_expression"|disable>] [-f] [-t] [-d] [-h]
 
-
-Usage: $me -a <action> [-l <list_type>] [-c "[tld] [tld] ... [tld]"] [-s <"sch_expression"|disable>] [-f] [-t] [-d] [-h]
+Commands:
+    status                        : check on the current status of geoblocking
 
 Options:
-    -a <add|remove|schedule>        : action to perform: add or remove ipsets, iptables rules and cron jobs
-                                          or "schedule" to change the cron schedule (has no effect on iptables rules).
-    -l <whitelist|blacklist>        : list type to manage (currently does nothing)
+    -a <add|remove|schedule>      : action to perform: add or remove TLDs (country codes) to/from geoblocking rules
+                                        schedule: change the cron schedule (has no effect on iptables rules).
 
-    -c "tld(s)"                     : tld / country codes. if passing multiple country codes, use double quotes.
-    -s <"sch_expression"|disable>   : schedule expression for the periodic cron job implementing auto-updates of the ip lists,
-                                          must be inside double quotes.
-                                    -- default schedule is "0 4 * * *" (at 4:00 [am] every day)
-                                    -- "disable" will *skip* creating the cron job which is required for automatic updates of the ip list
+    -c "tld(s)"                   : tld / country codes. if passing multiple country codes, use double quotes.
+    -s <"sch_expression"|disable> : schedule expression for the periodic cron job implementing auto-updates of the ip lists,
+                                            must be inside double quotes.
+                                            default schedule is "0 4 * * *" (at 4:00 [am] every day)
+                                        disable: *skip* creating the cron job which is required for automatic updates of the ip list
 
-    -f                              : Force the action even if it doesn't make sense or may cause remote server lockout.
-    -t                              : Test mode: inject unexpected tld and verify fault recovery
-    -d                              : Debug
-    -h                              : This help
+    -f                            : Force the action even if it doesn't make sense or may cause remote server lockout.
+    -t                            : Test mode: inject unexpected tld and verify fault recovery
+    -d                            : Debug
+    -h                            : This help
 
 EOF
 }
 
 
 #### PARSE ARGUMENTS
-while getopts ":a:l:c:s:ftdh" opt; do
+
+# check for "status" option in arguments
+args=()
+for arg in "$@"; do
+	[ "$arg" = "status" ] && status="true" || args+=( "$arg" )
+done
+
+# replace arguments
+set -- "${args[@]}"
+
+while getopts ":a:c:s:ftdh" opt; do
 	case $opt in
 		a) action=$OPTARG;;
-		l) list_type=$OPTARG;;
 		c) tlds_arg=$OPTARG;;
 		s) cron_schedule=$OPTARG;;
 		f) force_action="true";;
@@ -69,11 +84,23 @@ while getopts ":a:l:c:s:ftdh" opt; do
 done
 shift $((OPTIND -1))
 
+# check if there are unprocessed arguments
 [[ "$*" != "" ]] && {
 	usage
 	echo "Error in arguments. First unrecognized argument: '$1'." >&2
-	echo "Note: If specifying multiple country codes, put them in double braces." >&2
+	echo -e "Note: If specifying multiple country codes, put them in double braces.\n" >&2
 	exit 1
+}
+
+# check for "action" and "status" conflict
+[ "$status" = "true" ] && {
+	if [ -n "$action" ]; then
+		usage
+		echo -e "Error: incompatible arguments. Use either '-a <acton>' or 'status'.\n" >&2
+		exit 1
+	else
+		action="status"
+	fi
 }
 
 echo
@@ -89,30 +116,89 @@ debugentermsg
 
 #### FUNCTIONS
 
+report_status() {
+	echo
+	echo "Geoblocking status report:"
+	echo
+	echo "Active firewall mode: $list_type."
+	echo
+
+	current_input_policy=$(iptables -nL | grep "Chain INPUT" | awk -F'policy |)' '{print $2}')
+	current_forward_policy=$(iptables -nL | grep "Chain FORWARD" | awk -F'policy |)' '{print $2}')
+
+	if [ -z "$current_input_policy" ] || [ -z "$current_forward_policy" ]; then
+		echo "Error: failed to determine current policies." >&2
+	else
+		echo -e "Active iptables policies: \nINPUT: $current_input_policy, FORWARD: $current_forward_policy"
+	fi
+
+	if [ "$list_type" = "whitelist" ]; then
+		echo
+		echo "Active global iptables rules for $suite_name:"
+		global_rules="$(iptables-save | grep "${suite_name}_global")"
+		[ "$global_rules" = "" ] && echo "None." || echo "$global_rules"
+	fi
+
+	echo
+	echo "Active $list_type iptables rules for $suite_name:"
+	geoblocking_rules="$(iptables -L -v | grep "match-set ${suite_name}")"
+	[ "$geoblocking_rules" = "" ] && echo "None." || echo "$geoblocking_rules"
+	echo
+
+	if [ "$rv" -ne 0 ]; then
+		echo "Warning: discrepancy detected between existing ipsets and iptables rules!"
+	else
+		echo "Coherency check: Actual firewall config is coherent with the config file."
+	fi
+
+	active_tlds="$(find_active_tlds)"; rv=$?
+	echo
+	echo "$list_type is active for country codes: '$active_tlds'."
+	echo
+}
+
 restore_from_config() {
 # restore tlds from the config file
 
-	echo "Restoring countries set '$config_tlds' from the config file... "
+	echo
+	echo -e "Warning: Config incoherence detected between the firewall current status and the config file."
+	[ "$unexpected_tlds" != "" ] && echo "Unexpected tlds in the firewall: '$unexpected_tlds'" >&2
+	[ "$missing_tlds" != "" ] && echo "Missing tlds in the firewall: '$missing_tlds'" >&2
+	echo "Would you like to re-apply the rules from the config file to fix this?"
+	echo -e "\n'Y' to re-apply the config rules. 'N' to exit the script. 'S' to show country codes in the config file.\n"
+
+	while [[ "true" ]]; do
+		read -p "(Y/N/S) " -n 1 -r
+
+		if [[ "$REPLY" =~ ^[Yy]$ ]]; then echo; break
+		elif [[ "$REPLY" =~ ^[Nn]$ ]]; then echo -e "\nExiting."; exit 1
+		elif [[ "$REPLY" =~ ^[Ss]$ ]]; then
+			echo -e "\n\n\n\n$list_type country codes in the config file: '$config_tlds'\n"
+		else echo -e "\nPlease press 'y/n/s'.\n"
+		fi
+	done
+
+	echo "Restoring $list_type countries set '$config_tlds' from the config file... "
 	$run_command -o -a "remove" -c "$config_tlds $unexpected_tlds $tlds_to_change"
 	[[ "$config_tlds" != "" ]] && $run_command -o -a "add" -c "$config_tlds"
 
 	check_tlds_coherency; rv=$?
 	if [ $rv -eq 0 ]; then
-		echo "Successfully re-applied previous countries set."
+		echo "Successfully re-applied previous $list_type countries set."
 	else
-		echo "Failed to re-apply previous countries set." >&2
-		[ "$unexpected_tlds" != "" ] && echo "Unexpected tlds in the firewall: '$unexpected_tlds'" >&2
-		[ "$missing_tlds" != "" ] && echo "Missing tlds in the firewall: '$missing_tlds'" >&2
+		echo "Failed to re-apply previous $list_type countries set." >&2
+		[ "$unexpected_tlds" != "" ] && echo "Unexpected $list_type tlds in the firewall: '$unexpected_tlds'" >&2
+		[ "$missing_tlds" != "" ] && echo "Missing $list_type tlds in the firewall: '$missing_tlds'" >&2
 		# call the *backup script to initiate recovery from fault
 		${suite_name}-backup -a restore; rv=$?
 
 		check_tlds_coherency > /dev/null; rv1=$?; rv=$(( rv + rv1 ))
 		if [ $rv -eq 0 ]; then
-			echo "Successfully re-applied previous countries set."
+			echo "Successfully re-applied previous $list_type countries set."
 		else
-			echo "Failed to re-apply previous countries set." >&2
-			[ "$unexpected_tlds" != "" ] && echo "Unexpected tlds in the firewall: '$unexpected_tlds'" >&2
-			[ "$missing_tlds" != "" ] && echo "Missing tlds in the firewall: '$missing_tlds'" >&2
+			echo "Failed to re-apply previous $list_type countries set." >&2
+			[ "$unexpected_tlds" != "" ] && echo "Unexpected $list_type tlds in the firewall: '$unexpected_tlds'" >&2
+			[ "$missing_tlds" != "" ] && echo "Missing $list_type tlds in the firewall: '$missing_tlds'" >&2
 			die "$rv" -nolog "Something is not working as it should. Consider fixing your firewall or your system. If it's a bug then please report it."
 		fi
 	fi
@@ -121,13 +207,19 @@ restore_from_config() {
 
 #### VARIABLES
 
+# get install_dir from the config file
+install_dir="$(getconfig "Installdir")" || { die -nolog "Error: Couldn't read value for Installdir from the config file."; }
+
+# get list_type from the config file
+list_type="$(getconfig "ListType")" || { die -nolog "Error: Couldn't read value for ListType from the config file."; }
+
+# set global variable
+export list_type="$list_type"
+
 # set environment variable "nolog" to avoid daughter scripts writing errors
 #	to syslog when encountering incorrect arguments from the user
 #	nolog variable is checked in the sourced *common script
 export nolog="true"
-
-# get install_dir from the config file
-install_dir="$(getconfig "Installdir")" || { die -nolog "Error: Couldn't read value for Installdir from the config file."; }
 
 # convert input country codes (tlds) to lower case
 tlds_arg="${tlds_arg,,}"
@@ -146,21 +238,19 @@ run_command="${install_dir}/${suite_name}-run"
 
 #### CHECKS
 
-# check for root
-[ "$EUID" -ne 0 ] && die -nolog  "This needs to be run as root."
-
 # check that the config file exists
 [ ! -f "$conf_file" ] && die -nolog "Config file '$conf_file' doesn't exist! Run the installation script again."
 
-## Check arguments for sanity
+[ -z "$list_type" ] && die -nolog "\$list_type variable should not be empty! Something is wrong!"
 
-# check for valid action
+## Check arguments for sanity
 
 [ -z "$action" ] && { usage; die -nolog "Specify action with '-a <action>'!"; }
 
 case "$action" in
 	add) ;;
 	remove) ;;
+	status) ;;
 	schedule) ;;
 	*) usage; die -nolog "Error: unsupported action '$action'." ;;
 esac
@@ -170,6 +260,9 @@ esac
 
 [[ "$action" == "schedule" && ( -n "$tlds_arg" || -n "$force_action" ) ]] && \
 	die -nolog "Action '$action' only supports changing the cron schedule! Do not use it with any option except '-s' or '-d' !"
+
+[[ "$action" == "status" && ( -n "$tlds_arg" || -n "$force_action" ) ]] && \
+	die -nolog "Command '$action' only supports checking on current status of geoblocking! Do not use it with any option except '-l' or '-d' !"
 
 [ "$action" != "schedule" ] && [ -n "$cron_schedule" ] && {
 	msg1="Error: the '-s <\"cron_schedule\">' option only works with the \"schedule\" action."
@@ -187,11 +280,15 @@ check_tlds_coherency; rv=$?
 if [ $rv -eq 0 ]; then
 	debugprint "Successfully verified tlds coherency."
 else
-	echo "Warning: actual firewall config differs from what it's supposed to be!"
-	[ "$unexpected_tlds" != "" ] && echo "Unexpected tlds in the firewall: '$unexpected_tlds'" >&2
-	[ "$missing_tlds" != "" ] && echo "Missing tlds in the firewall: '$missing_tlds'" >&2
-	echo "Attempting to re-apply the rules from the config file." >&2
 	restore_from_config
+fi
+
+if [ "$action" = "status" ]; then
+	report_status
+	unset list_type
+	unset debugmode
+	unset nolog
+	exit 0
 fi
 
 
@@ -199,7 +296,7 @@ case "$action" in
 
 	add)
 		requested_planned_tlds="$(merge_lists "$config_tlds" "$tlds_arg")"
-		debugprint "requested resulting tlds: '$requested_planned_tlds'"
+#		debugprint "requested resulting tlds: '$requested_planned_tlds'"
 
 		if [ -z "$force_action" ]; then
 			# remove any entries already present in config_tlds from tlds_arg and assign to tlds_to_change
@@ -208,23 +305,23 @@ case "$action" in
 			# find which tlds were specified for addition but already exist
 			wrong_tlds="$(find_lists_intersection "$tlds_arg" "$config_tlds")"
 
-			[ "$wrong_tlds" != "" ] && echo "NOTE: countries '$wrong_tlds' have already been added." >&2
+			[ "$wrong_tlds" != "" ] && echo "NOTE: countries '$wrong_tlds' have already been added to the $list_type." >&2
 		else
 			tlds_to_change="$tlds_arg"
 		fi
 		planned_tlds="$(merge_lists "$config_tlds" "$tlds_to_change")"
-		debugprint "action: add, tlds_to_change: '$tlds_to_change'"
+#		debugprint "action: add, tlds_to_change: '$tlds_to_change'"
 	;;
 
 	remove)
-		debugprint "requested tlds to remove: '$tlds_arg'"
+#		debugprint "requested tlds to remove: '$tlds_arg'"
 		if [ -z "$force_action" ]; then
 			# find duplicate-free intersection between config_tlds and tlds_arg
 			tlds_to_change="$(find_lists_intersection "$config_tlds" "$tlds_arg")"
 			# find which tlds were specified for removal but don't exist
 			good_tlds="$(find_lists_intersection "$tlds_to_change" "$tlds_arg")"
 			wrong_tlds="$(find_lists_difference "$tlds_arg" "$good_tlds")"
-			[ "$wrong_tlds" != "" ] && echo "NOTE: countries '$wrong_tlds' have not been added, so can not remove." >&2
+			[ "$wrong_tlds" != "" ] && echo "NOTE: countries '$wrong_tlds' have not been added to the $list_type, so can not remove." >&2
 
 		else
 			tlds_to_change="$tlds_arg"
@@ -241,15 +338,15 @@ else
 
 	if [ -z "$tlds_to_change" ] && [ -z "$force_action" ]; then
 		config_tlds="$(getconfig "Countries")" || { die -nolog "Error: Couldn't read value for Countries from the config file."; }
-		echo; echo "Countries in final config: '$config_tlds'."
+		echo; echo "Countries in final $list_type config: '$config_tlds'."
 		die 254 -nolog "Nothing to do, exiting."
 	fi
 
 	debugprint "planned tlds after '$action': '$planned_tlds'"
 
 	# if planned_tlds list is empty
-	if [ -z "$planned_tlds" ] && [ -z "$force_action" ]; then
-		die -nolog "Planned final countries list is empty! Disallowing this to prevent accidental lockout of a remote server."
+	if [[ -z "$planned_tlds" && -z "$force_action" && "$list_type" = "whitelist" ]]; then
+		die -nolog "Planned final countries whitelist is empty! Disallowing this to prevent accidental lockout of a remote server."
 	fi
 
 
@@ -262,23 +359,23 @@ else
 		echo "Error performing action '$action' for countries '$tlds_to_change'." >&2
 
 		if [ "$config_tlds" = "" ]; then
-			die -nolog "Can not restore previous countries set because it is not found in the config file."
+			die -nolog "Can not restore previous countries set for $list_type because it is not found in the config file."
 		fi
-
 		restore_from_config
 	fi
 
 	new_verified_tlds="$(find_active_tlds)"
 	failed_tlds="$(find_lists_difference "$new_verified_tlds" "$planned_tlds")"
 
-	# if all 'add' actions failed
-	if [ -z "$(find_lists_difference "$tlds_to_change" "$failed_tlds")" ]; then
-		debugprint "failed_tlds: '$failed_tlds'"
-		die -nolog "All actions failed."
+	if [ "$failed_tlds" != "" ]; then
+		echo "Warning: failed to apply new $list_type rules for countries: $failed_tlds." >&2
+		# if the error encountered during installation, exit with error in order to fail the installation
+		[ "$parent_short" = "install" ] && die
 	fi
 
-	if [ "$failed_tlds" != "" ]; then
-		echo "Warning: failed to apply new rules for countries: $failed_tlds." >&2
+	# if all 'add' actions failed
+	if [ -z "$(find_lists_difference "$tlds_to_change" "$failed_tlds")" ]; then
+		die -nolog "All actions failed."
 	fi
 
 	debugprint "Writing new config to file: 'Countries=$new_verified_tlds'"
@@ -286,7 +383,7 @@ else
 		{ die -nolog "Failed to write updated tlds '$new_verified_tlds' to the config file"; }
 
 	config_tlds="$(getconfig "Countries")" || { die -nolog "Error: Couldn't read value for Countries from the config file."; }
-	debugprint "current countries in config file: '$config_tlds'"
+#	debugprint "current $list_type countries in config file: '$config_tlds'"
 
 ####### Fault recovery test: inject unrequested tld
 [ "$test" ] &&	$run_command -o -a "add" -c "ge"; rv=$?
@@ -299,10 +396,6 @@ else
 	if [ $rv -eq 0 ]; then
 		debugprint "Successfully verified tlds coherency."
 	else
-		echo "Warning: actual firewall config differs from what it's supposed to be!"
-		[ "$unexpected_tlds" != "" ] && echo "Unexpected tlds in the firewall: '$unexpected_tlds'" >&2
-		[ "$missing_tlds" != "" ] && echo "Missing tlds in the firewall: '$missing_tlds'" >&2
-		echo "Attempting to re-apply the rules." >&2
 		tlds_to_change=""
 		restore_from_config
 	fi
@@ -311,9 +404,9 @@ else
 	debugprint "Calling the backup script"
 	${suite_name}-backup -a backup
 	echo
-	echo "Countries in final config: '$config_tlds'."
+	echo "Countries in final $list_type: '$config_tlds'."
 	echo
-	echo "View current iptables rules with 'sudo iptables -L -v'"
+	echo "View current geoblocking status with 'sudo ${suite_name}-manage status'"
 	echo
 fi
 
@@ -341,5 +434,9 @@ fi
 echo
 
 debugexitmsg
+
+unset list_type
+unset debugmode
+unset nolog
 
 exit 0
