@@ -42,7 +42,6 @@ Actions:
     schedule                     : change the cron schedule (has no effect on iptables rules)
     status                       : check on the current status of geoblocking
 
-
 Options:
     -c "tld(s)"                   : tld / country codes. if passing multiple country codes, use double quotes.
     -s <"sch_expression"|disable> : schedule expression for the periodic cron job implementing auto-updates of the ip lists,
@@ -64,9 +63,6 @@ EOF
 # 1st argument should be the requested action
 action="$1"
 shift 1
-
-# replace arguments
-set -- "${args[@]}"
 
 while getopts ":c:s:ftdh" opt; do
 	case $opt in
@@ -139,8 +135,28 @@ report_status() {
 		echo "Coherency check: Active firewall config is coherent with the config file."
 	fi
 
-	active_tlds="$(find_active_tlds)"; rv=$?
+	# check cron jobs
 	echo
+	persistence_job="$(crontab -u root -l 2>/dev/null | grep "${suite_name}-persistence")"
+	[ "$persistence_job" != "" ] && echo "Persistence cron job is active." || echo "Persistence cron job is *inactive*."
+
+	echo
+	autoupdate_job="$(crontab -u root -l 2>/dev/null | grep "${suite_name}-autoupdate")"
+	if [ "$autoupdate_job" != "" ]; then
+		echo "Autoupdate cron job is active."
+		update_schedule="$(echo "$autoupdate_job" | cut -f1 -d\")"
+		if [[ "$update_schedule" != "" && "$update_schedule" != " " ]]; then
+			echo "Autoupdate schedule: $update_schedule"
+		else
+			echo "Could not determine autoupdate schedule. Complete cron line:"; echo "${autoupdate_job}"
+		fi
+	else
+		echo "Autoupdate cron job is *inactive*."
+	fi
+
+	# check ipsets and iptables rules for active tlds
+	echo
+	active_tlds="$(find_active_tlds)"; rv=$?
 	echo "$list_type is active for country codes: '$active_tlds'."
 	echo
 }
@@ -167,8 +183,8 @@ restore_from_config() {
 	done
 
 	echo "Restoring $list_type countries set '$config_tlds' from the config file... "
-	$run_command -o -a "remove" -c "$config_tlds $unexpected_tlds $tlds_to_change"
-	[[ "$config_tlds" != "" ]] && $run_command -o -a "add" -c "$config_tlds"
+	$run_command remove -o -c "$config_tlds $unexpected_tlds $tlds_to_change"
+	[[ "$config_tlds" != "" ]] && $run_command add -o -c "$config_tlds"
 
 	check_tlds_coherency; rv=$?
 	if [ $rv -eq 0 ]; then
@@ -179,7 +195,7 @@ restore_from_config() {
 		[ "$missing_tlds" != "" ] && echo "Missing $list_type tlds in the firewall: '$missing_tlds'" >&2
 		[ "$ipsets_incoherent" = "true" ] && echo "Warning: discrepancy detected between existing geoblocking ipsets and geoblocking firewall rules!" >&2
 		# call the *backup script to initiate recovery from fault
-		${suite_name}-backup -a restore; rv=$?
+		${suite_name}-backup restore; rv=$?
 
 		check_tlds_coherency; rv1=$?; rv=$(( rv + rv1 ))
 		if [ $rv -eq 0 ]; then
@@ -235,7 +251,7 @@ run_command="${install_dir}/${suite_name}-run"
 
 ## Check arguments for sanity
 
-[ -z "$action" ] && { usage; die -nolog "Specify action with '-a <action>'!"; }
+[ -z "$action" ] && { usage; die -nolog "Specify action!"; }
 
 case "$action" in
 	add) ;;
@@ -256,7 +272,7 @@ esac
 
 [ "$action" != "schedule" ] && [ -n "$cron_schedule" ] && {
 	msg1="Error: the '-s <\"cron_schedule\">' option only works with the \"schedule\" action."
-	msg2="To set up cron schedule, use '$me -a schedule -s <\"cron_schedule\">'"
+	msg2="To set up cron schedule, use '$me schedule -s <\"cron_schedule\">'"
 	usage
 	die -nolog "$msg1" "$msg2";
 }
@@ -336,7 +352,7 @@ else
 
 	### Call the *run script
 
-	$run_command -o -a "$action" -c "$tlds_to_change"; rv=$?
+	$run_command "$action" -o -c "$tlds_to_change"; rv=$?
 
 	# positive return code means apply failure or another permanent error, except for 254
 	if [ $rv -gt 0 ] && [ $rv -ne 254 ]; then
@@ -370,7 +386,7 @@ else
 #	debugprint "current $list_type countries in config file: '$config_tlds'"
 
 ####### Fault recovery test: inject unrequested tld
-[ "$test" ] &&	$run_command -o -a "add" -c "ge"; rv=$?
+[ "$test" ] &&	$run_command add -o -c "ge"; rv=$?
 #######
 
 
@@ -379,11 +395,11 @@ else
 
 	## call the backup script
 	debugprint "Calling the backup script"
-	${suite_name}-backup -a backup
+	${suite_name}-backup create-backup
 	echo
 	echo "Countries in final $list_type: '$config_tlds'."
 	echo
-	echo "View current geoblocking status with 'sudo ${suite_name}-manage status'"
+	echo "View current geoblocking status with 'sudo ${suite_name} status'"
 	echo
 fi
 
