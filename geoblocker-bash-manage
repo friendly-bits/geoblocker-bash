@@ -145,10 +145,12 @@ report_status() {
 	[ "$geoblocking_rules" = "" ] && echo "None." || echo "$geoblocking_rules"
 	echo
 
+	check_tlds_coherency; rv=$?
 	if [ "$rv" -ne 0 ]; then
-		echo "Warning: discrepancy detected between existing ipsets and iptables rules!"
+		echo "Warning: discrepancy detected between the config file and iptables rules!" >&2
+		[ "$ipsets_incoherent" = "true" ] && echo "Warning: discrepancy detected between existing geoblocking ipsets and geoblocking firewall rules!" >&2
 	else
-		echo "Coherency check: Actual firewall config is coherent with the config file."
+		echo "Coherency check: Active firewall config is coherent with the config file."
 	fi
 
 	active_tlds="$(find_active_tlds)"; rv=$?
@@ -189,16 +191,18 @@ restore_from_config() {
 		echo "Failed to re-apply previous $list_type countries set." >&2
 		[ "$unexpected_tlds" != "" ] && echo "Unexpected $list_type tlds in the firewall: '$unexpected_tlds'" >&2
 		[ "$missing_tlds" != "" ] && echo "Missing $list_type tlds in the firewall: '$missing_tlds'" >&2
+		[ "$ipsets_incoherent" = "true" ] && echo "Warning: discrepancy detected between existing geoblocking ipsets and geoblocking firewall rules!" >&2
 		# call the *backup script to initiate recovery from fault
 		${suite_name}-backup -a restore; rv=$?
 
-		check_tlds_coherency > /dev/null; rv1=$?; rv=$(( rv + rv1 ))
+		check_tlds_coherency; rv1=$?; rv=$(( rv + rv1 ))
 		if [ $rv -eq 0 ]; then
 			echo "Successfully re-applied previous $list_type countries set."
 		else
 			echo "Failed to re-apply previous $list_type countries set." >&2
 			[ "$unexpected_tlds" != "" ] && echo "Unexpected $list_type tlds in the firewall: '$unexpected_tlds'" >&2
 			[ "$missing_tlds" != "" ] && echo "Missing $list_type tlds in the firewall: '$missing_tlds'" >&2
+			[ "$ipsets_incoherent" = "true" ] && echo "Warning: discrepancy detected between existing geoblocking ipsets and geoblocking firewall rules!" >&2
 			die "$rv" -nolog "Something is not working as it should. Consider fixing your firewall or your system. If it's a bug then please report it."
 		fi
 	fi
@@ -274,14 +278,8 @@ esac
 
 #### MAIN
 
-debugprint "Verifying config coherency..."
 # check config coherency vs active ipsets and firewall rules before performing any action
-check_tlds_coherency; rv=$?
-if [ $rv -eq 0 ]; then
-	debugprint "Successfully verified tlds coherency."
-else
-	restore_from_config
-fi
+check_tlds_coherency || restore_from_config
 
 if [ "$action" = "status" ]; then
 	report_status
@@ -391,14 +389,7 @@ else
 
 
 	# double-check coherency after applying new tlds
-	debugprint "Verifying config coherency..."
-	check_tlds_coherency; rv=$?
-	if [ $rv -eq 0 ]; then
-		debugprint "Successfully verified tlds coherency."
-	else
-		tlds_to_change=""
-		restore_from_config
-	fi
+	check_tlds_coherency || { tlds_to_change=""; restore_from_config; }
 
 	## call the backup script
 	debugprint "Calling the backup script"
