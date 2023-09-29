@@ -16,6 +16,15 @@
 #### Initial setup
 
 me=$(basename "$0")
+
+# check for root
+[ "$EUID" -ne 0 ] && {
+	err="Error: $me needs to be run as root."
+	echo "$err" >&2
+	logger "$err"
+	exit 1
+}
+
 suite_name="geoblocker_bash"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 [ -n "$script_dir" ] && cd "$script_dir" || { echo "Error: Couldn't cd into '$script_dir'." >&2; exit 1; }
@@ -40,13 +49,14 @@ Serves as a proxy to call the -fetch, -apply and -backup scripts with arguments 
 Usage: $me -a <action> [-c <"tld [tld] ... [tld]">] [-s] [-d] [-h]
 
 Options:
-    -a update|add|remove  : Action to perform: "update", "add" or "remove" associated iptables rules
-    -c <"country_codes">  : tld's (country codes). if passing multiple country codes, use double quotes
-    -s                    : Skip fetching (only run the apply script)
-    -o                    : No backup: don't create backup after successful action
+    -a <update|add|remove>        : Action to perform: "update", "add" or "remove" associated iptables rules
+    -c <"country_codes">          : tld's (country codes). if passing multiple country codes, use double quotes
 
-    -d                    : Debug
-    -h                    : This help
+    -s                            : Skip fetching (only run the apply script)
+    -o                            : No backup: don't create backup after successful action
+
+    -d                            : Debug
+    -h                            : This help
 
 EOF
 }
@@ -55,7 +65,7 @@ EOF
 
 while getopts ":a:c:osdh" opt; do
 	case $opt in
-		a) action=$OPTARG;;
+		a) action_run=$OPTARG;;
 		c) arg_tlds=$OPTARG;;
 		s) skipfetch="true";;
 		o) nobackup="true";;
@@ -83,20 +93,14 @@ export debugmode="$debugmode"
 # Print script enter message for debug
 debugentermsg
 
-#### FUNCTIONS
-
 
 #### VARIABLES
 
-# get datadir from the config file
-datadir="$(getconfig "Datadir")" || { die "Error: Couldn't read value for Datadir from the config file."; }
+# Read current set of countries from the the config file into config_tlds
+config_tlds="$(getconfig "Countries")" || { die "Error: Couldn't read value for Countries from the config file."; }
 
-knowngood_file="$datadir/iptables_knowngood.bak"
-whitelist_dir="$datadir/ip_lists"
-
-if [ -z "$arg_tlds" ] || [ "$action" = "update" ]; then
-	# read tlds from the config file
-	tlds="$(getconfig "Countries")" || { die "Error: Couldn't read value for Countries from the config file."; }
+if [ -z "$arg_tlds" ] || [ "$action_run" = "update" ]; then
+	tlds="$config_tlds"
 else
 	tlds="$arg_tlds"
 fi
@@ -104,14 +108,30 @@ fi
 # trim single-quotes if any
 tlds="${tlds//\'}"
 
+# get list_type from the config file
+list_type="$(getconfig "ListType")" || { die -nolog "Error: Couldn't read value for ListType from the config file."; }
+
+# set global variable
+export list_type="$list_type"
+
+#convert to lower case
+action_run="${action_run,,}"
+
+# get datadir from the config file
+datadir="$(getconfig "Datadir")" || { die "Error: Couldn't read value for Datadir from the config file."; }
+
+knowngood_file="$datadir/iptables_knowngood.bak"
+iplist_dir="$datadir/ip_lists"
+
 
 #### CHECKS
 
-# check for root
-[ "$EUID" -ne 0 ] && die 1 "This needs to be run as root."
-
 # check that the config file exists
 [ ! -f "$conf_file" ] && die "Config file '$conf_file' doesn't exist! Run the installation script again."
+
+[ -z "$knowngood_file" ] && die 1 "Error: Known-good file path can not be empty! Exiting."
+
+[ -z "$iplist_dir" ] && die 1 "Error: iplist file path can not be empty! Exiting."
 
 # check for *fetch
 [ ! "$skipfetch" ] && if ! command -v ${suite_name}-fetch &> /dev/null; then
@@ -128,26 +148,25 @@ if ! command -v ${suite_name}-backup &> /dev/null; then
 	die 1 "Error: Can not find '${suite_name}-backup'. Did you run setup? Exiting."
 fi
 
-# check for valid action
-
-[ -z "$action" ] && { usage; die 1 "Specify action with '-a <action>'!"; }
-
-case "$action" in
-	add) apply_action="add" ;;
-	remove) apply_action="remove" ;;
-	update) apply_action="add" ;;
-	*) usage; die 1 "Error: unsupported action '$action'" ;;
-esac
-
 # check for country tlds
 [ -z "$tlds" ] && { err="tlds variable can not be empty! Exiting."; usage; die 1 "$err"; }
 
-[ -z "$knowngood_file" ] && die 1 "Error: Known-good file path can not be empty! Exiting."
+# check for valid action
 
-[ -z "$whitelist_dir" ] && die 1 "Error: Whitelist file path can not be empty! Exiting."
+[ -z "$action_run" ] && { usage; die 1 "Specify action with '-a <action>'!"; }
 
+# translate *run action to *apply action
+case "$action_run" in
+	add) action_apply="add" ;;
+	remove) action_apply="remove" ;;
+	update) action_apply="add" ;;
+	*) usage; die 1 "Error: unsupported action '$action_run'" ;;
+esac
+
+[ -z "$list_type" ] && die "\$list_type variable should not be empty! Something is wrong!"
 
 #### MAIN
+
 
 ### Fetch ip lists
 errcnt=0
@@ -155,9 +174,9 @@ ok_cnt=0
 up_to_date_cnt=0
 failed_tlds=""
 ok_tlds=""
-if [ ! "$skipfetch" ] && [ "$action" != "remove" ]; then
+if [ ! "$skipfetch" ] && [ "$action_run" != "remove" ]; then
 	for tld in $tlds; do
-		${suite_name}-fetch -c "$tld" -p "$whitelist_dir"; rv=$?
+		${suite_name}-fetch -c "$tld" -p "$iplist_dir"; rv=$?
 		if [ $rv -gt 0 ] && [ $rv -lt 254 ]; then
 			# (0 < $rv < 254) from fetch means fatal code error rather than fetch error
 			failed_tlds="$tlds"
@@ -195,20 +214,21 @@ else
 fi
 echo
 
+
 ### Apply ip lists
 
-if [ "$action" = "update" ] && [ ! "$skipfetch" ] && [ "$ok_cnt" -le "$up_to_date_cnt" ]; then
+if [ "$action_run" = "update" ] && [ ! "$skipfetch" ] && [ "$ok_cnt" -le "$up_to_date_cnt" ]; then
 # if all successfully fetched ip lists are not newer than existing ipsets, skip the -apply script
 	echolog "Fetched ip lists are not newer than applied ip lists, skipping iptables reconfiguration."
 	echo
 else
-	${suite_name}-apply -a "$apply_action" -c "$tlds"; rv=$?
+	${suite_name}-apply -a "$action_apply" -c "$tlds"; rv=$?
 	if [ $rv -eq 254 ]; then
 		debugprint "NOTE: *apply exited with error code 254."
 		echo ""
-		# if non-fatal errors occur in *apply, exit with an error
-		echolog "Error: *apply exited with code 254. Failed to apply action '$apply_action'."
-		die 1
+		# if non-fatal errors occur in *apply, set the nobackup variable
+		echolog "Error: *apply exited with code 254. Failed to apply action '$action_apply'."
+		nobackup="true"
 	elif [ $rv -gt 0 ] && [ $rv -ne 254 ]; then
 		debugprint "NOTE: *apply exited with error code $rv."
 		echo ""
@@ -219,33 +239,36 @@ else
 		die "$rv" ""
 	fi
 	echo
+fi
 
-	debugprint "Verifying config coherency..."
+if [ "$errcnt" -eq 0 ]; then
+	echolog "Successfully applied action '$action_run' for countries '$tlds'."
+fi
 
-	if [ -z "$nobackup" ]; then
-		# check config coherency vs active ipsets and firewall rules before performing any action
-		check_tlds_coherency; rv=$?
-		if [ $rv -eq 0 ]; then
-			debugprint "Successfully verified tlds coherency."
+if [ -z "$nobackup" ]; then
+	# check config coherency vs active ipsets and firewall rules before performing any action
 
-			# call the backup script to create a known-good backup of ipsets and iptables state
-			${suite_name}-backup -a backup
-		else
-			echolog "Warning: actual firewall config differs from the config file! Skipping creating backup of current firewall state."
-			echolog "Please run the *manage script to restore config coherency!"
-			[ "$unexpected_tlds" != "" ] && echo "Unexpected tlds in the firewall: '$unexpected_tlds'" >&2
-			[ "$missing_tlds" != "" ] && echo "Missing tlds in the firewall: '$missing_tlds'" >&2
-		fi
+	check_tlds_coherency; rv=$?
+	if [ $rv -eq 0 ]; then
+		debugprint "Successfully verified $list_type tlds coherency."
+		# call the backup script to create a known-good backup of ipsets and iptables state
+		${suite_name}-backup -a backup
 	else
-		debugprint "Skipping backup because nobackup was requested"
+		echolog "Warning: actual $list_type firewall config differs from the config file!"
+		echolog "Please run the *manage script to restore config coherency!"
+		echolog "If it's a recurring issue, please consider filing a bug report!"
+		[ "$unexpected_tlds" != "" ] && echo "Unexpected tlds in the firewall: '$unexpected_tlds'" >&2
+		[ "$missing_tlds" != "" ] && echo "Missing tlds in the firewall: '$missing_tlds'" >&2
+		echo
 	fi
+else
+	debugprint "Skipping backup of current firewall state."
 fi
 
 if [ "$errcnt" -ne 0 ]; then
 	rv=254
 else
 	rv=0
-	echolog "Successfully applied action '$action' for countries '$tlds'."
 fi
 
 debugexitmsg
