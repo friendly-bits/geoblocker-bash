@@ -35,15 +35,15 @@ usage() {
 $me
     Provides an interface to configure geoblocking.
 
-Usage: $me [status|-a <action>] [-c "[tld] [tld] ... [tld]"] [-s <"sch_expression"|disable>] [-f] [-t] [-d] [-h]
+Usage: $me <action> [-c "[tld] [tld] ... [tld]"] [-s <"sch_expression"|disable>] [-f] [-t] [-d] [-h]
 
-Commands:
-    status                        : check on the current status of geoblocking
+Actions:
+    add|remove                   : add or remove TLDs (country codes) to/from geoblocking rules
+    schedule                     : change the cron schedule (has no effect on iptables rules)
+    status                       : check on the current status of geoblocking
+
 
 Options:
-    -a <add|remove|schedule>      : action to perform: add or remove TLDs (country codes) to/from geoblocking rules
-                                        schedule: change the cron schedule (has no effect on iptables rules).
-
     -c "tld(s)"                   : tld / country codes. if passing multiple country codes, use double quotes.
     -s <"sch_expression"|disable> : schedule expression for the periodic cron job implementing auto-updates of the ip lists,
                                             must be inside double quotes.
@@ -61,18 +61,15 @@ EOF
 
 #### PARSE ARGUMENTS
 
-# check for "status" option in arguments
-args=()
-for arg in "$@"; do
-	[ "$arg" = "status" ] && status="true" || args+=( "$arg" )
-done
+# 1st argument should be the requested action
+action="$1"
+shift 1
 
 # replace arguments
 set -- "${args[@]}"
 
-while getopts ":a:c:s:ftdh" opt; do
+while getopts ":c:s:ftdh" opt; do
 	case $opt in
-		a) action=$OPTARG;;
 		c) tlds_arg=$OPTARG;;
 		s) cron_schedule=$OPTARG;;
 		f) force_action="true";;
@@ -90,17 +87,6 @@ shift $((OPTIND -1))
 	echo "Error in arguments. First unrecognized argument: '$1'." >&2
 	echo -e "Note: If specifying multiple country codes, put them in double braces.\n" >&2
 	exit 1
-}
-
-# check for "action" and "status" conflict
-[ "$status" = "true" ] && {
-	if [ -n "$action" ]; then
-		usage
-		echo -e "Error: incompatible arguments. Use either '-a <acton>' or 'status'.\n" >&2
-		exit 1
-	else
-		action="status"
-	fi
 }
 
 echo
