@@ -2,8 +2,7 @@
 
 # geoblocker-bash-cron
 
-# Provides an interface to configure cron jobs for geoblocking.
-# Parameters are communicated via the config file
+# Loads cron-related config from the config file and sets up cron jobs for geoblocking accordingly.
 
 
 #### Initial setup
@@ -31,7 +30,7 @@ usage() {
     cat <<EOF
 
 $me
-Provides interface to configure cron jobs for geoblocking.
+    Loads cron-related config from the config file and sets up cron jobs for geoblocking accordingly.
 
 Usage: $me [-d] [-h]
 
@@ -99,7 +98,7 @@ create_cron_job() {
 
 			# Remove existing autoupdate cron job before creating new one
 			remove_cron_job "autoupdate"
-			cron_command="$cron_schedule \"$run_command\" -a update &>/dev/null # ${suite_name}-autoupdate"
+			cron_command="$cron_schedule \"$run_command\" update &>/dev/null # ${suite_name}-autoupdate"
 			debugprint "Creating autoupdate cron job with schedule '$cron_schedule'... "
 		;;
 
@@ -110,7 +109,7 @@ create_cron_job() {
 			# using the -s switch for the *run script to skip fetching at reboot
 			## otherwise if there was no internet connection at reboot time, *fetch would fail which would cause *run to fail,
 			## so *apply wouldn't run, which would leave the system without geoblocking rules
-			cron_command="@reboot sleep $sleeptime && \"$run_command\" -a update -s &>/dev/null # ${suite_name}-persistence"
+			cron_command="@reboot sleep $sleeptime && \"$run_command\" update -s &>/dev/null # ${suite_name}-persistence"
 		;;
 
 		*) die -nolog "Unrecognized type of cron job: '$job_type'." ;;
