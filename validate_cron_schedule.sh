@@ -15,7 +15,7 @@
 #### Initial setup
 
 me=$(basename "$0")
-suite_name="geoblocker_bash"
+suite_name="geoblocker-bash"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 [ -n "$script_dir" ] && cd "$script_dir" || { echo "Error: Couldn't cd into '$script_dir'." >&2; exit 1; }
 
