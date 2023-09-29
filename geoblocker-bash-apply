@@ -42,14 +42,15 @@ usage() {
 
 $me
     Loads or removes ipsets and iptables rules for specified country codes.
-    Supported actions (specified by the -a option): add, remove.
-	If 'NoDrop' option is set to "true" in the config file, will perform all actions,
-        except setting default iptables policies to DROP, which effectively leaves geoblocking disabled.
+	If 'NoDrop' option is set to "true" in the config file (set up during installation): will perform the action,
+        except setting default iptables policies to DROP, which effectively leaves geoblocking *disabled*.
 
-Usage: $me -a <action> -c <"country_codes"> [-d] [-t] [-h]
+Usage: $me <action> -c <"country_codes"> [-d] [-t] [-h]
+
+Actions:
+    add|remove                 : Add or remove ipsets and iptables rules for TLDs (country codes) specified with the '-c' option
 
 Options:
-    -a <add|remove>            : action to perform: "add" or "remove" associated ipsets and iptables rules
     -c <"country_codes">       : tlds / country codes (if specifying multiple tlds, put them in double quotes)
 
     -d                         : Debug
@@ -61,9 +62,12 @@ EOF
 
 #### PARSE ARGUMENTS
 
-while getopts ":a:c:dht" opt; do
+# 1st argument should be the requested action
+action="$1"
+shift 1
+
+while getopts ":c:dht" opt; do
 	case $opt in
-		a) action=$OPTARG;;
 		c) tlds=$OPTARG;;
 		d) debugmode_args="true";;
 		h) usage; exit 0;;
@@ -162,7 +166,7 @@ exitvalue="0"
 
 # check for valid action
 
-[ -z "$action" ] && { usage; die 1 "Specify action with '-a <action>'!"; }
+[ -z "$action" ] && { usage; die 1 "Specify action!"; }
 
 case "$action" in
 	add) ;;
