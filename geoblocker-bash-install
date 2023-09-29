@@ -322,9 +322,20 @@ if [ "$script_dir" != "$install_dir" ]; then
 fi
 
 ## Create a symlink from ${suite_name}-manage to ${suite_name}
-ln -s "${install_dir}/${suite_name}-manage" "${install_dir}/${suite_name}" || {
-	echo "Failed to create symlink from ${suite_name}-manage to ${suite_name}" >&2
-	install_failed
+try_ln="$(ln -s "${install_dir}/${suite_name}-manage" "${install_dir}/${suite_name}" 2>&1)" || {
+	# don't fail the installation just because the symlink already exists
+	link_exists="$(echo "$try_ln" | grep 'File exists')"
+	if [ "$link_exists" == "" ]; then
+		echo "Failed to create symlink from ${suite_name}-manage to ${suite_name}" >&2
+		install_failed
+	else
+		unlink "${install_dir}/${suite_name}"
+		ln -s "${install_dir}/${suite_name}-manage" "${install_dir}/${suite_name}" || {
+			echo "Failed to create symlink from ${suite_name}-manage to ${suite_name}" >&2
+			install_failed
+		}
+
+	fi
 }
 
 ### Back up pre-install policies for INPUT and FORWARD chains
@@ -358,7 +369,7 @@ fi
 
 
 ### Add iplist(s) for $tlds to managed iplists, then fetch and apply the iplist(s)
-${suite_name}-manage -f -a "add" -c "$tlds"; rv=$?
+${suite_name}-manage add -f -c "$tlds"; rv=$?
 
 # the *manage script exits with return value 254 if requested country is already included in the config
 if [ $rv -ne 0 ] && [ $rv -ne 254 ]; then
@@ -367,14 +378,14 @@ if [ $rv -ne 0 ] && [ $rv -ne 254 ]; then
 fi
 
 ### Set up cron jobs
-${suite_name}-manage -a "schedule" -s "$cron_schedule"; rv=$?
+${suite_name}-manage schedule -s "$cron_schedule"; rv=$?
 
 if [ $rv -ne 0 ]; then
 	echo "Error: failed to set up cron jobs." >&2
 	install_failed
 fi
 
-echo "View current geoblocking status with 'sudo ${suite_name}-manage status'"
+echo "View current geoblocking status with 'sudo ${suite_name} status'"
 
 echo
 echo "Install done."
