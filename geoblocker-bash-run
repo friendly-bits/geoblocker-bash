@@ -46,13 +46,16 @@ usage() {
 $me
 Serves as a proxy to call the -fetch, -apply and -backup scripts with arguments required for each action.
 
-Usage: $me -a <action> [-c <"tld [tld] ... [tld]">] [-s] [-d] [-h]
+Usage: $me <action> [-c <"tld [tld] ... [tld]">] [-s] [-d] [-h]
+
+Actions:
+    add|remove                   : Add or remove TLDs (country codes) to/from geoblocking rules
+    update                       : Fetch ip lists and reactivate them via the *apply script
 
 Options:
-    -a <update|add|remove>        : Action to perform: "update", "add" or "remove" associated iptables rules
     -c <"country_codes">          : tld's (country codes). if passing multiple country codes, use double quotes
 
-    -s                            : Skip fetching (only run the apply script)
+    -s                            : For update action only. Skip fetching (only run the apply script).
     -o                            : No backup: don't create backup after successful action
 
     -d                            : Debug
@@ -63,9 +66,12 @@ EOF
 
 #### PARSE ARGUMENTS
 
-while getopts ":a:c:osdh" opt; do
+# 1st argument should be the requested action
+action_run="$1"
+shift 1
+
+while getopts ":c:osdh" opt; do
 	case $opt in
-		a) action_run=$OPTARG;;
 		c) arg_tlds=$OPTARG;;
 		s) skipfetch="true";;
 		o) nobackup="true";;
@@ -153,7 +159,7 @@ fi
 
 # check for valid action
 
-[ -z "$action_run" ] && { usage; die 1 "Specify action with '-a <action>'!"; }
+[ -z "$action_run" ] && { usage; die 1 "Specify action!"; }
 
 # translate *run action to *apply action
 case "$action_run" in
@@ -222,7 +228,7 @@ if [ "$action_run" = "update" ] && [ ! "$skipfetch" ] && [ "$ok_cnt" -le "$up_to
 	echolog "Fetched ip lists are not newer than applied ip lists, skipping iptables reconfiguration."
 	echo
 else
-	${suite_name}-apply -a "$action_apply" -c "$tlds"; rv=$?
+	${suite_name}-apply "$action_apply" -c "$tlds"; rv=$?
 	if [ $rv -eq 254 ]; then
 		debugprint "NOTE: *apply exited with error code 254."
 		echo ""
@@ -233,7 +239,7 @@ else
 		debugprint "NOTE: *apply exited with error code $rv."
 		echo ""
 		#if fatal errors occur in *apply, attempt to restore last known-good ipsets and iptables state
-		${suite_name}-backup -a restore; rv="$?"
+		${suite_name}-backup restore; rv="$?"
 
 		# exit with the same exit code as backup-restore operation
 		die "$rv" ""
@@ -251,7 +257,7 @@ if [ -z "$nobackup" ]; then
 	check_tlds_coherency; rv=$?
 	if [ $rv -eq 0 ]; then
 		# call the backup script to create a known-good backup of ipsets and iptables state
-		${suite_name}-backup -a backup
+		${suite_name}-backup create-backup
 	else
 		echolog "Warning: actual $list_type firewall config differs from the config file!"
 		echolog "Please run the *manage script to restore config coherency!"
