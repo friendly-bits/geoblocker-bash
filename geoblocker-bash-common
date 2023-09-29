@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# geoblocker_bash-common
+# geoblocker-bash-common
 
-# Common functions and variables for geoblocker_bash suite
+# Common functions and variables for geoblocker-bash suite
 # This script does nothing if called directly. It is sourced from other scripts.
 
 ### Functions
