@@ -158,7 +158,7 @@ exitvalue="0"
 ! command -v "ipset" &> /dev/null && die 254 "Error: Can not find 'ipset'. Install it with 'apt install ipset' or similar."
 
 # Check for iptables-save utility
-! command -v "iptables-save" &> /dev/null && die 254"Error: Can not find 'iptables-save'."
+! command -v "iptables-save" &> /dev/null && die 254 "Error: Can not find 'iptables-save'."
 
 # Check for bc utility
 ! command -v "bc" &> /dev/null && die 254 "Error: Can not find 'bc'."
