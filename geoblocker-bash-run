@@ -1,6 +1,6 @@
 #!/bin/bash -l
 
-# geoblocker_bash-run
+# geoblocker-bash-run
 
 # Serves as a proxy to call the -fetch, -apply and -backup scripts with arguments required for each action.
 # Intended for easy triggering from the -manage script and from cron jobs.
@@ -25,7 +25,7 @@ me=$(basename "$0")
 	exit 1
 }
 
-suite_name="geoblocker_bash"
+suite_name="geoblocker-bash"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 [ -n "$script_dir" ] && cd "$script_dir" || { echo "Error: Couldn't cd into '$script_dir'." >&2; exit 1; }
 
