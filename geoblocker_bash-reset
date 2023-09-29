@@ -1,0 +1,126 @@
+#!/bin/bash -l
+
+# geoblocker_bash-reset
+
+# Resets ipsets and iptables rules.
+
+
+#### Initial setup
+
+me=$(basename "$0")
+
+# check for root
+[ "$EUID" -ne 0 ] && {
+	err="Error: $me needs to be run as root."
+	echo "$err" >&2
+	logger "$err"
+	exit 1
+}
+
+suite_name="geoblocker_bash"
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+[ -n "$script_dir" ] && cd "$script_dir" || { echo "Error: Couldn't cd into '$script_dir'." >&2; exit 1; }
+
+source "$script_dir/${suite_name}-common" || { echo "Error: Can't source ${suite_name}-common." >&2; exit 1; }
+# **NOTE** that some functions and variables are sourced from the *common script
+
+
+#### USAGE
+
+usage() {
+    cat <<EOF
+
+$me
+    1) Deletes associated cron jobs
+    2) Restores pre-install state of default policies for INPUT and FORWARD chains
+    3) Deletes associated iptables rules and removes associated ipsets
+
+Usage: $me [-d] [-h]
+
+Options:
+    -d                         : Debug
+    -h                         : This help
+
+EOF
+}
+
+#### PARSE ARGUMENTS
+
+while getopts ":dh" opt; do
+	case $opt in
+		d) debugmode_args="true";;
+		h) usage; exit 0;;
+		\?) usage; echo "Error: Unknown option: '-$OPTARG'." >&2; exit 1;;
+	esac
+done
+shift $((OPTIND -1))
+
+[[ "$*" != "" ]] && {
+	usage
+	echo "Error in arguments. First unrecognized argument: '$1'." >&2
+	echo "Note: If specifying multiple country codes, put them in double braces." >&2
+	exit 1
+}
+
+# get debugmode variable from either the args or environment variable, depending on what's set
+debugmode="${debugmode_args:-$debugmode}"
+
+# set env var to match the result
+export debugmode="$debugmode"
+
+# Print script enter message for debug
+debugentermsg
+
+
+#### VARIABLES
+
+# get datadir from the config file
+datadir="$(getconfig "Datadir")"; rv=$?
+if [ "$rv" -ne 0 ] || [ -z "$datadir" ]; then datadir="/var/lib/${suite_name}"; fi
+
+preinstall_policies_file="$datadir/preinstall_policies.bak"
+
+iptables_comment_global="${suite_name}_global"
+iptables_comment="${suite_name}"
+
+
+#### CHECKS
+
+# Check for ipset utility
+! command -v "ipset" &> /dev/null && die 254 "Error: Can not find 'ipset'. Install it with 'apt install ipset' or similar."
+
+# Check for iptables-save utility
+! command -v "iptables-save" &> /dev/null && die 254"Error: Can not find 'iptables-save'."
+
+
+#### MAIN
+
+### Delete associated cron jobs
+debugprint "Deleting cron jobs for ${suite_name}..."
+crontab -u root -l 2>/dev/null |  grep -v "${suite_name}-run" | sudo crontab -u root -
+
+
+### Restore iptables policies to pre-install state
+while read -r preinstall_policy; do
+	chain_name=$(echo "$preinstall_policy" | cut -f 1 -d " ")
+	oldpolicy=$(echo "$preinstall_policy" | cut -f 2 -d " ")
+	if [ -n "$chain_name" ] && [ -n "$oldpolicy" ]; then
+		debugprint "Restoring pre-install iptables policy '$oldpolicy' for chain '$chain_name'"
+		iptables -P "$chain_name" "$oldpolicy" &> /dev/null
+	fi
+done < "$preinstall_policies_file"
+
+### Delete associated iptables rules
+
+debugprint "Removing all existing iptables rules for $suite_name... "
+iptables-save | sed -r "/INPUT.*comment.*${iptables_comment}/s/-A/iptables -D/e" &>/dev/null
+
+
+### Destroy associated ipsets
+debugprint "Destroying ipsets for ${suite_name}..."
+for ipset_name in $(ipset list -n | grep "${suite_name}"); do
+	debugprint "Found ipset \"$ipset_name\", destroying..."
+	ipset destroy "$ipset_name"
+done
+
+debugexitmsg
