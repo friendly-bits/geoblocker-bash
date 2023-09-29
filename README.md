@@ -34,13 +34,13 @@ https://github.com/blunderful-scripts/geoblocker-bash/releases
 run ```sudo geoblocker-bash <action> [-c "country_codes"]```
 
 where 'action' is either 'add', 'remove' or 'schedule'.
-- example (to add whitelists for Germany and Netherlands): ```sudo geoblocker-bash add -c "DE NL"```
-- example (to remove whitelist for Germany): ```sudo geoblocker-bash remove -c DE```
+- example (to add ip lists for Germany and Netherlands): ```sudo geoblocker-bash add -c "DE NL"```
+- example (to remove the ip list for Germany): ```sudo geoblocker-bash remove -c DE```
 
  To disable/enable/change the autoupdate schedule, use the '-s' option followed by either cron schedule expression in doulbe quotes, or 'disable':
  ```sudo geoblocker-bash schedule -s <cron_schdedule_expression>|disable```
 - example (to enable or change periodic cron job schedule): ```sudo geoblocker-bash schedule -s "1 4 * * *"```
-- example (to disable ip lists autoupdate entirely): ```sudo geoblocker-bash schedule -s disable```
+- example (to disable ip lists autoupdate): ```sudo geoblocker-bash schedule -s disable```
  
 **To check on current geoblocking status:**
 - run ```sudo geoblocker-bash status```
@@ -51,15 +51,16 @@ where 'action' is either 'add', 'remove' or 'schedule'.
 **To switch mode (from whitelist to blacklist or the opposite):**
 - simply re-install
 
-## **Prerequisites**:
+## **Pre-requisites**:
 
-- Linux running systemd (tested on Debian, Ubuntu and Mint, should work on any Debian derivative, may require modifications to work on other distributions)
+- Linux with systemd (tested on Debian, Ubuntu and Mint, should work on any Debian derivative, may work or may require slight modifications to work on other distributions)
 - iptables - firewall management utility (nftables support may get implemented later)
 - standard GNU utilities including awk, sed, grep, bc
+- obviously, bash
 
 additional mandatory prerequisites: to install, run ```sudo apt install ipset wget jq grepcidr```
 - wget (or alternatively curl) is used by the "fetch" and "check_ip_in_ripe" scripts to download lists from RIPE
-- ipset utility is a companion tool to iptables (used by the "apply" script to create an efficient iptables whitelist rule)
+- ipset utility is a companion tool to iptables (used by the "apply" script to create efficient iptables rules)
 - jq - Json processor (used to parse lists downloaded from RIPE)
 - grepcidr - filters ip addresses matching CIDR patterns (used by check_ip_in_ripe.sh to check if an ip address belongs to a subnet from a list of subnets)
 
@@ -119,7 +120,7 @@ After installation, the user interface is provided by simply running "geoblocker
 - Doesn't require any arguments
 - Deletes associated cron jobs
 - Restores pre-install state of default policies for INPUT and FORWARD chains
-- Deletes associated iptables rules and removes the whitelist ipset
+- Deletes geoblocking iptables rules and removes the associated ipsets
 - Deletes scripts' data folder /var/lib/geoblocker-bash
 - Deletes the scripts from /usr/local/bin
 
