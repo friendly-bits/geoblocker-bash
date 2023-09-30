@@ -128,7 +128,6 @@ command -v "wget" &> /dev/null && wget_exists="true"
 
 fetched_file=$(mktemp "/tmp/fetched-$country-XXXX.json")
 
-# debugprint "Trying: $curl_or_wget '$url'" >&2
 echo "Fetching iplist from RIPE for country '$country'... "
 
 echo
@@ -137,7 +136,7 @@ echo
 if [ $rv -ne 0 ]; then
 	echo "Failed."
 	rm "$fetched_file" &>/dev/null
-	die 254 "Failed to run $curl_or_wget $url."
+	die 254 "Failed to run fetch $url."
 fi
 
 
