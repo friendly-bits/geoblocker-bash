@@ -98,6 +98,9 @@ ip_regex='^((25[0-5]|(2[0-4]|1\d|[1-9]|)\d)\.?\b){4}'
 mask_regex='(/([01]?\d\d?|2[0-4]\d|25[0-5]))$'
 subnet_regex="${ip_regex}${mask_regex}"
 
+curl_command="curl --retry 8 --fail-early --connect-timeout 5 --progress-bar"
+wget_command="wget --tries=8 --timeout=5 --show-progress"
+
 
 #### Checks
 
@@ -106,16 +109,15 @@ subnet_regex="${ip_regex}${mask_regex}"
 # check that we have iplist file path
 [ -z "$iplist_path" ] && { usage; die 1 "Specify iplist file path with '-p <path-to-file>'!"; }
 
-# use curl or wget, depending on which one we find
-if hash curl 2>/dev/null; then
-	curl_or_wget="curl -s --retry 4 --fail-early --connect-timeout 7"
-elif hash wget 2>/dev/null; then
-	curl_or_wget="wget --tries=4 --timeout=7 -qO-"
-else
-	die 1 "Error: Neither curl nor wget found."
-fi
+# check for curl
+command -v "curl" &> /dev/null && curl_exists="true"
 
-# check that we have jq
+# check for wget
+command -v "wget" &> /dev/null && wget_exists="true"
+
+[[ ! "$curl_exists" && ! "$wget_exists" ]] && die 1 "Error: Neither curl nor wget found."
+
+# check for jq
 ! command -v jq &> /dev/null && die 1 "Error: Can not find 'jq' - Json processor. Install it with 'apt install jq' or similar."
 
 # check that iplist directory exists
@@ -127,9 +129,10 @@ fi
 fetched_file=$(mktemp "/tmp/fetched-$country-XXXX.json")
 
 # debugprint "Trying: $curl_or_wget '$url'" >&2
-echo -n "Fetching iplist from RIPE for country '$country'... "
+echo "Fetching iplist from RIPE for country '$country'... "
 
-$curl_or_wget "$url" > "$fetched_file"; rv=$?
+echo
+[ "$wget_exists" ] && { $wget_command "$url" -O "$fetched_file"; rv=$?; } || { $curl_command "$url" -o "$fetched_file"; rv=$?; }
 
 if [ $rv -ne 0 ]; then
 	echo "Failed."
@@ -148,7 +151,7 @@ if [ ! "$status" = "ok" ]; then
 	die 254 "Failed to fetch ip list from RIPE."
 fi
 
-echo "Ok."
+echo -e "\nFetch successful.\n"
 
 ##
 if [ -f "$out_list" ]; then
