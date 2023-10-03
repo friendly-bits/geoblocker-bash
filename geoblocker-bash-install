@@ -149,7 +149,9 @@ copyscript() {
 # set environment variable "nolog" to avoid daughter scripts writing errors
 #	to syslog when encountering incorrect arguments from the user
 #	nolog variable is checked in the sourced *common script
+
 export nolog="true"
+export manualmode="true"
 
 install_dir="/usr/local/bin"
 datadir="/var/lib/${suite_name}"
@@ -394,5 +396,6 @@ echo
 
 unset nolog
 unset debugmode
+unset manualmode
 
 exit 0
