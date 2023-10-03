@@ -149,7 +149,7 @@ exitvalue="0"
 [ ! -f "$conf_file" ] && die "Config file '$conf_file' doesn't exist! Run the installation script again."
 
 # check for country tlds
-[ -z "$tlds" ] && { usage; die 254 "tlds (country codes) variable is empty!"; }
+[ -z "$tlds" ] && { usage; die 254 "Specify country codes!"; }
 
 # check for datadir path
 [ -z "$datadir" ] && { usage; die 254 "Error: failed to read the 'datadir' variable from the config file."; }
@@ -410,7 +410,7 @@ if [ "$action" = "add" ]; then
 
 		if [ "$list_type" = "whitelist" ]; then iptables_action="ACCEPT"; else iptables_action="DROP"; fi
 
-		echo -n "Appending $list_type iplist rule for country '$tld' to the INPUT chain... "
+		echo -n "Appending $list_type rule for country '$tld' to the INPUT chain... "
 		iptables -A INPUT -m set --match-set "$perm_ipset" src -j "$iptables_action" -m comment --comment "$iptables_comment"; rv=$?
 
 		if [ $rv -ne 0 ]; then
