@@ -56,7 +56,8 @@ where 'action' is either 'add', 'remove' or 'schedule'.
 - Linux with systemd (tested on Debian, Ubuntu and Mint, should work on any Debian derivative, may work or may require slight modifications to work on other distributions)
 - iptables - firewall management utility (nftables support may get implemented later)
 - standard GNU utilities including awk, sed, grep, bc
-- obviously, bash
+- for persistence and autoupdate functionality, requires the cron service to be enabled
+- obviously, needs bash (*may* work on some other shells but I do not test on them)
 
 additional mandatory prerequisites: to install, run ```sudo apt install ipset wget jq grepcidr```
 - wget (or alternatively curl) is used by the "fetch" and "check_ip_in_ripe" scripts to download lists from RIPE
@@ -146,8 +147,10 @@ After installation, the user interface is provided by simply running "geoblocker
 ```geoblocker-bash-run update``` : intended for triggering from periodic cron jobs. Updates the ipsets for all country codes that had been previously configured. Also used by the reboot cron job to implement persistence.
 
 **The -fetch script**
-- Fetches ipv4 subnets list for a given country code from RIPE.
-- Parses, validates, compiles the downloaded list, and saves to a file.
+- Fetches ipv4 subnets lists for given country codes from RIPE.
+- Parses, validates, compiles the downloaded lists, and saves each list to a separate file.
+- Implements extensive coherency checks on each stage (fetching, parsing, validating and saving) and handles errors if they occur
+- If a "soft" error is encountered (mostly a temporary network error), retries the download up to 3 times
 
 **The -apply script**:  directly interfaces with iptables. Creates or removes ipsets and iptables rules for specified country codes.
 
@@ -157,28 +160,27 @@ After installation, the user interface is provided by simply running "geoblocker
 ```geoblocker-bash-apply remove -c <"country_codes">``` :
 - removes ipsets and associated iptables rules for specified countries.
 
-**The -cronsetup script** exists to manage all the cron-related logic in one place. Called by the -manage script. Applies settings stored in the config file.
+**The -cronsetup script** manages all the cron-related logic in one place. Called by the -manage script. Applies settings stored in the config file.
 
 **The -backup script**: Creates a backup of the current iptables state and geoblocker-associated ipsets, or restores them from backup.
 
 ```geoblocker-bash-backup backup``` : Creates a backup of the current iptables state and geoblocker-associated ipsets.
 
 ```geoblocker-bash-backup restore``` : Used for automatic recovery from fault conditions (should not happen but implemented just in case)
-- Restores ipsets and iptables state from backup
-- If restore from backup fails, assumes a fundamental issue and disables geoblocking entirely
+- Restores ipsets and iptables state from last known good backup
+- If restore from backup fails, either gives up (default behavior) or (if installed with the -e option for Emergency Deactivation) deactivates geoblocking entirely
 
-**The -reset script:**: is called by the install script to clean up previous installation config (just in case you install again without uninstalling first)
+**The -reset script:**: is called by the *install script to clean up previous geoblocking rules in the firewall and reset the config (just in case you install again without uninstalling first)
 
-**The -common script:** : Stores common functions and variables for geoblocker-bash suite. Does nothing if called directly.
+**The -common script:** : Stores common functions and variables for geoblocker-bash suite. Does nothing if called directly. Most other scripts won't work without it.
 
 **The validate_cron_schedule.sh script** is used by the -cronsetup script. It accepts a cron schedule expression and attempts to make sure that it conforms to the crontab format.
 
-**The check_ip_in_ripe.sh script** can be used to verify that a certain ip address belongs to a subnet found in RIPE's records for a given country. It is not called from other scripts.
+**The check_ip_in_ripe.sh script** can be used to verify that a certain ip address belongs to a subnet found in RIPE's records for a given country. It is intended for manual use and is not called from other scripts.
 
 ## **Extra notes**
 
 - All scripts (except -common) display "usage" when called with the "-h" option. You can find out about some additional options specific for each script by running it with that option.
 - Most scripts accept the "-d" option for debug
 - The fetch script can be easily modified to get the lists from another source instead of RIPE, for example from ipdeny.com
-- If you live in a small country, the fetched list may be shorter than 100 subnets. If that's the case, the fetch and check_ip_in_ripe scripts will assume that the download failed and refuse to work. You can change the value of the "min_subnets_num" variable in both scripts to work around that.
 - If you remove your country's whitelist using the -manage script, you will probably get locked out of your remote server.
