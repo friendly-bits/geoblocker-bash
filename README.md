@@ -167,7 +167,7 @@ After installation, the user interface is provided by simply running "geoblocker
 
 **The -backup script**: Creates a backup of the current iptables state and geoblocker-associated ipsets, or restores them from backup.
 
-```geoblocker-bash-backup backup``` : Creates a backup of the current iptables state and geoblocker-associated ipsets.
+```geoblocker-bash-backup create-backup``` : Creates a backup of the current iptables state and geoblocker-associated ipsets.
 
 ```geoblocker-bash-backup restore``` : Used for automatic recovery from fault conditions (should not happen but implemented just in case)
 - Restores ipsets and iptables state from last known good backup
