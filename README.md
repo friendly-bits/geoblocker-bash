@@ -116,7 +116,7 @@ After installation, the user interface is provided by simply running "geoblocker
 - Creates backup of pre-install policies for INPUT and FORWARD chains
 - Calls geoblocker-bash-manage to set up geoblocker and then call the -fetch and -apply scripts.
 - If an error occurs during the installation, calls the uninstall script to revert any changes made to the system.
-- Accepts optional custom cron schedule expression for autoupdates as an argument. Default cron schedule is "0 4 * * *" - at 4:00 [am] every day. 'disable' instead of the schedule will disable autoupdates.
+- Accepts optional custom cron schedule expression for autoupdates as an argument with the '-s' option. Default cron schedule is "0 4 * * *" - at 4:00 [am] every day. 'disable' instead of the schedule will disable autoupdate.
 - Accepts the '-n' option to disable persistence (reboot cron job won't be created so after system reboot, there will be no more geoblocking - although if you have an autoupdate cron job then it will eventually kick in and re-activate geoblocking)
 
 **The -uninstall script**
