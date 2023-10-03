@@ -4,10 +4,10 @@
 
 # Based on a prior script by mivk, called get-ripe-ips.
 
-# Fetches ipv4 subnets for a given country code from RIPE
+# Fetches ipv4 subnets for given country codes from RIPE
 ## See https://stat.ripe.net/docs/data_api
 #
-# Parses, validates, compiles the downloaded list, and saves to a file.
+# Parses, validates, compiles the downloaded lists, and saves each one to a separate file.
 
 # Requires jq - JSON processor.
 ## On Debian and derivatives, if you are missing jq then install it using this command:
@@ -18,11 +18,19 @@
 
 me=$(basename "$0")
 
+# check for root
+[ "$EUID" -ne 0 ] && {
+	err="Error: $me needs to be run as root."
+	echo "$err" >&2
+	logger "$err"
+	exit 1
+}
+
 suite_name="geoblocker-bash"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-[ -n "$script_dir" ] && cd "$script_dir" || { echo "Error: Couldn't cd into '$script_dir'." >&2; exit 1; }
+[ -n "$script_dir" ] && cd "$script_dir" || { err="Error: Couldn't cd into '$script_dir'."; echo "$err" >&2; logger "$err" exit 1; }
 
-source "$script_dir/${suite_name}-common" || { echo "Error: Can't find ${suite_name}-common." >&2; exit 1; }
+source "$script_dir/${suite_name}-common" || { err="Error: Can't find ${suite_name}-common."; echo >&2; logger "err"; exit 1; }
 # **NOTE** that some functions and variables are sourced from the *common script
 
 # sanitize arguments
@@ -37,41 +45,43 @@ usage() {
     cat <<EOF
 
 This script:
-1) Fetches ipv4 subnets for a given country from RIPE.
-2) Parses, validates, compiles them into a plain list, and saves to a file.
+1) Fetches ipv4 subnets for given country codes (TLD's) from RIPE.
+2) Parses, validates, compiles the downloaded lists, and saves each one to a separate file.
 
-Usage: $me -c <country_code> -p <path> [-d] [-h]
+Usage: $me -c <"tld [tld] ... [tld]"> -p <path> [-f] [-d] [-h]
 
 Options:
-    -c <country_code>  : tld/country code
-    -p <path>          : Path to directory where downloaded and compiled subnet lists will be stored
+    -c <"country_codes">   : tld's (country codes). if passing multiple country codes, use double quotes
+    -p <path>              : Path to directory where downloaded and compiled subnet lists will be stored
 
-    -d                 : Debug
-    -h                 : This help
+    -f                     : force using fetched lists even if list timestamp didn't change compared to existing list
+    -d                     : Debug
+    -h                     : This help
 
 EOF
 }
 
+
 #### Parse arguments
 
-while getopts ":c:p:dh" opt; do
+while getopts ":c:p:fdh" opt; do
 	case $opt in
-		c) country=$OPTARG;;
-		p) iplist_path=$OPTARG;;
+		c) tlds=$OPTARG;;
+		p) iplist_dir=$OPTARG;;
+
+		f) force_update="true";;
 		d) debugmode_args="true";;
 		h) usage; exit 0;;
-		\?) usage; echo "Error: Unknown option: '-$OPTARG'." >&2; exit 1;;
+		\?) usage; die "Error: Unknown option: '-$OPTARG'.";;
 	esac
 done
 shift $((OPTIND -1))
 
 [[ "$*" != "" ]] && {
 	usage
-	echo "Error in arguments. First unrecognized argument: '$1'." >&2
+	die "Error in arguments. First unrecognized argument: '$1'."
 	exit 1
 }
-
-echo
 
 # get debugmode variable from either the args or environment variable, depending on what's set
 debugmode="${debugmode_args:-$debugmode}"
@@ -84,11 +94,7 @@ debugentermsg
 
 #### VARIABLES
 ripe_url="https://stat.ripe.net/data/country-resource-list/data.json?v4_format=prefix&resource="
-url="$ripe_url$country"
-min_subnets_num="100"
 family="ipv4"    ## only parsing the ipv4 section at this time
-filename="${family}_$country"
-out_list="$iplist_path/$filename"
 
 # regex patterns used for ipv4 validation
 # using Perl regex syntax because grep is faster with it than with native grep syntax
@@ -101,13 +107,21 @@ subnet_regex="${ip_regex}${mask_regex}"
 curl_command="curl --retry 8 --fail-early --connect-timeout 5 --progress-bar"
 wget_command="wget --tries=8 --timeout=5 --show-progress"
 
+failed_validation_cnt=0
+apply_tlds=""
+failed_tlds=""
+partial_tlds=""
+
+fetch_retries=3
+
+status_file="$iplist_dir/status"
 
 #### Checks
 
-[ -z "$country" ] && { usage; die 1 "Specify country with '-c <country>'!"; }
+[ -z "$tlds" ] && { usage; die 1 "Specify country codes!"; }
 
 # check that we have iplist file path
-[ -z "$iplist_path" ] && { usage; die 1 "Specify iplist file path with '-p <path-to-file>'!"; }
+[ -z "$iplist_dir" ] && { usage; die 1 "Specify iplist directory with '-p <path-to-dir>'!"; }
 
 # check for curl
 command -v "curl" &> /dev/null && curl_exists="true"
@@ -121,121 +135,188 @@ command -v "wget" &> /dev/null && wget_exists="true"
 ! command -v jq &> /dev/null && die 1 "Error: Can not find 'jq' - Json processor. Install it with 'apt install jq' or similar."
 
 # check that iplist directory exists
-[ ! -d "$iplist_path" ] && die 1 "Directory '$iplist_path' doesn't exist!"
+[ ! -d "$iplist_dir" ] && die 1 "Directory '$iplist_dir' doesn't exist!"
 
 
 #### Main
 
-fetched_file=$(mktemp "/tmp/fetched-$country-XXXX.json")
+for tld in $tlds; do
 
-echo "Fetching iplist from RIPE for country '$country'... "
+	url="$ripe_url$tld"
+	filename="${family}_${tld}"
+	list_path="$iplist_dir/${filename}"
+	fetched_file=$(mktemp "/tmp/fetched-$tld-XXXX.json")
 
-echo
-[ "$wget_exists" ] && { $wget_command "$url" -O "$fetched_file"; rv=$?; } || { $curl_command "$url" -o "$fetched_file"; rv=$?; }
-
-if [ $rv -ne 0 ]; then
-	echo "Failed."
-	rm "$fetched_file" &>/dev/null
-	die 254 "Failed to run fetch $url."
-fi
-
-
-status=$(jq -r '.status' "$fetched_file")
-if [ ! "$status" = "ok" ]; then
-	ripe_msg=$(jq -r -c '.messages' "$fetched_file")
-	echo "Failed."
-	echo "RIPE message: '$ripe_msg'."
-	echo "Requested url was: '$url'"
-	rm "$fetched_file" &>/dev/null
-	die 254 "Failed to fetch ip list from RIPE."
-fi
-
-echo -e "\nFetch successful.\n"
-
-##
-if [ -f "$out_list" ]; then
-	out_list_exists="true"
-	date_old=$(stat --printf "%Y" "$out_list")
-else
-	date_old=0
-fi
-
-# get date of the newly fetched file
-ripe_db_time=$(jq -r '.data.query_time' "$fetched_file")
-# debugprint "ripe_db_time=$ripe_db_time" >&2
-date_new=$(date -d "$ripe_db_time" +%s)
-
-if [ ! "$date_new" -gt "$date_old" ] && [ ! "$debugmode" ]; then
-	echo "Not updating '$filename' because data querytime did not change: '$(date --date=@$date_old)'."
-	up_to_date="true"
-else
-	errorcount=0
-	parsed_file=$(mktemp "/tmp/parsed-$country-XXXX.list")
-	validated_file=$(mktemp "/tmp/validated-$country-XXXX.list")
-
-	echo -n "Parsing... "
-	jq -r ".data.resources.$family | .[]" "$fetched_file" > "$parsed_file"
-
-	parsed_subnet_cnt=$(wc -l < "$parsed_file")
-
-	echo -n "Validating... "
-	grep -P "$subnet_regex" "$parsed_file" > "$validated_file"
-
-	validated_subnets_cnt=$(wc -l < "$validated_file")
-
-	errorcount=$((parsed_subnet_cnt - validated_subnets_cnt))
-
-	if [ $errorcount -ne 0 ]; then
-		echo "Issues found."
-		echo "Warning: $errorcount subnets failed validation." >&2
-		echo "Invalid subnets removed from the list." >&2
+	if [ -s "$list_path" ]; then
+		old_list_exists="true"
+		date_old=$(stat --printf "%Y" "$list_path")
 	else
-		if [ "$validated_subnets_cnt" -ge "$min_subnets_num" ]; then
+		date_old=0
+	fi
+
+	retry_cnt=0
+
+	tld_status="unknown"
+
+	# Make $fetch_retries attempts to fetch the list for each TLD (or until successful fetch and no validation errors)
+	while true; do
+		retry_cnt=$(( retry_cnt + 1 ))
+
+
+		[ "$wget_exists" ] && fetch_command="$wget_command $url -O $fetched_file"
+		[ "$curl_exists" ] && fetch_command="$curl_command $url -o $fetched_file"
+
+		# debugprint "Trying: $curl_or_wget '$ripe_url$tld'" >&2
+		echo -e "Fetching iplist from RIPE for country '$tld'... \n"
+
+		$fetch_command; rv=$?
+
+		if [ $rv -ne 0 ]; then
+			rm "$fetched_file" &>/dev/null
+			die 254 "Error when running $fetch_command."
+		fi
+
+		status=$(jq -r '.status' "$fetched_file")
+		if [ ! "$status" = "ok" ]; then
+			echolog -err "Failed to fetch the list for country $tld."
+			ripe_msg=$(jq -r -c '.messages' "$fetched_file")
+			debugprint "RIPE replied with message: '$ripe_msg'"
+			rm "$fetched_file" &>/dev/null
+			tld_status="failed"
+		fi
+
+		echo -e "\nFetch successful.\n"
+
+		# get the date of the fetched file
+		ripe_db_time=$(jq -r '.data.query_time' "$fetched_file")
+		date_new=$(date -d "$ripe_db_time" +%s)
+
+		if [ "$old_list_exists" ]; then
+			old_failed_subnets_cnt="$(getstatus "$status_file" "LastFailedSubnetsCnt_$tld")" || {
+				rm "$fetched_file" &>/dev/null
+				die "Error: Couldn't read value for LastFailedSubnetsCnt_$tld from the config file.";
+			}
+			if [[ "$date_new" -le "$date_old" && "$force_update" != "true" && "$manualmode" != "true" && "$old_failed_subnets_cnt" -eq 0 ]]; then
+				echolog "Subnets list for country $tld is up-to-date. Timestamp: '$(date --date=@$date_new)'."
+				tld_status="up_to_date"
+				rm "$fetched_file" &>/dev/null
+				break
+			fi
+		fi
+
+
+		parsed_file=$(mktemp "/tmp/parsed-$tld-XXXX.list")
+
+		# Parse the fetched file
+		echo -n "Parsing... "
+		jq -r ".data.resources.$family | .[]" "$fetched_file" > "$parsed_file"; rv=$?
+
+		rm "$fetched_file" &>/dev/null
+
+		if [ "$rv" -eq 0 ]; then
 			echo "Ok."
 		else
 			rm "$parsed_file" &>/dev/null
-			rm "$validated_file" &>/dev/null
-			rm "$fetched_file"
-			die 254 "Error: validated subnets count '$validated_subnets_cnt' is less than '$min_subnets_num'. Probably a download error."
+			tld_status="failed"
+			echolog -err "Error: failed to parse the fetched file for country $tld."
 		fi
-	fi
 
-	echo "Validated $validated_subnets_cnt subnets."
-	echo ""
+		# Validate the parsed file
+		parsed_subnets_cnt=$(wc -l < "$parsed_file")
 
-	if [ "$out_list_exists" ]; then
-		old_subnets_cnt="$(wc -l < "$out_list")"
-		# compare fetched subnets count to old subnets count, get result in %
-		subnets_percents="$(echo "scale=0 ; $validated_subnets_cnt * 100 / $old_subnets_cnt" | bc)"
-		if [ "$subnets_percents" -lt 90 ]; then
-			rm "$parsed_file" &>/dev/null
-			rm "$validated_file" &>/dev/null
-			rm "$fetched_file"
-			die 254 "Error: validated subnets count '$validated_subnets_cnt' decreased by more than 10% relatively to subnets count in the existing list - '$old_subnets_cnt'." "Warning: something is wrong! Not updating the list."
-		else
-			debugprint "Validated subnets count is ${subnets_percents}% of the count in the existing list"
-		fi
-	fi
-
-	echo -n "Updating $out_list... "
-	mv "$validated_file" "$out_list"; rv=$?
-	if [ $rv -ne 0 ]; then
-		echo "Failed."
+		echo -n "Validating... "
+		validated_file=$(mktemp "/tmp/validated-$tld-XXXX.list")
+		grep -P "$subnet_regex" "$parsed_file" > "$validated_file"
 		rm "$parsed_file" &>/dev/null
-		rm "$validated_file" &>/dev/null
-		rm "$fetched_file" &>/dev/null
-		die 1 "Failed to overwrite the file $out_list"
-	fi
-	echo "Ok."
-	touch -d "$ripe_db_time" "$out_list"
-fi
 
-rm "$parsed_file" &>/dev/null
-rm "$validated_file" &>/dev/null
-rm "$fetched_file" &>/dev/null
-echo ""
+		validated_subnets_cnt=$(wc -l < "$validated_file")
+
+		failed_validation_cnt=$(( parsed_subnets_cnt - validated_subnets_cnt ))
+		if [ "$failed_validation_cnt" -gt 0 ]; then
+			echo "Note: Fetch attempt $retry_cnt for country $tld: $failed_validation subnets failed validation." >&2
+			[ "$retry_cnt" -ge "$fetch_retries" ] && { tld_status="partial"; break; }
+			rm "$validated_file" &>/dev/null
+			echolog "Retrying fetch..." >&2
+		else
+			echo "Ok."
+			tld_status="Ok"
+			break
+		fi
+	done
+
+	# If we have a partial list, decide whether to consider it Ok or not
+	if [ "$tld_status" = "partial" ]; then
+			echolog -err "Warning: $failed_validation_cnt subnets for country $tld failed validation."
+			echolog -err "Invalid subnets removed from the list."
+
+		if [ "$old_list_exists" = "true" ]; then
+			## don't update the list if it is partial and the count of validated subnets fell compared to the old list
+			if [ "$failed_subnets_cnt" -gt "$old_failed_subnets_cnt" ]; then
+				rm "$validated_file" &>/dev/null
+				tld_status="failed"
+				err1="Warning: validated subnets count '$validated_subnets_cnt' for country $tld is less than '$old_subnets_cnt' in the old list."
+				err2="Not updating the list."
+				echolog -err "$err1" "$err2"
+			else
+				tld_status="Ok"
+			fi
+		else
+			# old list does not exist
+			# if we are in manual mode, meaning we were launched from either the *install or the *manage script
+			if [ "$manualmode" = "true" ]; then
+				# if an older existing list is unavailable, ask the user what to do
+				echo -e "\n\nWarning: Ip list for country '$tld' has been fetched but may be incomplete, and there is no older downloaded file for this list."
+				echo "Use the incomplete list anyway?"
+				while true; do
+					read -p "(Y/N) " -n 1 -r
+					if [[ "$REPLY" =~ ^[Yy]$ ]]; then tld_status="Ok"; break
+					elif [[ "$REPLY" =~ ^[Nn]$ ]]; then
+						tld_status="failed"
+						rm "$validated_file" &>/dev/null
+					else echo -e "\nPlease press 'y/n'.\n"
+					fi
+				done
+			fi
+		fi
+	fi
+
+	if [[ "$tld_status" = "Ok" || "$tld_status" = "partial" ]]; then
+		echo -e "Validated subnets count for country $tld: $validated_subnets_cnt.\n"
+	fi
+
+	case "$tld_status" in
+		Ok | up_to_date ) setstatus "$status_file" "LastFailedSubnetsCnt_${tld}=$failed_subnets_cnt" ;;
+
+		partial | failed ) failed_tlds="$failed_tlds $tld" ;;
+
+		unknown ) echolog -err "Error: validation status for country $tld is unknown. This should not happen. Please file a bug report." ;;
+		* ) echolog -err "Error: validation status for country $tld is $tld_status which I don't understand. This should not happen. Please file a bug report." ;;
+	esac
+
+	if [ "$tld_status" = "Ok" ]; then
+
+		echo -n "Updating $list_path... "
+		mv "$validated_file" "$list_path"; rv=$?
+		if [ $rv -ne 0 ]; then
+			echo "Failed."
+			rm "$validated_file" &>/dev/null
+			echolog -err "Failed to overwrite the file $list_path"
+			tld_status="failed"
+		else
+			echo "Ok."
+			touch -d "$ripe_db_time" "$list_path"
+			apply_tlds="$apply_tlds $tld"
+		fi
+
+	fi
+
+	rm "$validated_file" &>/dev/null
+
+done
+
+# report fetch results back to *run via the config file
+setstatus "$status_file" "apply_tlds=$apply_tlds" "failed_tlds=$failed_tlds"
 
 debugexitmsg
 
-[ "$up_to_date" = "true" ] && rv=255 || rv=0
-exit $rv
+exit 0
