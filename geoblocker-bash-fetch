@@ -325,7 +325,7 @@ for tld in $tlds; do
 			echo "Failed."
 			rm "$validated_file" &>/dev/null
 			echolog -err "Failed to overwrite the file '$list_path'"
-			tld_status="failed"
+			failed_tlds="$failed_tlds $tld"
 		else
 			echo "Ok."
 			touch -d "$ripe_db_time" "$list_path"
