@@ -159,6 +159,8 @@ for tld in $tlds; do
 	validated_subnets_cnt=0
 	failed_subnets_cnt=0
 	parsed_subnets_cnt=0
+	old_list_exists=""
+	old_failed_subnet_cnt=""
 
 	# Make $fetch_retries attempts to fetch the list for each TLD (or until successful fetch and no validation errors)
 	while true; do
@@ -223,6 +225,7 @@ for tld in $tlds; do
 			echolog "Error: failed to parse the fetched file for country '$tld'."
 			[ "$retry_cnt" -ge "$fetch_retries" ] && break || echolog "Retrying fetch..." >&2
 		else
+			echo "Ok."
 			# Validate the parsed file
 			parsed_subnets_cnt=$(wc -l < "$parsed_file")
 
