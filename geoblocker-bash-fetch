@@ -256,11 +256,11 @@ for tld in $tlds; do
 			echolog -err "Invalid subnets removed from the list."
 
 		if [ "$old_list_exists" = "true" ]; then
-			## don't update the list if it is partial and the count of validated subnets fell compared to the old list
+			## don't update the list if it is partial and the count of failed validations increased compared to the old list
 			if [ "$failed_subnets_cnt" -gt "$old_failed_subnets_cnt" ]; then
 				rm "$validated_file" &>/dev/null
 				tld_status="failed"
-				err1="Warning: validated subnets count '$validated_subnets_cnt' for country '$tld' is less than '$old_failed_subnets_cnt' in the old list."
+				err1="Warning: failed subnets count '$failed_subnets_cnt' for country '$tld' is higher than '$old_failed_subnets_cnt' in the old list."
 				err2="Not updating the list."
 				echolog -err "$err1" "$err2"
 			else
