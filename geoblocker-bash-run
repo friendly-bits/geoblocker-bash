@@ -198,10 +198,10 @@ if [ ! "$skipfetch" ] && [ "$action_run" != "remove" ]; then
 
 	# read *fetch results from the config file
 	apply_tlds="$(getstatus "$status_file" "apply_tlds")" || { die "Error: Couldn't read value for 'apply_tlds' from the status file '$status_file'."; }
-	failed_tlds="$(getstatus "$status_file" "failed_tlds")" || { die "Error: Couldn't read value for 'failed_tlds' from the config file."; }
+	failed_tlds="$(getstatus "$status_file" "failed_tlds")" || { die "Error: Couldn't read value for 'failed_tlds' from the status file '$status_file'."; }
 
 	if [ "$failed_tlds" != "" ]; then
-		echolog -err "Failed to fetch subnet lists for countries '$failed_tlds'."
+		echolog -err "Failed to fetch and validate subnet lists for countries '$failed_tlds'."
 	fi
 
 	failed_tlds_cnt=$(echo "$failed_tlds" | wc -w)
