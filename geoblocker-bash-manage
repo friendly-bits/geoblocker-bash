@@ -206,7 +206,8 @@ restore_from_config() {
 	done
 
 	echo "Restoring $list_type countries set '$config_tlds' from the config file... "
-	$run_command remove -o -c "$config_tlds $unexpected_tlds $tlds_to_change"
+	tlds_to_remove="$(merge_lists $config_tlds $unexpected_tlds $tlds_to_change)"
+	$run_command remove -o -c "$tlds_to_remove"
 	[[ "$config_tlds" != "" ]] && $run_command add -o -c "$config_tlds"
 
 	check_tlds_coherency; rv=$?
@@ -242,8 +243,9 @@ install_dir="$(getconfig "Installdir")" || { die -nolog "Error: Couldn't read va
 # get list_type from the config file
 list_type="$(getconfig "ListType")" || { die -nolog "Error: Couldn't read value for ListType from the config file."; }
 
-# set global variable
+# set global variables
 export list_type="$list_type"
+export manualmode="true"
 
 # set environment variable "nolog" to avoid daughter scripts writing errors
 #	to syslog when encountering incorrect arguments from the user
