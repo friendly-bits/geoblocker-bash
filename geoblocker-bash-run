@@ -187,7 +187,7 @@ esac
 if [ ! "$skipfetch" ] && [ "$action_run" != "remove" ]; then
 
 	# mark all tlds as failed before launching *fetch. if *fetch completes successfully, it will reset this
-	setconfig "failed_tlds=$tlds"
+	setstatus "$status_file" "failed_tlds=$tlds"
 
 	${suite_name}-fetch -c "$tlds" -p "$iplist_dir"; rv=$?
 
