@@ -186,4 +186,4 @@ After installation, the user interface is provided by simply running "geoblocker
 - All scripts (except -common) display "usage" when called with the "-h" option. You can find out about some additional options specific for each script by running it with that option.
 - Most scripts accept the "-d" option for debug (and pass it on to any other scripts they call)
 - The fetch script can be easily modified to get the lists from another source instead of RIPE, for example from ipdeny.com
-- If you remove your country's whitelist using the -manage script, you will probably get locked out of your remote server.
+- If you install the suite in whitelist mode and then remove your country's whitelist using the -manage script, you will probably get locked out of your remote server. If you only have one country in your whitelist, the -manage script will not allow you to remove it in order to prevent exactly this situation. But you can fool it by adding another country and then removing your own country. You may not get locked out while you're still connected to the server but once you disconnect, you may no longer be able to reconnect.
