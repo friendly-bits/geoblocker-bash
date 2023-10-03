@@ -107,7 +107,6 @@ subnet_regex="${ip_regex}${mask_regex}"
 curl_command="curl --retry 8 --fail-early --connect-timeout 5 --progress-bar"
 wget_command="wget --tries=8 --timeout=5 --show-progress"
 
-failed_validation_cnt=0
 apply_tlds=""
 failed_tlds=""
 partial_tlds=""
@@ -154,9 +153,12 @@ for tld in $tlds; do
 		date_old=0
 	fi
 
+	# reset variables
 	retry_cnt=0
-
 	tld_status="unknown"
+	validated_subnets_cnt=0
+	failed_subnets_cnt=0
+	parsed_subnets_cnt=0
 
 	# Make $fetch_retries attempts to fetch the list for each TLD (or until successful fetch and no validation errors)
 	while true; do
@@ -178,7 +180,7 @@ for tld in $tlds; do
 
 		status=$(jq -r '.status' "$fetched_file")
 		if [ ! "$status" = "ok" ]; then
-			echolog -err "Failed to fetch the list for country $tld."
+			echolog -err "Failed to fetch the list for country '$tld'."
 			ripe_msg=$(jq -r -c '.messages' "$fetched_file")
 			debugprint "RIPE replied with message: '$ripe_msg'"
 			rm "$fetched_file" &>/dev/null
@@ -197,7 +199,7 @@ for tld in $tlds; do
 				die "Error: Couldn't read value for LastFailedSubnetsCnt_$tld from the config file.";
 			}
 			if [[ "$date_new" -le "$date_old" && "$force_update" != "true" && "$manualmode" != "true" && "$old_failed_subnets_cnt" -eq 0 ]]; then
-				echolog "Subnets list for country $tld is up-to-date. Timestamp: '$(date --date=@$date_new)'."
+				echolog "Subnets list for country '$tld' is up-to-date. Timestamp: '$(date --date=@$date_new)'."
 				tld_status="up_to_date"
 				rm "$fetched_file" &>/dev/null
 				break
@@ -213,40 +215,39 @@ for tld in $tlds; do
 
 		rm "$fetched_file" &>/dev/null
 
-		if [ "$rv" -eq 0 ]; then
-			echo "Ok."
-		else
+		if [ "$rv" -ne 0 ]; then
 			rm "$parsed_file" &>/dev/null
 			tld_status="failed"
-			echolog -err "Error: failed to parse the fetched file for country $tld."
-		fi
-
-		# Validate the parsed file
-		parsed_subnets_cnt=$(wc -l < "$parsed_file")
-
-		echo -n "Validating... "
-		validated_file=$(mktemp "/tmp/validated-$tld-XXXX.list")
-		grep -P "$subnet_regex" "$parsed_file" > "$validated_file"
-		rm "$parsed_file" &>/dev/null
-
-		validated_subnets_cnt=$(wc -l < "$validated_file")
-
-		failed_validation_cnt=$(( parsed_subnets_cnt - validated_subnets_cnt ))
-		if [ "$failed_validation_cnt" -gt 0 ]; then
-			echo "Note: Fetch attempt $retry_cnt for country $tld: $failed_validation subnets failed validation." >&2
-			[ "$retry_cnt" -ge "$fetch_retries" ] && { tld_status="partial"; break; }
-			rm "$validated_file" &>/dev/null
-			echolog "Retrying fetch..." >&2
+			echolog "Error: failed to parse the fetched file for country '$tld'."
+			[ "$retry_cnt" -ge "$fetch_retries" ] && break || echolog "Retrying fetch..." >&2
 		else
-			echo "Ok."
-			tld_status="Ok"
-			break
+			# Validate the parsed file
+			parsed_subnets_cnt=$(wc -l < "$parsed_file")
+
+			echo -n "Validating... "
+			validated_file=$(mktemp "/tmp/validated-$tld-XXXX.list")
+			grep -P "$subnet_regex" "$parsed_file" > "$validated_file"
+			rm "$parsed_file" &>/dev/null
+
+			validated_subnets_cnt=$(wc -l < "$validated_file")
+
+			failed_subnets_cnt=$(( parsed_subnets_cnt - validated_subnets_cnt ))
+			if [ "$failed_subnets_cnt" -gt 0 ]; then
+				echo "Note: Fetch attempt $retry_cnt for country '$tld': $failed_subnets_cnt subnets failed validation." >&2
+				[ "$retry_cnt" -ge "$fetch_retries" ] && { tld_status="partial"; break; }
+				rm "$validated_file" &>/dev/null
+				echolog "Retrying fetch..." >&2
+			else
+				echo "Ok."
+				tld_status="Ok"
+				break
+			fi
 		fi
 	done
 
 	# If we have a partial list, decide whether to consider it Ok or not
 	if [ "$tld_status" = "partial" ]; then
-			echolog -err "Warning: $failed_validation_cnt subnets for country $tld failed validation."
+			echolog -err "Warning: $failed_subnets_cnt subnets for country '$tld' failed validation."
 			echolog -err "Invalid subnets removed from the list."
 
 		if [ "$old_list_exists" = "true" ]; then
@@ -254,7 +255,7 @@ for tld in $tlds; do
 			if [ "$failed_subnets_cnt" -gt "$old_failed_subnets_cnt" ]; then
 				rm "$validated_file" &>/dev/null
 				tld_status="failed"
-				err1="Warning: validated subnets count '$validated_subnets_cnt' for country $tld is less than '$old_subnets_cnt' in the old list."
+				err1="Warning: validated subnets count '$validated_subnets_cnt' for country '$tld' is less than '$old_failed_subnets_cnt' in the old list."
 				err2="Not updating the list."
 				echolog -err "$err1" "$err2"
 			else
@@ -281,7 +282,7 @@ for tld in $tlds; do
 	fi
 
 	if [[ "$tld_status" = "Ok" || "$tld_status" = "partial" ]]; then
-		echo -e "Validated subnets count for country $tld: $validated_subnets_cnt.\n"
+		echo -e "Validated subnets count for country '$tld': $validated_subnets_cnt.\n"
 	fi
 
 	case "$tld_status" in
@@ -289,8 +290,8 @@ for tld in $tlds; do
 
 		partial | failed ) failed_tlds="$failed_tlds $tld" ;;
 
-		unknown ) echolog -err "Error: validation status for country $tld is unknown. This should not happen. Please file a bug report." ;;
-		* ) echolog -err "Error: validation status for country $tld is $tld_status which I don't understand. This should not happen. Please file a bug report." ;;
+		unknown ) echolog -err "Error: validation status for country '$tld' is unknown. This should not happen. Please file a bug report." ;;
+		* ) echolog -err "Error: validation status for country '$tld' is '$tld_status' which I don't understand. This should not happen. Please file a bug report." ;;
 	esac
 
 	if [ "$tld_status" = "Ok" ]; then
@@ -300,7 +301,7 @@ for tld in $tlds; do
 		if [ $rv -ne 0 ]; then
 			echo "Failed."
 			rm "$validated_file" &>/dev/null
-			echolog -err "Failed to overwrite the file $list_path"
+			echolog -err "Failed to overwrite the file '$list_path'"
 			tld_status="failed"
 		else
 			echo "Ok."
