@@ -379,12 +379,16 @@ if [ $rv -ne 0 ] && [ $rv -ne 254 ]; then
 	install_failed
 fi
 
-### Set up cron jobs
-${suite_name}-manage schedule -s "$cron_schedule"; rv=$?
+if [[ ! "$no_persistence" && "$cron_schedule" != "disable" ]]; then
+	### Set up cron jobs
+	${suite_name}-manage schedule -s "$cron_schedule"; rv=$?
 
-if [ $rv -ne 0 ]; then
-	echo "Error: failed to set up cron jobs." >&2
-	install_failed
+	if [ $rv -ne 0 ]; then
+		echo "Error: failed to set up cron jobs." >&2
+		install_failed
+	fi
+else
+	echo "Warning: Installed with no persistence and no autoupdate functionality."
 fi
 
 echo "View current geoblocking status with 'sudo ${suite_name} status'"
