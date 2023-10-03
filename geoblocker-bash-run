@@ -103,7 +103,7 @@ debugentermsg
 #### VARIABLES
 
 # Read current set of countries from the the config file into config_tlds
-config_tlds="$(getconfig "Countries")" || { die "Error: Couldn't read value for Countries from the config file."; }
+config_tlds="$(getconfig "Countries")" || die "Error: Couldn't read value for Countries from the config file."
 
 if [ -z "$arg_tlds" ] || [ "$action_run" = "update" ]; then
 	tlds="$config_tlds"
@@ -114,8 +114,13 @@ fi
 # trim single-quotes if any
 tlds="${tlds//\'}"
 
+# trim extra whitespaces
+tlds="$(awk '{$1=$1};1' <<< "$tlds")"
+
+tlds_cnt=$(echo "$tlds" | wc -w)
+
 # get list_type from the config file
-list_type="$(getconfig "ListType")" || { die -nolog "Error: Couldn't read value for ListType from the config file."; }
+list_type="$(getconfig "ListType")" || die -nolog "Error: Couldn't read value for ListType from the config file."
 
 # set global variable
 export list_type="$list_type"
@@ -124,11 +129,14 @@ export list_type="$list_type"
 action_run="${action_run,,}"
 
 # get datadir from the config file
-datadir="$(getconfig "Datadir")" || { die "Error: Couldn't read value for Datadir from the config file."; }
+datadir="$(getconfig "Datadir")" || die "Error: Couldn't read value for Datadir from the config file."
 
 knowngood_file="$datadir/iptables_knowngood.bak"
 iplist_dir="$datadir/ip_lists"
 
+status_file="$iplist_dir/status"
+
+failed_tlds_cnt=0
 
 #### CHECKS
 
@@ -175,65 +183,50 @@ esac
 
 
 ### Fetch ip lists
-errcnt=0
-ok_cnt=0
-up_to_date_cnt=0
-failed_tlds=""
-ok_tlds=""
+
 if [ ! "$skipfetch" ] && [ "$action_run" != "remove" ]; then
-	for tld in $tlds; do
-		${suite_name}-fetch -c "$tld" -p "$iplist_dir"; rv=$?
-		if [ $rv -gt 0 ] && [ $rv -lt 254 ]; then
-			# (0 < $rv < 254) from fetch means fatal code error rather than fetch error
-			failed_tlds="$tlds"
-			echolog -err "Failed to fetch ip lists for country '$tld'."
-			die 1 "Error in *fetch script, something is broken."
-		elif [ $rv -eq 254 ]; then
-			errcnt=$(( errcnt + 1 ))
-			failed_tlds="$failed_tlds $tld"
-		else
-			# ($rv = 255) from fetch means fetched list is not newer than the existing ipset
-			[ "$rv" = 255 ] && up_to_date_cnt=$(( up_to_date_cnt + 1 ))
-			ok_cnt=$(( ok_cnt + 1 ))
-			ok_tlds="$ok_tlds $tld"
-		fi
-	done
 
-	# trim extra whitespaces
-	ok_tlds="$(awk '{$1=$1};1' <<< "$ok_tlds")"
-	failed_tlds="$(awk '{$1=$1};1' <<< "$failed_tlds")"
+	# mark all tlds as failed before launching *fetch. if *fetch completes successfully, it will reset this
+	setconfig "failed_tlds=$tlds"
 
-	if [ "$errcnt" -gt 0 ]; then
-		echolog -err "Failed to fetch ip lists for countries '$failed_tlds'."
+	${suite_name}-fetch -c "$tlds" -p "$iplist_dir"; rv=$?
+
+	if [ "$rv" -ne 0 ]; then
+		failed_tlds="$tlds"
+		die "Errors encountered in the *fetch script, something is broken."
 	fi
 
-	if [ "$ok_cnt" -gt 0 ]; then
-		echolog "Successfully fetched the ip lists for countries '$ok_tlds'."
-	else
-		err="All fetch attempts failed."
-		die 254 "$err"
+	# read *fetch results from the config file
+	apply_tlds="$(getstatus "$status_file" "apply_tlds")" || { die "Error: Couldn't read value for 'apply_tlds' from the status file '$status_file'."; }
+	failed_tlds="$(getstatus "$status_file" "failed_tlds")" || { die "Error: Couldn't read value for 'failed_tlds' from the config file."; }
+
+	if [ "$failed_tlds" != "" ]; then
+		echolog -err "Failed to fetch subnet lists for countries '$failed_tlds'."
 	fi
 
-	tlds="$ok_tlds"
+	failed_tlds_cnt=$(echo "$failed_tlds" | wc -w)
+
+	[ "$failed_tlds_cnt" -ge "$tlds_cnt" ] && die 254 "All fetch attempts failed."
+
 else
-	debugprint "Skipped fetching because '-s' switch was used"
+	apply_tlds="$tlds"
+	debugprint "Skipped fetch because '-s' switch was used"
 fi
+
 echo
 
 
 ### Apply ip lists
 
-if [ "$action_run" = "update" ] && [ ! "$skipfetch" ] && [ "$ok_cnt" -le "$up_to_date_cnt" ]; then
-# if all successfully fetched ip lists are not newer than existing ipsets, skip the -apply script
-	echolog "Fetched ip lists are not newer than applied ip lists, skipping iptables reconfiguration."
-	echo
+if [ "$apply_tlds" = "" ]; then
+	echolog "No lists require firewall reconfiguration."
 else
-	${suite_name}-apply "$action_apply" -c "$tlds"; rv=$?
+	${suite_name}-apply "$action_apply" -c "$apply_tlds"; rv=$?
 	if [ $rv -eq 254 ]; then
 		debugprint "NOTE: *apply exited with error code 254."
 		echo ""
 		# if non-fatal errors occur in *apply, set the nobackup variable
-		echolog "Error: *apply exited with code 254. Failed to apply action '$action_apply'."
+		echolog -err "Error: *apply exited with code 254. Failed to apply action '$action_apply'."
 		nobackup="true"
 	elif [ $rv -gt 0 ] && [ $rv -ne 254 ]; then
 		debugprint "NOTE: *apply exited with error code $rv."
@@ -243,39 +236,40 @@ else
 
 		# exit with the same exit code as backup-restore operation
 		die "$rv" ""
-	fi
-	echo
-fi
-
-if [ "$errcnt" -eq 0 ]; then
-	echolog "Successfully applied action '$action_run' for countries '$tlds'."
-fi
-
-if [ -z "$nobackup" ]; then
-	# check config coherency vs active ipsets and firewall rules before performing any action
-
-	check_tlds_coherency; rv=$?
-	if [ $rv -eq 0 ]; then
-		# call the backup script to create a known-good backup of ipsets and iptables state
-		${suite_name}-backup create-backup
 	else
-		echolog "Warning: actual $list_type firewall config differs from the config file!"
-		echolog "Please run the *manage script to restore config coherency!"
-		echolog "If it's a recurring issue, please consider filing a bug report!"
-		[ "$unexpected_tlds" != "" ] && echo "Unexpected tlds in the firewall: '$unexpected_tlds'" >&2
-		[ "$missing_tlds" != "" ] && echo "Missing tlds in the firewall: '$missing_tlds'" >&2
-		echo
+		echolog "Successfully applied action '$action_run' for countries '$apply_tlds'."
 	fi
-else
-	debugprint "Skipping backup of current firewall state."
+
+	if [ -z "$nobackup" ]; then
+		# check config coherency vs active ipsets and firewall rules before performing any action
+
+		check_tlds_coherency; rv=$?
+		if [ $rv -eq 0 ]; then
+			# call the backup script to create a known-good backup of ipsets and iptables state
+			${suite_name}-backup create-backup
+		else
+			echolog -err "Warning: actual $list_type firewall config differs from the config file!"
+			echolog -err "Please run the *manage script to restore config coherency!"
+			echolog -err "If it's a recurring issue, please consider filing a bug report!"
+			[ "$unexpected_tlds" != "" ] && echolog -err "Unexpected country codes in the firewall: '$unexpected_tlds'" >&2
+			[ "$missing_tlds" != "" ] && echolog -err "Missing country codes in the firewall: '$missing_tlds'" >&2
+			echo
+		fi
+	else
+		debugprint "Skipping backup of current firewall state."
+	fi
+
 fi
 
-if [ "$errcnt" -ne 0 ]; then
+if [ "$failed_tlds_cnt" -ne 0 ]; then
+	debugprint "failed_tlds_cnt: $failed_tlds_cnt"
 	rv=254
 else
 	rv=0
 fi
 
 debugexitmsg
+
+unset apply_tlds
 
 exit "$rv"
