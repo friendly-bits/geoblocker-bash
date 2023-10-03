@@ -164,9 +164,11 @@ for tld in $tlds; do
 	while true; do
 		retry_cnt=$(( retry_cnt + 1 ))
 
-
-		[ "$wget_exists" ] && fetch_command="$wget_command $url -O $fetched_file"
-		[ "$curl_exists" ] && fetch_command="$curl_command $url -o $fetched_file"
+		if [ "$wget_exists" ]; then
+			fetch_command="$wget_command $url -O $fetched_file"
+		elif [ "$curl_exists" ]; then
+			fetch_command="$curl_command $url -o $fetched_file"
+		fi
 
 		# debugprint "Trying: $curl_or_wget '$ripe_url$tld'" >&2
 		echo -e "Fetching iplist from RIPE for country '$tld'... \n"
