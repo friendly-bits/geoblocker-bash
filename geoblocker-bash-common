@@ -10,21 +10,27 @@
 echolog() {
 # outputs arguments to stdout and writes them to syslog
 # if one of the arguments is "-err" then redirect output to stderr
-	msg_args=()
+	msg_args1=()
 	# check for "-err" option in arguments
 	for msg_arg in "$@"; do
-		[ "$msg_arg" = "-err" ] && msg_is_err="true" || msg_args+=( "$msg_arg" )
+		[ "$msg_arg" = "-err" ] && msg_is_err="true" || msg_args1+=( "$msg_arg" )
 	done
 
-	if [ -n "${msg_args[*]}" ]; then
-		echo ""
+	msg_args2=()
+	# check for "-noecho" option in arguments
+	for msg_arg in "${msg_args1[@]}"; do
+		[ "$msg_arg" = "-noecho" ] && noecho="true" || msg_args2+=( "$msg_arg" )
+	done
+
+	if [ -n "${msg_args2[*]}" ]; then
 		# loop through arguments and print them to stderr and to the syslog
 		# "$nolog" is set as environment variable (used in *manage and *install scripts)
-		for arg in "${msg_args[@]}"; do
-			[ "$msg_is_err" ] && echo "$me_short: $arg" 1>&2 || echo "$me_short: $arg"
+		for arg in "${msg_args2[@]}"; do
+			if [ "$noecho" != "true" ]; then
+				[ "$msg_is_err" ] && echo "$me_short: $arg" 1>&2 || echo "$me_short: $arg"
+			fi
 			[ "$nolog" != "true" ] && logger -t "$me" "$arg"
 		done
-	else debugprint "nothing in msg_args"
 	fi
 }
 
@@ -71,10 +77,10 @@ getconfig() {
 # outputs the resulting field
 # returns 0 if successful
 	key_conf="$1"
-	configfile="${2:-$conf_file}"
-	[ -z "$key_conf" ] || [ -z "$configfile" ] && return 1
+	target_file="${2:-$conf_file}"
+	[ -z "$key_conf" ] || [ -z "$target_file" ] && return 1
 
-	entry="$(grep "$key_conf=" "$configfile" 2>/dev/null)" || return 2
+	entry="$(grep "$key_conf=" "$target_file" 2>/dev/null)" || return 2
 
 	value_conf="${entry//$key_conf=}"
 	echo "$value_conf"
@@ -82,8 +88,20 @@ getconfig() {
 	return 0
 }
 
+getstatus() {
+# utilizes getconfig() but intended for reading status from status files
+# 1st argument is path to the status file
+# rest of the arguments are passed as is to setconfig()
+	target_file="$1"
+	shift 1
+	[ -n "$target_file" ] && { status_value="$(getconfig "$*" "$target_file")"; rv=$?; } || rv=1
+	echo "$status_value"
+	return $rv
+}
+
 setconfig() {
 # accepts key=value pairs and writes them to (or replaces in) config file specified in global variable $conf_file
+# if one of the value pairs is "target_file=[file]" then writes to $file instead
 # returns 0 if successful, 1 if not
 
 	### Parse arguments into associative array
@@ -92,21 +110,25 @@ setconfig() {
    		key_conf="$(echo "$argument_conf" | cut -f1 -d=)"
    		key_length=${#key_conf}
    		value_conf="${argument_conf:$key_length+1}"
-   		arguments_arr["$key_conf"]="$value_conf"
+   		if [ "$key_conf" = "target_file" ]; then
+			arguments_target_file="$value_conf"
+		else
+			arguments_arr["$key_conf"]="$(awk '{$1=$1};1' <<< "$value_conf")"
+		fi
 	done
 
-	# Check that $configfile variable is not empty
-	arguments_configfile="${arguments_arr[configfile]}"
-	configfile="${arguments_configfile:-$conf_file}"
-	[[ "$configfile" = "" ]] && { die "*common: setconfig: '\$configfile' variable is not set!"; }
+	target_file="${arguments_target_file:-$conf_file}"
+
+	# Check that $target_file variable is not empty
+	[[ "$target_file" = "" ]] && { die "*common: setconfig: '\$target_file' variable is not set!"; }
 
 	# create the config file if it doesn't exist
-	if [ ! -f "$configfile" ]; then
-		touch "$configfile" || { die "*common: setconfig: could not create configfile '$configfile'"; }
+	if [ ! -f "$target_file" ]; then
+		touch "$target_file" || { die "*common: setconfig: could not create target_file '$target_file'"; }
 	fi
 
 	# read config file into variable
-	config_var="$(<"$configfile")" || { die "*common: setconfig: could not read configfile '$configfile'"; }
+	config_var="$(<"$target_file")" || { die "*common: setconfig: could not read target_file '$target_file'"; }
 
 	for key_conf in "${!arguments_arr[@]}"; do
 		value_conf="${arguments_arr[$key_conf]}"
@@ -120,9 +142,19 @@ $key_conf=$value_conf"
 	done
 
 	# write modified config file
-	echo -e "$config_var" > "$configfile" || { die "*common: setconfig: Error: could not write to file '$configfile'!"; }
+	echo -e "$config_var" > "$target_file" || { die "*common: setconfig: Error: could not write to file '$target_file'!"; }
 
 	return 0
+}
+
+setstatus() {
+# utilizes setconfig() but intended for writing status to status files
+# 1st argument is path to the status file
+# rest of the arguments are passed as is to setconfig()
+	target_file="$1"
+	shift 1
+	[ -n "$target_file" ] && { setconfig "target_file=$target_file" "${@}"; rv=$?; } || rv=1
+	return $rv
 }
 
 sanitize_string() {
@@ -177,8 +209,8 @@ subtract_list_a_from_b() {
 }
 
 merge_lists() {
-# merges 2 lists then sanitizes the list by removing extra white spaces and replacing \n with " "
-	merged_list="$1 $2"
+# merges string lists then sanitizes the list by removing extra white spaces and replacing \n with " "
+	merged_list="$*"
 	result_list="$(sanitize_string "$merged_list")"
 	echo "$result_list"
 }
