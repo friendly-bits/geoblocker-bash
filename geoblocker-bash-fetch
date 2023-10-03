@@ -149,6 +149,7 @@ for tld in $tlds; do
 	if [ -s "$list_path" ]; then
 		old_list_exists="true"
 		date_old=$(stat --printf "%Y" "$list_path")
+		old_subnets_cnt="$(wc -l < "$list_path")"
 	else
 		old_list_exists=""
 		date_old=0
@@ -253,8 +254,7 @@ for tld in $tlds; do
 	# Check if subnets count decreased dramatically compared to the old list
 	# This is to prevent a possible future situation where RIPE server decides to change API or spew out wrong data
 	# and we get something like 0 subnets, all successfully validated and passed as a good list
-	if [[ "$old_list_exists" && "$tld_status" = "Ok" ]]; then
-		old_subnets_cnt="$(wc -l < "$list_path")"
+	if [ "$old_list_exists" ]; then
 		# compare fetched subnets count to old subnets count, get result in %
 		subnets_percents="$(echo "scale=0 ; $validated_subnets_cnt * 100 / $old_subnets_cnt" | bc)"
 		if [ "$subnets_percents" -lt 90 ]; then
@@ -267,7 +267,7 @@ for tld in $tlds; do
 			debugprint "Validated subnets count for country '$tld' is ${subnets_percents}% of the count in the existing list"
 		fi
 	fi
-	
+
 	# If we have a partial list, decide whether to consider it Ok or not
 	if [ "$tld_status" = "partial" ]; then
 			echolog -err "Warning: $failed_subnets_cnt subnets for country '$tld' failed validation."
