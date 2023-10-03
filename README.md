@@ -67,7 +67,7 @@ additional mandatory prerequisites: to install, run ```sudo apt install ipset wg
 
 ## **Notes**
 
-1) Only the *install, *uninstall, *manage (also called by running 'geoblocker-bash' after installation) and check_ip_in_ripe.sh scripts are intended as a user interface. The *manage script saves the config to a file and implements coherency checks between that file and the actual firewall state. While you can run the other scripts separately, if you make any changes to firewall geoblocking, next time you run the *manage script it will insist on reverting any such changes as they are not reflected in the config file.
+1) Only the *install, *uninstall, *manage (also called by running 'geoblocker-bash' after installation) and check_ip_in_ripe.sh scripts are intended as user interface. The *manage script saves the config to a file and implements coherency checks between that file and the actual firewall state. While you can run the other scripts individually, if you make changes to firewall geoblocking rules, next time you run the *manage script it may insist on reverting those changes since they are not reflected in the config file.
 
 2) Firewall config, as well as automatic subnet list updates, is made persistent via cron jobs: a periodic job running by default on a daily schedule, and a job that runs at system reboot (after 30 seconds delay). Either or both cron jobs can be disabled (run the *install script with the -h switch to find out how).
 
