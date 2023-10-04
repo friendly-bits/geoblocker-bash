@@ -24,10 +24,11 @@ me=$(basename "$0")
 
 suite_name="geoblocker-bash"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-[ -n "$script_dir" ] && cd "$script_dir" || { echo "Error: *install: Couldn't cd into '$script_dir'." >&2; exit 1; }
+[ -n "$script_dir" ] && cd "$script_dir" || { echo "$me: Error: Couldn't cd into '$script_dir'." >&2; exit 1; }
 
-source "$script_dir/${suite_name}-common" || { echo "Error: *install: Can't source '${suite_name}-common'." >&2; exit 1; }
-# NOTE that some functions and variables are sourced from the *common script
+source "$script_dir/${suite_name}-common" || { echo "$me: Error: Can't source '${suite_name}-common'." >&2; exit 1; }
+
+# **NOTE** that some functions and variables are sourced from the *common script
 
 # sanitize arguments
 sanitize_args "$@"
@@ -91,7 +92,7 @@ while getopts ":c:m:s:enpdh" opt; do
 		p) nodrop="true";;
 		d) debugmode_args="true";;
 		h) usage; exit 0;;
-		\?) usage; echo "Error: Unknown option: '-$OPTARG'." >&2; exit 1;;
+		\?) usage; die "Error: Unknown option: '$OPTARG'." ;;
 	esac
 done
 shift $((OPTIND -1))
