@@ -109,7 +109,6 @@ wget_command="wget --tries=8 --timeout=5 --show-progress"
 
 apply_tlds=""
 failed_tlds=""
-partial_tlds=""
 
 fetch_retries=3
 
@@ -161,7 +160,7 @@ for tld in $tlds; do
 	validated_subnets_cnt=0
 	failed_subnets_cnt=0
 	parsed_subnets_cnt=0
-	old_failed_subnet_cnt=""
+	old_failed_subnets_cnt=""
 
 	# Make $fetch_retries attempts to fetch the list for each TLD (or until successful fetch and no validation errors)
 	while true; do
