@@ -16,11 +16,11 @@ I created this project for running on my own server, and it's being doing its jo
 Recommended to read the NOTES section below.
 
 **To install:**
-1) Install prerequisites. On Debian, Ubuntu and derivatives run: ```sudo apt install ipset jq wget grepcidr``` (on other distributions, use their built-in package manager. Note that I only test on Debian, Ubuntu and Mint)
+1) Install pre-requisites. On Debian, Ubuntu and derivatives run: ```sudo apt install ipset jq wget``` (on other distributions, use their built-in package manager. Note that I only test on Debian, Ubuntu and Mint)
 2) Download the latest realease:
 https://github.com/blunderful-scripts/geoblocker-bash/releases
 3) Put all scripts in this suite into the same folder somewhere in your home directory
-4) Optional: If intended use is whitelist, use the check_ip_in_ripe.sh script to make sure that your public ip address is included in the list fetched from RIPE, so you do not get locked out of your server.
+4) Optional: If intended use is whitelist, use the check_ip_in_ripe.sh script to make sure that your public ip address is included in the list fetched from RIPE, so you do not get locked out of your server. It has the additional pre-requisite: grepcidr. Install it with ```sudo apt install grepcidr```.
 - example (for Germany): ```bash check_ip_in_ripe.sh -c DE -i <your_public_ip_address>```
 5) cd into the directory where you extracted the scripts to and run ```sudo bash geoblocker-bash-install -m <whitelist|blacklist> -c <"country_codes">```
 - example (whitelist Germany and block all other countries): ```sudo bash geoblocker-bash-install -m whitelist -c DE```
@@ -28,7 +28,7 @@ https://github.com/blunderful-scripts/geoblocker-bash/releases
 
 (when specifying multiple countries, put the list in double quotes)
 
-6) That's it! If no errors occured during installation (such as missing prerequisites), geoblocking should be active, and automatic list updates should just work. By default, subnet lists will be updated daily at 4am - you can verify that updates do work by running something like ```sudo cat /var/log/syslog | grep geoblocker-bash``` on the next day.
+6) That's it! If no errors occured during installation (such as missing pre-requisites), geoblocking should be active, and automatic list updates should just work. By default, subnet lists will be updated daily at 4am - you can verify that updates do work by running something like ```sudo cat /var/log/syslog | grep geoblocker-bash``` on the next day.
  
 **To change configuration:**
 run ```sudo geoblocker-bash <action> [-c <"country_codes">] | [-s <"cron_schedule">|disable]```
@@ -59,10 +59,12 @@ where 'action' is either 'add', 'remove' or 'schedule'.
 - for persistence and autoupdate functionality, requires the cron service to be enabled
 - obviously, needs bash (*may* work on some other shells but I do not test on them)
 
-additional mandatory prerequisites: to install, run ```sudo apt install ipset wget jq grepcidr```
+additional mandatory pre-requisites: to install, run ```sudo apt install ipset wget jq```
 - wget (or alternatively curl) is used by the "fetch" and "check_ip_in_ripe" scripts to download lists from RIPE
 - ipset utility is a companion tool to iptables (used by the "apply" script to create efficient iptables rules)
 - jq - Json processor (used to parse ip lists downloaded from RIPE)
+
+optional: the check_ip_in_ripe.sh script requires grepcidr. install it with ```sudo apt install grepcidr```
 - grepcidr - efficiently filters ip addresses matching CIDR patterns (used by check_ip_in_ripe.sh to check if an ip address belongs to a subnet from a list of subnets)
 
 ## **Notes**
@@ -107,7 +109,7 @@ The suite currently includes 12 scripts:
 11. validate_cron_schedule.sh
 12. check_ip_in_ripe.sh
 
-The scripts intended as user interface are **-install**, **-uninstall**, **-manage** and **check_ip_in_ripe.sh**. All the other scripts are intended as a back-end, although they can be run by the user as well. If you just want to install and move on, you only need to run the -install script, specify mode with the -m option and specify country codes with the "-c" option. Provided you are not missing any prerequisites, it should be as easy as that.
+The scripts intended as user interface are **-install**, **-uninstall**, **-manage** and **check_ip_in_ripe.sh**. All the other scripts are intended as a back-end, although they can be run by the user as well. If you just want to install and move on, you only need to run the -install script, specify mode with the -m option and specify country codes with the "-c" option. Provided you are not missing any pre-requisites, it should be as easy as that.
 After installation, the user interface is provided by simply running "geoblocker-bash", which is a symlink to the -manage script.
 
 **The -install script**
