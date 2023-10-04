@@ -79,7 +79,7 @@ additional mandatory prerequisites: to install, run ```sudo apt install ipset wg
 
 6) To test before deployment, you can run the install script with the "-n" option to skip creating the reboot cron job which implements persistence and with the '-s disable' option to skip creating the autoupdate cron job. This way, a simple machine restart will undo all changes made to the firewall. For example: ```sudo bash geoblocker-bash-install -c <country_code> -m whitelist -n -s disable```. To enable persistence and autoupdate later, reinstall without both options.
 
-7) The run, fetch and apply scripts write to syslog in case an error occurs. The run script also writes to syslog upon success. To verify that cron jobs ran successfully, on Debian and derivatives run ```sudo cat /var/log/syslog | grep geoblocker-bash```
+7) The run, fetch and apply scripts write to syslog in case an error occurs. The run and fetch scripts also write to syslog upon success. To verify that cron jobs ran successfully, on Debian and derivatives run ```sudo cat /var/log/syslog | grep geoblocker-bash```
 
 8) If you want support for ipv6, please let me know using the Issues tab, and I may consider implementing it.
 
