@@ -194,7 +194,7 @@ restore_from_config() {
 	echo "Would you like to re-apply the rules from the config file to fix this?"
 	echo -e "\n'Y' to re-apply the config rules. 'N' to exit the script. 'S' to show country codes in the config file.\n"
 
-	while [[ "true" ]]; do
+	while true; do
 		read -p "(Y/N/S) " -n 1 -r
 
 		if [[ "$REPLY" =~ ^[Yy]$ ]]; then echo; break
@@ -206,7 +206,7 @@ restore_from_config() {
 	done
 
 	echo "Restoring $list_type countries set '$config_tlds' from the config file... "
-	tlds_to_remove="$(merge_lists $config_tlds $unexpected_tlds $tlds_to_change)"
+	tlds_to_remove="$(merge_lists "$config_tlds" "$unexpected_tlds" "$tlds_to_change")"
 	$run_command remove -o -c "$tlds_to_remove"
 	[[ "$config_tlds" != "" ]] && $run_command add -o -c "$config_tlds"
 
