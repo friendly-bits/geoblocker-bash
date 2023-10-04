@@ -73,7 +73,7 @@ Extra Options:
                                             Disabled by default.
     -n                             : No persistence. Will *skip* creating the cron job which is required for geoblocking to work upon reboot.
     -p                             : No Drop: installs and configures the scripts but skips setting INPUT chain default policy to DROP
-                                           (everything will be installed and configured but geoblocking won't be enabled)
+                                           (everything will be installed and configured but geoblocking will not be enabled)
     -d                             : Debug
     -h                             : This help
 
@@ -227,13 +227,6 @@ fi
 # check for jq
 if ! command -v jq &> /dev/null; then
 	echo "Error: Can not find the jq Json processor. Install it with 'apt install jq' or similar. Exiting" >&2
-	echo ""
-	exit 1
-fi
-
-# check for grepcidr
-if ! command -v grepcidr &> /dev/null; then
-	echo "Error: Can not find grepcidr. Install it with 'apt install grepcidr' or similar. Exiting" >&2
 	echo ""
 	exit 1
 fi
