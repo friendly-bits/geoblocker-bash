@@ -31,7 +31,7 @@ https://github.com/blunderful-scripts/geoblocker-bash/releases
 6) That's it! If no errors occured during installation (such as missing prerequisites), geoblocking should be active, and automatic list updates should just work. By default, subnet lists will be updated daily at 4am - you can verify that updates do work next day by running something like ```sudo cat /var/log/syslog | grep geoblocker-bash```
  
 **To change configuration:**
-run ```sudo geoblocker-bash <action> [-c "country_codes"] | [-s "schedule"|disable]```
+run ```sudo geoblocker-bash <action> [-c <"country_codes">] | [-s <"cron_schedule">|disable]```
 
 where 'action' is either 'add', 'remove' or 'schedule'.
 - example (to add subnet lists for Germany and Netherlands): ```sudo geoblocker-bash add -c "DE NL"```
