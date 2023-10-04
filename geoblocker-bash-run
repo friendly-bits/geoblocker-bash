@@ -219,7 +219,7 @@ echo
 ### Apply ip lists
 
 if [ "$apply_tlds" = "" ]; then
-	echolog "No lists require firewall reconfiguration."
+	echolog "ip lists don't require firewall reconfiguration."
 else
 	${suite_name}-apply "$action_apply" -c "$apply_tlds"; rv=$?
 	if [ $rv -eq 254 ]; then
