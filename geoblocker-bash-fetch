@@ -254,7 +254,7 @@ for tld in $tlds; do
 	# Check if subnets count decreased dramatically compared to the old list
 	# This is to prevent a possible future situation where RIPE server decides to change API or spew out wrong data
 	# and we get something like 0 subnets, all successfully validated and passed as a good list
-	if [ "$old_list_exists" ]; then
+	if [[ "$old_list_exists" && "$tld_status" != "up_to_date" ]]; then
 		# compare fetched subnets count to old subnets count, get result in %
 		subnets_percents="$(echo "scale=0 ; $validated_subnets_cnt * 100 / $old_subnets_cnt" | bc)"
 		if [ "$subnets_percents" -lt 90 ]; then
