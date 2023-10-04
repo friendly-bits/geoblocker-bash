@@ -28,10 +28,10 @@ https://github.com/blunderful-scripts/geoblocker-bash/releases
 
 (when specifying multiple countries, put the list in double quotes)
 
-6) That's it! If no errors occured during installation (such as missing prerequisites), geoblocking should be active, and automatic list updates should just work. By default, subnet lists will be updated daily at 4am - you can verify that updates do work next day by running something like ```sudo cat /var/log/syslog | grep geoblocker-bash```
+6) That's it! If no errors occured during installation (such as missing prerequisites), geoblocking should be active, and automatic list updates should just work. By default, subnet lists will be updated daily at 4am - you can verify that updates do work by running something like ```sudo cat /var/log/syslog | grep geoblocker-bash``` on the next day.
  
 **To change configuration:**
-run ```sudo geoblocker-bash <action> [-c "country_codes"] | [-s "schedule"|disable]```
+run ```sudo geoblocker-bash <action> [-c <"country_codes">] | [-s <"cron_schedule">|disable]```
 
 where 'action' is either 'add', 'remove' or 'schedule'.
 - example (to add subnet lists for Germany and Netherlands): ```sudo geoblocker-bash add -c "DE NL"```
@@ -52,7 +52,7 @@ where 'action' is either 'add', 'remove' or 'schedule'.
 - simply re-install
 
 ## **Pre-requisites**:
-
+(if a pre-requisite is missing, the -install script will tell you which)
 - Linux with systemd (tested on Debian, Ubuntu and Mint, should work on any Debian derivative, may work or may require slight modifications to work on other distributions)
 - iptables - firewall management utility (nftables support will likely get implemented later)
 - standard GNU utilities including awk, sed, grep, bc
