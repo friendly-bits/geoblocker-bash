@@ -13,15 +13,18 @@ me=$(basename "$0")
 [ "$EUID" -ne 0 ] && {
 	err="Error: $me needs to be run as root."
 	echo "$err" >&2
-	logger "$err"
+	[ ! "$manualmode" ] && logger "$err"
 	exit 1
 }
 
 suite_name="geoblocker-bash"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-[ -n "$script_dir" ] && cd "$script_dir" || { echo "Error: Couldn't cd into '$script_dir'." >&2; exit 1; }
+[ -n "$script_dir" ] && cd "$script_dir" || { err="$me: Error: Couldn't cd into '$script_dir'."; echo "$err" >&2; \
+	[ ! "$manualmode" ] && logger "$err"; exit 1; }
 
-source "$script_dir/${suite_name}-common" || { echo "Error: Can't source ${suite_name}-common." >&2; exit 1; }
+source "$script_dir/${suite_name}-common" || { err="$me: Error: Can't source ${suite_name}-common."; echo "$err" >&2; \
+	[ ! "$manualmode" ] && logger "$err"; exit 1; }
+
 # **NOTE** that some functions and variables are sourced from the *common script
 
 
