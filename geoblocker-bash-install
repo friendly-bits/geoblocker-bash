@@ -62,7 +62,7 @@ Core Options:
                                            (if passing multiple country codes, use double quotes)
     -m <whitelist|blacklist>       : firewall mode to install: whitelist or blacklist
                                            (to change mode after installation, run the *install script again)
-    -s <"sch_expression"|disable>  : schedule expression for the periodic cron jobimplementing auto-updates of the ip lists,
+    -s <"sch_expression"|disable>  : schedule expression for the periodic cron job implementing auto-updates of the ip lists,
                                            must be inside double quotes
                                            default is "0 4 * * *" (at 4:00 [am] every day)
                                      "disable" will *skip* creating the autoupdate cron job so there will be no automatic updates of the ip lists
@@ -72,8 +72,10 @@ Extra Options:
                                             geoblocking will be automatically deactivated until the problem is manually fixed.
                                             Disabled by default.
     -n                             : No persistence. Will *skip* creating the cron job which is required for geoblocking to work upon reboot.
-    -p                             : No Drop: installs and configures the scripts but skips setting INPUT chain default policy to DROP
+    -p                             : No Drop: installs the script and configures the firewall but in the whitelist mode,
+                                           skips setting INPUT chain default policy to DROP
                                            (everything will be installed and configured but geoblocking will not be enabled)
+                                           (does not affect blacklist functionality)
     -d                             : Debug
     -h                             : This help
 
