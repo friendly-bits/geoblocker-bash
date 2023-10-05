@@ -149,9 +149,9 @@ copyscript() {
 
 # set environment variable "nolog" to avoid daughter scripts writing errors
 #	to syslog when encountering incorrect arguments from the user
-#	nolog variable is checked in the sourced *common script
-
 export nolog="true"
+
+# set environment variable "manualmode" to signal to daughter scripts that user interaction is possible
 export manualmode="true"
 
 install_dir="/usr/local/bin"
@@ -395,5 +395,6 @@ echo
 unset nolog
 unset debugmode
 unset manualmode
+unset list_type
 
 exit 0
