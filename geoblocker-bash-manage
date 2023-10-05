@@ -238,7 +238,7 @@ restore_from_config() {
 			[ "$unexpected_tlds" != "" ] && echo "Unexpected $list_type tlds in the firewall: '$unexpected_tlds'" >&2
 			[ "$missing_tlds" != "" ] && echo "Missing $list_type tlds in the firewall: '$missing_tlds'" >&2
 			[ "$ipsets_incoherent" = "true" ] && echo "Warning: discrepancy detected between existing geoblocking ipsets and geoblocking firewall rules!" >&2
-			die "$rv" -nolog "Something is not working as it should. Consider fixing your firewall or your system. If it's a bug then please report it."
+			die "$rv" "Something is not working as it should. Consider fixing your firewall or your system. If it's a bug then please report it."
 		fi
 	fi
 }
@@ -246,20 +246,21 @@ restore_from_config() {
 
 #### VARIABLES
 
-# get install_dir from the config file
-install_dir="$(getconfig "Installdir")" || { die -nolog "Error: Couldn't read value for Installdir from the config file."; }
-
-# get list_type from the config file
-list_type="$(getconfig "ListType")" || { die -nolog "Error: Couldn't read value for ListType from the config file."; }
-
 # set global variables
 export list_type="$list_type"
-export manualmode="true"
 
 # set environment variable "nolog" to avoid daughter scripts writing errors
 #	to syslog when encountering incorrect arguments from the user
-#	nolog variable is checked in the sourced *common script
 export nolog="true"
+
+# set environment variable "manualmode" to signal to daughter scripts that user interaction is possible
+export manualmode="true"
+
+# get install_dir from the config file
+install_dir="$(getconfig "Installdir")" || { die "Error: Couldn't read value for Installdir from the config file."; }
+
+# get list_type from the config file
+list_type="$(getconfig "ListType")" || { die "Error: Couldn't read value for ListType from the config file."; }
 
 # convert input country codes (tlds) to lower case
 tlds_arg="${tlds_arg,,}"
@@ -268,7 +269,7 @@ tlds_arg="${tlds_arg,,}"
 tlds_arg="$(sanitize_string "$tlds_arg")"
 
 ### Read current set of countries from the the config file into config_tlds
-config_tlds="$(getconfig "Countries")" || { die -nolog "Error: Couldn't read value for Countries from the config file."; }
+config_tlds="$(getconfig "Countries")" || { die "Error: Couldn't read value for Countries from the config file."; }
 
 # convert the string to lower case
 action="${action,,}"
@@ -279,36 +280,36 @@ run_command="${install_dir}/${suite_name}-run"
 #### CHECKS
 
 # check that the config file exists
-[ ! -f "$conf_file" ] && die -nolog "Config file '$conf_file' doesn't exist! Run the installation script again."
+[ ! -f "$conf_file" ] && die "Config file '$conf_file' doesn't exist! Run the installation script again."
 
-[ -z "$list_type" ] && die -nolog "\$list_type variable should not be empty! Something is wrong!"
+[ -z "$list_type" ] && die "\$list_type variable should not be empty! Something is wrong!"
 
 ## Check arguments for sanity
 
-[ -z "$action" ] && { usage; die -nolog "Specify action!"; }
+[ -z "$action" ] && { usage; die "Specify action!"; }
 
 case "$action" in
 	add) ;;
 	remove) ;;
 	status) ;;
 	schedule) ;;
-	*) usage; die -nolog "Error: unsupported action '$action'." ;;
+	*) usage; die "Error: unsupported action '$action'." ;;
 esac
 
 [[ ("$action" == "add" || "$action" == "remove") && -z "$tlds_arg" ]] && \
-	die -nolog "Error: action '$action' requires to specify countries with '-c <tlds>'!"
+	die "Error: action '$action' requires to specify countries with '-c <tlds>'!"
 
 [[ "$action" == "schedule" && ( -n "$tlds_arg" || -n "$force_action" ) ]] && \
-	die -nolog "Action '$action' only supports changing the cron schedule! Do not use it with any option except '-s' or '-d' !"
+	die "Action '$action' only supports changing the cron schedule! Do not use it with any option except '-s' or '-d' !"
 
 [[ "$action" == "status" && ( -n "$tlds_arg" || -n "$force_action" ) ]] && \
-	die -nolog "Command '$action' only supports checking on current status of geoblocking! Do not use it with any option except '-l' or '-d' !"
+	die "Command '$action' only supports checking on current status of geoblocking! Do not use it with any option except '-l' or '-d' !"
 
 [ "$action" != "schedule" ] && [ -n "$cron_schedule" ] && {
 	msg1="Error: the '-s <\"cron_schedule\">' option only works with the \"schedule\" action."
 	msg2="To set up cron schedule, use '$me schedule -s <\"cron_schedule\">'"
 	usage
-	die -nolog "$msg1" "$msg2";
+	die "$msg1" "$msg2";
 }
 
 
@@ -322,6 +323,7 @@ if [ "$action" = "status" ]; then
 	unset list_type
 	unset debugmode
 	unset nolog
+	unset manualmode
 	exit 0
 fi
 
@@ -371,16 +373,16 @@ if [ "$action" != "add" ] && [ "$action" != "remove" ]; then
 else
 
 	if [ -z "$tlds_to_change" ] && [ -z "$force_action" ]; then
-		config_tlds="$(getconfig "Countries")" || { die -nolog "Error: Couldn't read value for Countries from the config file."; }
+		config_tlds="$(getconfig "Countries")" || { die "Error: Couldn't read value for Countries from the config file."; }
 		echo; echo "Countries in final $list_type config: '$config_tlds'."
-		die 254 -nolog "Nothing to do, exiting."
+		die 254 "Nothing to do, exiting."
 	fi
 
 	debugprint "planned tlds after '$action': '$planned_tlds'"
 
 	# if planned_tlds list is empty
 	if [[ -z "$planned_tlds" && -z "$force_action" && "$list_type" = "whitelist" ]]; then
-		die -nolog "Planned final countries whitelist is empty! Disallowing this to prevent accidental lockout of a remote server."
+		die "Planned final countries whitelist is empty! Disallowing this to prevent accidental lockout of a remote server."
 	fi
 
 
@@ -393,7 +395,7 @@ else
 		echo "Error performing action '$action' for countries '$tlds_to_change'." >&2
 
 		if [ "$config_tlds" = "" ]; then
-			die -nolog "Can not restore previous countries set for $list_type because it is not found in the config file."
+			die "Can not restore previous countries set for $list_type because it is not found in the config file."
 		fi
 		restore_from_config
 	fi
@@ -409,14 +411,14 @@ else
 
 	# if all 'add' actions failed
 	if [ -z "$(find_lists_difference "$tlds_to_change" "$failed_tlds")" ]; then
-		die -nolog "All actions failed."
+		die "All actions failed."
 	fi
 
 	debugprint "Writing new config to file: 'Countries=$new_verified_tlds'"
 	setconfig "Countries=$new_verified_tlds" || \
-		{ die -nolog "Failed to write updated tlds '$new_verified_tlds' to the config file"; }
+		{ die "Failed to write updated tlds '$new_verified_tlds' to the config file"; }
 
-	config_tlds="$(getconfig "Countries")" || { die -nolog "Error: Couldn't read value for Countries from the config file."; }
+	config_tlds="$(getconfig "Countries")" || { die "Error: Couldn't read value for Countries from the config file."; }
 #	debugprint "current $list_type countries in config file: '$config_tlds'"
 
 ####### Fault recovery test: inject unrequested tld
@@ -447,14 +449,14 @@ else
 	[[ "$cron_schedule" == "" ]] && cron_schedule="disable"
 
 	# write to the config file in order to communicate parameters to *cronsetup
-	setconfig "CronSchedule=$cron_schedule" || { die -nolog "Failed to write the updated CronSchedule value to the config file"; }
+	setconfig "CronSchedule=$cron_schedule" || { die "Failed to write the updated CronSchedule value to the config file"; }
 
 	${suite_name}-cronsetup; rv=$?
 	echo
 	if [ "$rv" -eq 0 ]; then
 		echo "View current cron jobs with 'sudo crontab -l'"
 	else
-		die -nolog "Error: Failed to create cron jobs!"
+		die "Error: Failed to create cron jobs!"
 	fi
 fi
 
@@ -465,5 +467,6 @@ debugexitmsg
 unset list_type
 unset debugmode
 unset nolog
+unset manualmode
 
 exit 0
