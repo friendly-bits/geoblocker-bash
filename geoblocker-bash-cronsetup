@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# geoblocker-bash-cron
+# geoblocker-bash-cronsetup
 
 # Loads cron-related config from the config file and sets up cron jobs for geoblocking accordingly.
 
