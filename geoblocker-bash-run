@@ -59,7 +59,7 @@ Actions:
 Options:
     -c <"country_codes">          : tld's (country codes). if passing multiple country codes, use double quotes
 
-    -s                            : For update action only. Skip fetching (only run the apply script).
+    -s                            : Skip fetching (only run the apply script). For update action only.
     -o                            : No backup: don't create backup after successful action
 
     -d                            : Debug
@@ -77,7 +77,7 @@ shift 1
 # check for valid action
 case "$action_run" in
 	add | remove | update ) ;;
-	* ) err1="Error: Unrecognized action: '$action_run'."; err2="Specify action in the 1st argument!"; die "$err1" "$err2" ;;
+	* ) usage; err1="Error: Unrecognized action: '$action_run'."; err2="Specify action in the 1st argument!"; die "$err1" "$err2" ;;
 esac
 
 # process the rest of the arguments
@@ -131,7 +131,7 @@ tlds="$(awk '{$1=$1};1' <<< "$tlds")"
 tlds_cnt=$(echo "$tlds" | wc -w)
 
 # get list_type from the config file
-list_type="$(getconfig "ListType")" || die -nolog "Error: Couldn't read value for ListType from the config file."
+list_type="$(getconfig "ListType")" || die "Error: Couldn't read value for ListType from the config file."
 
 # set global variable
 export list_type="$list_type"
