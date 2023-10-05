@@ -35,16 +35,16 @@ usage() {
 
 $me
     Checks a cron schedule expression to ensure that it's formatted properly.  Expects standard cron notation of
-       min hr dom mon dow
-    where min is 0-59, hr 0-23, dom is 1-31, mon is 1-12 (or names) and dow is 0-7 (or names).  Fields can have ranges (a-e), lists
-    separated by commas (a,c,z), or an asterisk. Note that the step value notation of Vixie cron is not supported (e.g., 2-6/2).
+       "minute hour day-of-month month day-of-week"
+    where min is 0-59, hr 0-23, dom is 1-31, mon is 1-12 (or names) and dow is 0-7 (or names).  Fields can have ranges (e.g. 5-8), lists
+    separated by commas (e.g. Sun, Mon, Fri), or an asterisk for "any".
 
 Usage: $me -x "<schedule_expression>" [-h] [-d]
 
 Options:
     -x "<sch_expression>"  : crontab schedule expression ***in double quotes***
                                  example: "0 4 * * 6"
-                                 format: min hr dom mon dow
+                                 format: minute hour day-of-month month day-of-week
 
     -d                     : debug
     -h                     : This help
@@ -67,7 +67,7 @@ shift $((OPTIND -1))
 [[ "$*" != "" ]] && {
 	usage
 	echo "Error in arguments. First unrecognized argument: '$1'." >&2
-	echo "When specifying schedule, make sure to use double braces." >&2
+	echo "When specifying cron schedule, make sure to use double quotation marks around it." >&2
  	exit 1
 }
 
@@ -224,7 +224,7 @@ read -r min hour dom mon dow extra <<< "$sourceline"
 if [ -n "$extra" ]; then
 	echo "" >&2
 	echo "Error: Too many fields in schedule expression! I don't know what to do with \"$extra\"!" >&2
-	echo "Use double braces around your expression!" >&2
+	echo "Use double quotation marks around your expression!" >&2
 	echo "You entered: \"$sourceline\"" >&2
 	echo "Valid example: \"0 4 * * 6\"" >&2
 	echo "" >&2
@@ -236,7 +236,8 @@ if [ -z "$min" ] || [ -z "$hour" ] || [ -z "$dom" ] || [ -z "$mon" ] || [ -z "$d
 	echo "" >&2
 	echo "Not enough fields in schedule expression!" >&2
 	echo "This script requires crontab schedule line as an argument!" >&2
-	echo "Use double braces around your expression!" >&2
+	echo "Cron notation fields should be in this format: \"minute hour day-of-month month day-of-week\"" >&2
+	echo "Use double quotation marks around your cron schedule expression!" >&2
 	echo "You entered: \"$sourceline\"" >&2
 	echo "Valid example: \"0 4 * * 6\"" >&2
 	echo "" >&2
@@ -266,6 +267,8 @@ validateField "day of week" "$dow" "1" "7"
 if [ "$errors" -gt 0 ] ; then
 	exitstatus=1
 	echo "" >&2
+	echo "Cron notation fields should be in this format: \"minute hour day-of-month month day-of-week\"" >&2
+	echo "Use double quotation marks around your cron schedule expression!" >&2
 	echo "You entered: \"$sourceline\"" >&2
 	echo "Valid example: \"0 4 * * 6\"" >&2
 else
