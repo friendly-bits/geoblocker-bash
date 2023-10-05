@@ -73,7 +73,7 @@ shift 1
 # check for valid action
 case "$action" in
 	add | remove ) ;;
-	* ) err1="Error: Unrecognized action: '$action'."; err2="Specify action in the 1st argument!"; die "$err1" "$err2" ;;
+	* ) usage; err1="Error: Unrecognized action: '$action'."; err2="Specify action in the 1st argument!"; die "$err1" "$err2" ;;
 esac
 
 # process the rest of the arguments
