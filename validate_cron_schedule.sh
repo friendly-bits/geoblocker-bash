@@ -8,7 +8,7 @@
 #    Fields can have ranges (a-e), lists separated by commas (a,c,z),
 #    or an asterisk. Note that the step value notation of Vixie cron is not supported (e.g., 2-6/2).
 #
-#    Based on prior "verifycron" script circulating on the internets
+#    Based on prior "verifycron" script circulating on the internets.
 #    This is a simplified and improved version, adapted to receive one cron schedule expression in an argument.
 
 
@@ -228,7 +228,7 @@ if [ -n "$extra" ]; then
 	echo "You entered: \"$sourceline\"" >&2
 	echo "Valid example: \"0 4 * * 6\"" >&2
 	echo "" >&2
-	die -nolog ""
+	die
 fi
 
 # if some arguments are missing
@@ -240,7 +240,7 @@ if [ -z "$min" ] || [ -z "$hour" ] || [ -z "$dom" ] || [ -z "$mon" ] || [ -z "$d
 	echo "You entered: \"$sourceline\"" >&2
 	echo "Valid example: \"0 4 * * 6\"" >&2
 	echo "" >&2
-	die -nolog ""
+	die
 fi
 
 
