@@ -221,10 +221,13 @@ check_tlds_coherency() {
 
 	debugprint "Verifying config coherency..."
 
+	# check for a valid list type
+	[ "$list_type" != "whitelist" && "$list_type" != "blacklist" ] &&  die "Error: Unrecognized list type '$list_type'!"
+
 	# initialize variables
 	unexpected_tlds=""; missing_tlds=""
 
-	config_tlds="$(getconfig "Countries")" || { die -nolog "Error: Couldn't read value for Countries from the config file."; }
+	config_tlds="$(getconfig "Countries")" || die "Error: Couldn't read value for Countries from the config file."
 
 	active_tlds="$(find_active_tlds)" || return 1
 
