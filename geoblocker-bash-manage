@@ -263,7 +263,7 @@ install_dir="$(getconfig "Installdir")" || die "Error: Couldn't read value for I
 # get list_type from the config file
 list_type="$(getconfig "ListType")" || die "Error: Couldn't read value for ListType from the config file."
 
-[ "$list_type" != "whitelist" && "$list_type" != "blacklist" ] &&  die "Error: Unrecognized list type '$list_type'!"
+[[ "$list_type" != "whitelist" && "$list_type" != "blacklist" ]] &&  die "Error: Unrecognized list type '$list_type'!"
 
 # convert input country codes (tlds) to lower case
 tlds_arg="${tlds_arg,,}"
