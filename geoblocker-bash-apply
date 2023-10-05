@@ -46,7 +46,8 @@ usage() {
 $me
     Loads or removes ipsets and iptables rules for specified country codes.
 	If 'NoDrop' option is set to "true" in the config file (set up during installation): will perform the action,
-        except setting default iptables policies to DROP, which effectively leaves geoblocking *disabled*.
+        except setting default iptables policies to DROP, which for a whitelist effectively leaves geoblocking *disabled*.
+        (NoDrop does not affect blacklist functionality)
 
 Usage: $me <action> -c <"country_codes"> [-d] [-t] [-h]
 
