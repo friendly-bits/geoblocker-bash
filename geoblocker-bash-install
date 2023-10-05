@@ -188,6 +188,8 @@ if [ -z "$list_type" ]; then
 	exit 1
 fi
 
+[ "$list_type" != "whitelist" && "$list_type" != "blacklist" ] &&  die "Error: Unrecognized list type '$list_type'! Use either 'whitelist' or 'blacklist'!"
+
 # check for systemd
 if [ "$(! ps -p 1 -o comm=)" != "systemd" ]; then
 	echo "Error: systemd is required but this sytem does not appear to be running systemd. Exiting." >&2
