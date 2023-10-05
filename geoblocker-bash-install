@@ -47,13 +47,14 @@ Installer for geoip blocking suite of bash scripts.
 Must be run as root.
 
 This script:
-1) Creates system folder structure for scripts, config and data.
-2) Copies all scripts included in the suite to /usr/local/bin.
-3) Creates backup of pre-install policies for INPUT and FORWARD iptables chains.
-4) Calls the *manage script to set up geoblocker and then call the -fetch and -apply scripts.
-5) If an error occurs during installation, calls the uninstall script to revert any changes made to the system.
-6) Requires to specify whitelist or blacklist for installation with the '-l' option
-7) Accepts a custom cron schedule expression as an argument. Default cron schedule is "0 4 * * *" - at 4:00 [am] every day.
+1) Requires to specify countries (TLD's) to include in the whitelist/blacklist
+2) Requires to specify whitelist or blacklist mode for installation with the '-m' option
+3) Accepts a custom cron schedule expression as an argument. Default cron schedule is "0 4 * * *" - at 4:00 [am] every day.
+4) Creates system folder structure for scripts, config and data.
+5) Copies all scripts included in the suite to /usr/local/bin.
+6) Creates backup of pre-install policies for INPUT and FORWARD iptables chains.
+7) Calls the *manage script to set up geoblocker and then call the -fetch and -apply scripts.
+8) If an error occurs during installation, calls the uninstall script to revert any changes made to the system.
 
 Usage: $me -c <"tld [tld] ... [tld]"> -m <whitelist|blacklist> [-s <"sch_expression"|disable>] [-e] [-n] [-p] [-d] [-h]
 
@@ -74,7 +75,7 @@ Extra Options:
     -n                             : No persistence. Will *skip* creating the cron job which is required for geoblocking to work upon reboot.
     -p                             : No Drop: installs the script and configures the firewall but in the whitelist mode,
                                            skips setting INPUT chain default policy to DROP
-                                           (everything will be installed and configured but geoblocking will not be enabled)
+                                           (everything will be installed and configured but geoblocking won't be enabled)
                                            (does not affect blacklist functionality)
     -d                             : Debug
     -h                             : This help
