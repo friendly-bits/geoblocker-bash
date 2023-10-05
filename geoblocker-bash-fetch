@@ -7,7 +7,7 @@
 # Fetches ipv4 subnets for given country codes from RIPE
 ## See https://stat.ripe.net/docs/data_api
 #
-# Parses, validates, compiles the downloaded lists, and saves each one to a separate file.
+# Parses, validates the downloaded lists, and saves each one to a separate file.
 
 # Requires jq - JSON processor.
 ## On Debian and derivatives, if you are missing jq then install it using this command:
@@ -22,17 +22,17 @@ me=$(basename "$0")
 [ "$EUID" -ne 0 ] && {
 	err="Error: $me needs to be run as root."
 	echo "$err" >&2
-	[ ! "$manualmode" ] && logger "$err"
+	[ ! "$nolog" ] && logger "$err"
 	exit 1
 }
 
 suite_name="geoblocker-bash"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 [ -n "$script_dir" ] && cd "$script_dir" || { err="$me: Error: Couldn't cd into '$script_dir'."; echo "$err" >&2; \
-	[ ! "$manualmode" ] && logger "$err"; exit 1; }
+	[ ! "$nolog" ] && logger "$err"; exit 1; }
 
 source "$script_dir/${suite_name}-common" || { err="$me: Error: Can't source ${suite_name}-common."; echo "$err" >&2; \
-	[ ! "$manualmode" ] && logger "$err"; exit 1; }
+	[ ! "$nolog" ] && logger "$err"; exit 1; }
 
 # **NOTE** that some functions and variables are sourced from the *common script
 
@@ -206,7 +206,7 @@ for tld in $tlds; do
 				die "Error: Couldn't read value for LastFailedSubnetsCnt_$tld from the status file.";
 			}
 			if [[ "$date_new" -le "$date_old" && "$force_update" != "true" && "$manualmode" != "true" && "$old_failed_subnets_cnt" -eq 0 ]]; then
-				echolog "Subnets list for country '$tld' is up-to-date. Timestamp: '$(date --date=@$date_new)'."
+				echolog "Subnets list for country '$tld' is already up-to-date. Timestamp: '$(date --date=@$date_new)'."
 				tld_status="up_to_date"
 				rm "$fetched_file" &>/dev/null
 				break
