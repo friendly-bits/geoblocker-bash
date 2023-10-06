@@ -102,9 +102,9 @@ shift $((OPTIND -1))
 
 [[ "$*" != "" ]] && {
 	usage
-	echo "Error in arguments. First unrecognized argument: '$1'." >&2
-	echo "Note: If specifying multiple country codes, put them in double braces." >&2
-	exit 1
+	err1="Error in arguments. First unrecognized argument: '$1'."
+	err2="Note: If specifying multiple country codes, put them in double quotation marks."
+	die -nolog "$err1" "$err2"
 }
 
 echo
@@ -129,7 +129,7 @@ install_failed() {
 
 check_file_exists() {
 if [ ! -f "$1" ]; then
-	echo "Error: Can not find $1" >&2
+	echo "Error: Can not find file '$1'" >&2
 	echo ""
 	exit 1
 fi
@@ -137,7 +137,7 @@ fi
 
 copyscript() {
 	scriptfile="$1"; destination="$2"
-	errormessage="Error copying $scriptfile to $destination. Exiting."
+	errormessage="Error copying script '$scriptfile' to '$destination'. Exiting."
 	cp "$scriptfile" "$destination"; rv=$?
 	if [ $rv -ne 0 ]; then
 		echo "$errormessage" >&2
@@ -231,14 +231,14 @@ fi
 
 # check for jq
 if ! command -v jq &> /dev/null; then
-	echo "Error: Can not find the jq Json processor. Install it with 'apt install jq' or similar. Exiting" >&2
+	echo "Error: Can not find 'jq' - Json processor. Install it with 'apt install jq' or similar. Exiting" >&2
 	echo ""
 	exit 1
 fi
 
 # check for bc
 if ! command -v bc &> /dev/null; then
-	echo "Error: Can not find bc. Exiting" >&2
+	echo "Error: Can not find the 'bc' utility. Exiting" >&2
 	echo ""
 	exit 1
 fi
