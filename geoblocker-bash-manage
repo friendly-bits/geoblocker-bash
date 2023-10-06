@@ -89,9 +89,9 @@ shift $((OPTIND -1))
 # check if there are unprocessed arguments
 [[ "$*" != "" ]] && {
 	usage
-	echo "Error in arguments. First unrecognized argument: '$1'." >&2
-	echo -e "Note: If specifying multiple country codes, put them in double braces.\n" >&2
-	exit 1
+	err1="Error in arguments. First unrecognized argument: '$1'."
+	err2="Note: If specifying multiple country codes, put them in double quotation marks."
+	die -nolog "$err1" "$err2"
 }
 
 echo
