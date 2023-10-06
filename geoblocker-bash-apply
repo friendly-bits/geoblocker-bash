@@ -91,7 +91,7 @@ shift $((OPTIND -1))
 [[ "$*" != "" ]] && {
 	usage
 	err1="Error in arguments. First unrecognized argument: '$1'."
-	err2="Note: If specifying multiple country codes, put them in double braces."
+	err2="Note: If specifying multiple country codes, put them in double quotation marks."
 	die "$err1" "$err2"
 }
 
