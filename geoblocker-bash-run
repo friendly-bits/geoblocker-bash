@@ -93,11 +93,11 @@ while getopts ":c:osdh" opt; do
 done
 shift $((OPTIND -1))
 
-[[ "$*" != "" ]] && {
+[ "$*" != "" ] && {
 	usage
-	echo "Error in arguments. First unrecognized argument: '$1'." >&2
-	echo "Note: If specifying multiple country codes, put them in double braces." >&2
-	exit 1
+	err1 "Error in arguments. First unrecognized argument: '$1'."
+	err2="Note: If specifying multiple country codes, put them in double quotation marks."
+	die "$err1" "$err2"
 }
 
 echo
@@ -230,17 +230,17 @@ echo
 ### Apply ip lists
 
 if [ "$apply_tlds" = "" ]; then
-	echolog "ip lists don't require firewall reconfiguration."
+	echolog "Ip lists don't require firewall reconfiguration."
 else
 	${suite_name}-apply "$action_apply" -c "$apply_tlds"; rv=$?
 	if [ $rv -eq 254 ]; then
 		debugprint "NOTE: *apply exited with error code 254."
 		echo ""
 		# if non-fatal errors occur in *apply, set the nobackup variable
-		echolog -err "Error: *apply exited with code 254. Failed to apply action '$action_apply'."
+		echolog -err "Error: *apply exited with code '254'. Failed to apply action '$action_apply'."
 		nobackup="true"
 	elif [ $rv -gt 0 ] && [ $rv -ne 254 ]; then
-		debugprint "NOTE: *apply exited with error code $rv."
+		debugprint "NOTE: *apply exited with error code '$rv'."
 		echo ""
 		#if fatal errors occur in *apply, attempt to restore last known-good ipsets and iptables state
 		${suite_name}-backup restore; rv="$?"
@@ -252,7 +252,7 @@ else
 	fi
 
 	if [ -z "$nobackup" ]; then
-		# check config coherency vs active ipsets and firewall rules before performing any action
+		# check config coherency vs active ipsets and firewall rules before creating backup
 
 		check_tlds_coherency; rv=$?
 		if [ $rv -eq 0 ]; then
@@ -262,8 +262,8 @@ else
 			echolog -err "Warning: actual $list_type firewall config differs from the config file!"
 			echolog -err "Please run the *manage script to restore config coherency!"
 			echolog -err "If it's a recurring issue, please consider filing a bug report!"
-			[ "$unexpected_tlds" != "" ] && echolog -err "Unexpected country codes in the firewall: '$unexpected_tlds'" >&2
-			[ "$missing_tlds" != "" ] && echolog -err "Missing country codes in the firewall: '$missing_tlds'" >&2
+			[ "$unexpected_tlds" != "" ] && echolog -err "Unexpected country codes in the firewall: '$unexpected_tlds'"
+			[ "$missing_tlds" != "" ] && echolog -err "Missing country codes in the firewall: '$missing_tlds'"
 			echo
 		fi
 	else
