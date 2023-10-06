@@ -152,6 +152,10 @@ for tld in $tlds; do
 		old_list_exists="true"
 		date_old=$(stat --printf "%Y" "$list_path")
 		old_subnets_cnt="$(wc -l < "$list_path")"
+		old_failed_subnets_cnt="$(getstatus "$status_file" "LastFailedSubnetsCnt_$tld")" || {
+			rm "$fetched_file" &>/dev/null
+			die "Error: Couldn't read value for LastFailedSubnetsCnt_$tld from the status file.";
+		}
 	else
 		old_list_exists=""
 		date_old=0
@@ -200,19 +204,15 @@ for tld in $tlds; do
 		ripe_db_time=$(jq -r '.data.query_time' "$fetched_file")
 		date_new=$(date -d "$ripe_db_time" +%s)
 
-		if [ "$old_list_exists" ]; then
-			old_failed_subnets_cnt="$(getstatus "$status_file" "LastFailedSubnetsCnt_$tld")" || {
-				rm "$fetched_file" &>/dev/null
-				die "Error: Couldn't read value for LastFailedSubnetsCnt_$tld from the status file.";
-			}
-			if [[ "$date_new" -le "$date_old" && "$force_update" != "true" && "$manualmode" != "true" && "$old_failed_subnets_cnt" -eq 0 ]]; then
-				echolog "Subnets list for country '$tld' is already up-to-date. Timestamp: '$(date --date=@$date_new)'."
-				tld_status="up_to_date"
-				rm "$fetched_file" &>/dev/null
-				break
-			fi
+		# skip list update if data timestamp didn't change, and there were no validation errors in the old list,
+		# and we are not in manual mode, and force_update wasn't requested
+		if [[ "$old_list_exists" &&  "$date_new" -le "$date_old" && "$force_update" != "true" && \
+						"$manualmode" != "true" && "$old_failed_subnets_cnt" -eq 0 ]]; then
+			echolog "Subnets list for country '$tld' is already up-to-date. Timestamp: '$(date --date=@$date_new)'."
+			tld_status="up_to_date"
+			rm "$fetched_file" &>/dev/null
+			break
 		fi
-
 
 		parsed_file=$(mktemp "/tmp/parsed-$tld-XXXX.list")
 
