@@ -121,7 +121,8 @@ debugentermsg
 #### FUNCTIONS
 
 install_failed() {
-	echo "Installation failed." >&2
+	echo "$*" >&2
+	echo -e "\nInstallation failed." >&2
 	echo "Uninstalling ${suite_name}..." >&2
 	bash ${suite_name}-uninstall
 	exit 1
@@ -129,22 +130,14 @@ install_failed() {
 
 check_file_exists() {
 if [ ! -f "$1" ]; then
-	echo "Error: Can not find file '$1'" >&2
-	echo ""
-	exit 1
+	die "Error: Can not find the file '$1'."
 fi
 }
 
 copyscript() {
 	scriptfile="$1"; destination="$2"
-	errormessage="Error copying script '$scriptfile' to '$destination'. Exiting."
-	cp "$scriptfile" "$destination"; rv=$?
-	if [ $rv -ne 0 ]; then
-		echo "$errormessage" >&2
-		echo ""
-		install_failed
-	fi
-	chmod +x "${install_dir}/$scriptfile"
+	cp "$scriptfile" "$destination" || install_failed "Error copying script '$scriptfile' to '$destination'."
+	chmod a+x "${install_dir}/$scriptfile" || install_failed "Error: failed to set 'a+x' permissions for file '${install_dir}/$scriptfile'."
 }
 
 
@@ -156,6 +149,8 @@ export nolog="true"
 
 # set environment variable "manualmode" to signal to daughter scripts that user interaction is possible
 export manualmode="true"
+
+export in_install="true"
 
 install_dir="/usr/local/bin"
 datadir="/var/lib/${suite_name}"
@@ -179,72 +174,64 @@ fi
 
 if [ -z "$tlds" ]; then
 	usage
-	echo "Specify countries with \"-c <tlds>\"!"
-	echo ""
-	exit 1
+	die "Specify countries with '-c <tlds>'!"
 fi
 
 if [ -z "$list_type" ]; then
 	usage
-	echo "Specify firewall mode with '-m whitelist' or '-m blacklist'!"
-	echo ""
-	exit 1
+	die "Specify firewall mode with '-m whitelist' or '-m blacklist'!"
 fi
 
 [[ "$list_type" != "whitelist" && "$list_type" != "blacklist" ]] &&  die "Error: Unrecognized list type '$list_type'! Use either 'whitelist' or 'blacklist'!"
 
 # check for systemd
 if [ "$(! ps -p 1 -o comm=)" != "systemd" ]; then
-	echo "Error: systemd is required but this sytem does not appear to be running systemd. Exiting." >&2
-	echo ""
-	exit 1
+	die "Error: systemd is required but this sytem does not appear to be running systemd."
 fi
 
-# check for curl or wget
-curl_or_wget=$(if hash curl 2>/dev/null; then echo "curl -s"; elif hash wget 2>/dev/null; then echo "wget -qO-"; fi);
-if [ -z "$curl_or_wget" ]; then
-	echo "Error: Neither curl nor wget found. Exiting." >&2
-	echo ""
-	exit 1
+# check for awk
+if ! command -v awk &> /dev/null; then
+	die "Error: Cannot find awk. Install it with 'sudo apt install gawk' or similar."
 fi
 
-# Check that we have the ipset utility
+# check for grep
+if ! command -v grep &> /dev/null; then
+	die "Error: Cannot find grep. Install it with 'sudo apt install grep' or similar."
+fi
+
+# check for curl
+command -v "curl" &> /dev/null && curl_exists="true"
+
+# check for wget
+command -v "wget" &> /dev/null && wget_exists="true"
+
+[[ ! "$curl_exists" && ! "$wget_exists" ]] && die "Error: Neither curl nor wget found."
+
+# Check for ipset
 if ! command -v "ipset" &> /dev/null; then
-	echo "Error: Can not find 'ipset'. Install it with 'apt install ipset' or similar. Exiting." >&2
-	echo ""
-	exit 1
+	die "Error: Can not find 'ipset'. Install it with 'apt install ipset' or similar."
 fi
 
-# Check for iptables-save utility
+# Check for iptables-save
 if ! command -v "iptables-save" &> /dev/null; then
-	echo "Error: Can not find 'iptables-save'. Exiting." >&2
-	echo ""
-	exit 1
+	die "Error: Can not find 'iptables-save'."
 fi
 
-# Check for iptables-restore utility
+# Check for iptables-restore
 if ! command -v "iptables-restore" &> /dev/null; then
-	echo "Error: Can not find 'iptables-restore'. Exiting." >&2
-	echo ""
-	exit 1
+	die "Error: Can not find 'iptables-restore'."
 fi
 
 # check for jq
 if ! command -v jq &> /dev/null; then
-	echo "Error: Can not find 'jq' - Json processor. Install it with 'apt install jq' or similar. Exiting" >&2
-	echo ""
-	exit 1
+	die "Error: Can not find 'jq'. Install it with 'apt install jq' or similar."
 fi
 
 # check for bc
 if ! command -v bc &> /dev/null; then
-	echo "Error: Can not find the 'bc' utility. Exiting" >&2
-	echo ""
-	exit 1
+	die "Error: Can not find the 'bc' utility. Install it with 'apt install bc' or similar."
 fi
 
-script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-[ -n "$script_dir" ] && cd "$script_dir" || { echo "Error: Couldn't cd into '$script_dir'. Exiting." >&2; exit 1; }
 
 check_file_exists "${suite_name}-fetch"
 check_file_exists "${suite_name}-common"
@@ -273,8 +260,7 @@ setconfig "Countries=" "ListType=$list_type" "Installdir=$install_dir" "Datadir=
 
 if [ "$rv" -ne 0 ]; then
 	echo "Failed." >&2
-	echo "Error writing initial config to the config file." >&2
-	install_failed
+	install_failed "Error writing initial config to the config file."
 else echo "Ok."
 fi
 
@@ -323,21 +309,10 @@ if [ "$script_dir" != "$install_dir" ]; then
 fi
 
 ## Create a symlink from ${suite_name}-manage to ${suite_name}
-try_ln="$(ln -s "${install_dir}/${suite_name}-manage" "${install_dir}/${suite_name}" 2>&1)" || {
-	# don't fail the installation just because the symlink already exists
-	link_exists="$(echo "$try_ln" | grep 'File exists')"
-	if [ "$link_exists" == "" ]; then
-		echo "Failed to create symlink from ${suite_name}-manage to ${suite_name}" >&2
-		install_failed
-	else
-		unlink "${install_dir}/${suite_name}"
-		ln -s "${install_dir}/${suite_name}-manage" "${install_dir}/${suite_name}" || {
-			echo "Failed to create symlink from ${suite_name}-manage to ${suite_name}" >&2
-			install_failed
-		}
+unlink "${install_dir}/${suite_name}" &> /dev/null
+ln -s "${install_dir}/${suite_name}-manage" "${install_dir}/${suite_name}" ||
+	install_failed "Failed to create symlink from ${suite_name}-manage to ${suite_name}"
 
-	fi
-}
 
 ### Back up pre-install policies for INPUT and FORWARD chains
 
@@ -350,14 +325,10 @@ else
 	preinstall_input_policy=$(iptables -nL | grep "Chain INPUT" | awk -F'policy |)' '{print $2}')
 	preinstall_forward_policy=$(iptables -nL | grep "Chain FORWARD" | awk -F'policy |)' '{print $2}')
 	if [ -z "$preinstall_input_policy" ] || [ -z "$preinstall_forward_policy" ]; then
-		echo "Error: failed to determine current policies." >&2
-		install_failed
+		install_failed "Error: failed to determine current iptables policies."
 	fi
-	touch "$preinstall_policies_file"; rv=$?
-	if [ $rv -ne 0 ]; then
-		echo "Error: failed to create backup file." >&2
-		install_failed
-	fi
+	touch "$preinstall_policies_file" || install_failed "Error: failed to create pre-install policies backup file."
+
 	echo "INPUT $preinstall_input_policy" >> "$preinstall_policies_file"
 	echo "FORWARD $preinstall_forward_policy" >> "$preinstall_policies_file"
 	echo "Ok."
@@ -366,7 +337,7 @@ fi
 
 # cd into the install directory
 # exit in case "cd" fails
-[ -n "$install_dir" ] && cd "$install_dir" || { echo "Error: Couldn't cd into '$install_dir'." >&2; install_failed; }
+[ -n "$install_dir" ] && cd "$install_dir" || install_failed "Error: Couldn't cd into '$install_dir'."
 
 
 ### Add iplist(s) for $tlds to managed iplists, then fetch and apply the iplist(s)
@@ -374,8 +345,7 @@ ${suite_name}-manage add -f -c "$tlds"; rv=$?
 
 # the *manage script exits with return value 254 if requested country is already included in the config
 if [ $rv -ne 0 ] && [ $rv -ne 254 ]; then
-	echo "Failed to create and apply the iplist." >&2
-	install_failed
+	install_failed "Failed to create and apply the iplist."
 fi
 
 if [[ ! "$no_persistence" && "$cron_schedule" != "disable" ]]; then
@@ -383,14 +353,13 @@ if [[ ! "$no_persistence" && "$cron_schedule" != "disable" ]]; then
 	${suite_name}-manage schedule -s "$cron_schedule"; rv=$?
 
 	if [ $rv -ne 0 ]; then
-		echo "Error: failed to set up cron jobs." >&2
-		install_failed
+		install_failed "Error: failed to set up cron jobs."
 	fi
 else
-	echo "Warning: Installed with no persistence and no autoupdate functionality."
+	echo -e "Warning: Installed with no persistence and no autoupdate functionality.\n"
 fi
 
-echo "View current geoblocking status with 'sudo ${suite_name} status'"
+echo -e "View current geoblocking status with 'sudo ${suite_name} status'.\n"
 
 echo
 echo "Install done."
@@ -401,5 +370,6 @@ unset nolog
 unset debugmode
 unset manualmode
 unset list_type
+unset in_install
 
 exit 0
