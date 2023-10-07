@@ -19,18 +19,19 @@ Recommended to read the NOTES section below.
 1) Install pre-requisites. On Debian, Ubuntu and derivatives run: ```sudo apt install ipset jq wget``` (on other distributions, use their built-in package manager. Note that I only test on Debian, Ubuntu and Mint)
 2) Download the latest realease:
 https://github.com/blunderful-scripts/geoblocker-bash/releases
-3) Put all scripts in this suite into the same folder somewhere in your home directory
-4) Optional: If intended use is whitelist and you want to install geoblocker on a remote machine, run the check_ip_in_ripe.sh script before installation to make sure that your local machine's public ip address is included in the whitelist fetched from RIPE, so you do not get locked out of your remote server. check_ip_in_ripe.sh has an additional pre-requisite: grepcidr. Install it with ```sudo apt install grepcidr```.
-- example (for US): ```bash check_ip_in_ripe.sh -c US -i <your_public_ip_address>```
-5) cd into the directory where you extracted the scripts to and run ```sudo bash geoblocker-bash-install -m <whitelist|blacklist> -c <"country_codes">```
+3) Extract all scripts included in the release into the same folder somewhere in your home directory and cd into that directory in your terminal
+4) ****Optional: If intended use is whitelist and you want to install geoblocker-bash on a remote machine, run the check_ip_in_ripe.sh script before installation to make sure that your local public ip addresses are included in the whitelist fetched from RIPE, so you do not get locked out of your remote server. check_ip_in_ripe.sh has an additional pre-requisite: grepcidr. Install it with ```sudo apt install grepcidr```.
+- example (for US): ```bash check_ip_in_ripe.sh -c US -i <"ip_address ... ip_address">``` (if checking multiple ip addresses, use double quotation marks)
+5) ***Optional: inversely, if intended use is a blacklist and you know in advance some of the ip addresses you want to block, use check_ip_in_ripe.sh script before installation to verify that those ip addresses are included in the list fetched from RIPE
+6) run ```sudo bash geoblocker-bash-install -m <whitelist|blacklist> -c <"country_codes">```
 - example (whitelist Germany and block all other countries): ```sudo bash geoblocker-bash-install -m whitelist -c DE```
 - example (blacklist Germany and Netherlands and allow all other countries): ```sudo bash geoblocker-bash-install -m blacklist -c "DE NL"```
 
 (when specifying multiple countries, put the list in double quotes)
 
-6) That's it! If no errors occured during installation (such as missing pre-requisites), geoblocking should be active, and automatic list updates should just work. By default, subnet lists will be updated daily at 4am - you can verify that updates do work by running something like ```sudo cat /var/log/syslog | grep geoblocker-bash``` on the next day.
-
-You can check geoblocking status by running ```geoblocker-bash status```.
+7) If any significant errors are encountered during the installation, the installation will revert itself. Once installation completes successfully, most likely everything is good.
+8) That's it! By default, subnet lists will be updated daily at 4am - you can verify that automatic updates work by running ```sudo cat /var/log/syslog | grep geoblocker-bash``` on the next day (change syslog path if necessary, according to the location assigned by your distro).
+9) You can check on geoblocking status by running ```geoblocker-bash status```.
  
 **To change configuration:**
 
