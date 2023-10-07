@@ -253,8 +253,14 @@ find_active_tlds() {
 # returns a list of active tlds (country codes)
 # if $1 is "all" then returns all tlds even when there is a difference between ipset tlds and iptables rules tlds
 
+	case "$list_type" in
+		whitelist) rule_type="ACCEPT" ;;
+		blacklist) rule_type="DROP" ;;
+		*) die "Error: unexpected list type '$list_type'!"
+	esac
+
 	current_ipset_tlds="$(ipset list -n | grep "${suite_name}" | grep -o '..$' | tr '\n' ' ' | awk '{$1=$1};1')"
-	current_iprules_tlds="$(iptables -L | grep -oP "(?<=src /\* ${suite_name}\_).*?(?= \*/)" | tr '\n' ' ' | awk '{$1=$1};1')"
+	current_iprules_tlds="$(iptables -L | grep "$rule_type" | grep -oP "(?<=src /\* ${suite_name}\_).*?(?= \*/)" | tr '\n' ' ' | awk '{$1=$1};1')"
 
 	tlds_intersection="$(find_lists_intersection "$current_ipset_tlds" "$current_iprules_tlds")"
 	tlds_difference="$(find_lists_difference "$current_ipset_tlds" "$current_iprules_tlds")"
@@ -325,6 +331,14 @@ done
 }
 
 ### Variables
+
+# colors
+red='\033[0;31m'
+green='\033[0;32m'
+yellow='\033[1;33m'
+purple='\033[0;35m'
+no_color='\033[0m'
+
 
 me="$(basename "$0")"
 me_short="${me//${suite_name}-/}"
