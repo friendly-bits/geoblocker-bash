@@ -108,90 +108,94 @@ debugentermsg
 #### FUNCTIONS
 
 report_status() {
-	echo
-	echo "Geoblocking status report:"
-	echo
-	echo "Geoblocking mode: $list_type."
-	echo
-
-	current_input_policy=$(iptables -nL | grep "Chain INPUT" | awk -F'policy |)' '{print $2}')
-	current_forward_policy=$(iptables -nL | grep "Chain FORWARD" | awk -F'policy |)' '{print $2}')
-
-	if [ -z "$current_input_policy" ] || [ -z "$current_forward_policy" ]; then
-		echo "Error: failed to determine current policies." >&2
-	else
-		echo -e "Active default iptables policies: \nINPUT: $current_input_policy, FORWARD: $current_forward_policy"
-	fi
-
-	# check INPUT chain default policy compatibility with list_type
-	echo
 	case "$list_type" in
-		whitelist) [[ "$current_input_policy" != "DROP" ]] && {
-			echo "WARNING: whitelist functionality requires INPUT chain policy to be 'DROP' but it is '$current_input_policy'."
-			echo "Essentially, connections from all countries are allowed and whitelist is not working.";
-			} || echo "Current INPUT chain policy is compatible with whitelist." ;;
-		blacklist) [[ "$current_input_policy" != "ACCEPT" ]] && {
-			echo "WARNING: blacklist functionality requires INPUT chain policy to be 'ACCEPT' but it is '$current_input_policy'."
-			echo "Essentially, connections from all countries are being blocked which is probably not what you want.";
-			} || echo "Current INPUT chain policy is compatible with blacklist." ;;
+		whitelist) expected_policy="DROP"; expected_rule_type="ACCEPT"  ;;
+		blacklist) expected_policy="ACCEPT"; expected_rule_type="DROP" ;;
 		*) die "Error: unrecognized list type '$list_type'!"
 	esac
 
-	if [ "$list_type" = "whitelist" ]; then
-		echo
-		echo "Global iptables rules for $suite_name:"
-		global_rules="$(iptables-save | grep "${suite_name}_global")"
-		[ "$global_rules" = "" ] && echo "None." || echo "$global_rules"
-	fi
+	echo -e "\n${yellow}Geoblocking status report:${no_color}"
 
-	echo
-	echo "$list_type iptables rules for $suite_name:"
-	geoblocking_rules="$(iptables -L -v | grep "match-set ${suite_name}")"
-	[ "$geoblocking_rules" = "" ] && echo "None." || echo "$geoblocking_rules"
-	echo
+	echo -e "\nGeoblocking mode: ${yellow}${list_type}${no_color}.\n"
 
-	check_tlds_coherency; rv=$?
-	if [ "$rv" -ne 0 ]; then
-		echo "Warning: discrepancy detected between the config file and iptables rules!" >&2
-		[ "$ipsets_incoherent" = "true" ] && echo "Warning: discrepancy detected between existing geoblocking ipsets and geoblocking firewall rules!" >&2
-	else
-		echo "Coherency check: Countries in the firewall config are coherent with the config file."
-	fi
+	input_policy=$(iptables -nL | grep "Chain INPUT" | awk -F'policy |)' '{print $2}')
+	forward_policy=$(iptables -nL | grep "Chain FORWARD" | awk -F'policy |)' '{print $2}')
 
-	# check if cron service is enabled
-	echo
-	(systemctl is-enabled cron.service) > /dev/null || crondisabled="true"
-	if [ -n "$crondisabled" ]; then
-		echo "WARNING: cron service appears to be disabled. If that's the case, both persistence across reboots and autoupdates will not work."
-	else
-		echo "Cron system service is enabled, so persistence and ip lists autoupdates are possible."
-
-		# check cron jobs
-		echo
-		persistence_job="$(crontab -u root -l 2>/dev/null | grep "${suite_name}-persistence")"
-		[ "$persistence_job" != "" ] && echo "Persistence cron job is active." || \
-			echo "WARNING: Persistence cron job is *not set up*. Geoblocking will not work after reboot."
-
-		echo
-		autoupdate_job="$(crontab -u root -l 2>/dev/null | grep "${suite_name}-autoupdate")"
-		if [ "$autoupdate_job" != "" ]; then
-			echo "Autoupdate cron job is active."
-			update_schedule="$(echo "$autoupdate_job" | cut -f1 -d\")"
-			if [[ "$update_schedule" != "" && "$update_schedule" != " " ]]; then
-				echo "Autoupdate schedule: $update_schedule"
-			else
-				echo "Could not determine autoupdate schedule. Complete cron line:"; echo "${autoupdate_job}"
-			fi
-		else
-			echo "NOTE: Autoupdate cron job is *not set up*. Automatic ip list updates are disabled."
-		fi
+	if [ -z "$input_policy" ] || [ -z "$forward_policy" ]; then
+		die "Error: failed to determine current policies for INPUT and FORWARD chains."
 	fi
 
 	# check ipsets and iptables rules for active tlds
-	echo
 	active_tlds="$(find_active_tlds)"; rv=$?
-	echo "$list_type is configured for country codes: '$active_tlds'."
-	echo
+	echo -e "$list_type is configured for country codes: '${yellow}$active_tlds${no_color}'.\n"
+
+	# report INPUT and FORWARD chain policies
+	[ "$input_policy" = "$expected_policy" ] && input_policy_colored="${green}${input_policy}${no_color}" || \
+		input_policy_colored="${red}${input_policy}${no_color}"
+	[[ "$forward_policy" = "$expected_policy" || "$forward_policy" = "DROP" ]] && forward_policy_colored="${green}${forward_policy}${no_color}" || \
+		forward_policy_colored="${red}${forward_policy}${no_color}"
+	echo -e "Active ${yellow}iptables policies${no_color}: \nINPUT chain: $input_policy_colored, FORWARD chain: $forward_policy_colored\n"
+
+
+	# check INPUT chain default policy compatibility with list_type
+	[ "$input_policy" != "$expected_policy" ] && {
+				echo -e "${purple}WARNING${no_color}: $list_type functionality requires INPUT chain policy to be '$expected_policy' but it is '$input_policy'."
+				echo -e "${red}$list_type is not functioning${no_color}.";
+				} || echo -e "INPUT chain policy ${green}is compatible${no_color} with $list_type."
+
+	# check FORWARD chain default policy compatibility with list_type
+	[ "$forward_policy" != "$expected_policy" ] && [ "$forward_policy" != "DROP" ] && {
+				echo -e "${purple}WARNING${no_color}: $list_type functionality recommends FORWARD chain policy to be '$expected_policy' but it is '$forward_policy'."
+				} || echo -e "FORWARD chain policy ${green}is compatible${no_color} with $list_type."
+
+
+	# for a whitelist, report global iptables rules (irrelevant for blacklist)
+	if [ "$list_type" = "whitelist" ]; then
+		echo -e "\n${yellow}Global iptables rules${no_color} for $suite_name:"
+		global_rules="$(iptables-save | grep "${suite_name}_global")"
+		[ "$global_rules" = "" ] && echo "None.\n" || echo -e "${global_rules}\n"
+	fi
+
+	# report specific rules for the active geoblocking mode
+	echo -e "\n${yellow}$list_type iptables rules${no_color} for $suite_name:"
+	geoblocking_rules="$(iptables -L -v | grep "match-set ${suite_name}" | grep "$expected_rule_type")"
+	[ "$geoblocking_rules" = "" ] && echo -e "${red}None.${no_color}\n ${red}Error${no_color}: expected geoblocking rules are not found in the firewall!\n" || \
+		echo -e "$geoblocking_rules\n"
+
+	check_tlds_coherency; rv=$?
+	if [ "$rv" -ne 0 ]; then
+		echo -e "${red}Error${no_color}: discrepancy detected between the config file and iptables rules!\n" >&2
+		[ "$ipsets_incoherent" = "true" ] && \
+			echo "${purple}Warning:${no_color} discrepancy detected between existing geoblocking ipsets and geoblocking firewall rules!\n" >&2
+	else
+		echo -e "Coherency check: Country codes in the firewall config ${green}are coherent${no_color} with the config file.\n"
+	fi
+
+	# check if cron service is enabled
+	(systemctl is-enabled cron.service) > /dev/null || crondisabled="true"
+	if [ -n "$crondisabled" ]; then
+		echo -e "${purple}WARNING${no_color}: cron service appears to be disabled. Both persistence across reboots and autoupdates will likely not work.\n"
+	else
+		echo -e "Cron system service is ${green}enabled${no_color}.\n"
+
+		# check cron jobs
+		persistence_job="$(crontab -u root -l 2>/dev/null | grep "${suite_name}-persistence")"
+		[ "$persistence_job" != "" ] && echo -e "${green}Persistence cron job is active${no_color}.\n" || \
+			echo -e "${purple}WARNING${no_color}: Persistence cron job is ${red}missing${no_color}. Geoblocking will not work after reboot.\n"
+
+		autoupdate_job="$(crontab -u root -l 2>/dev/null | grep "${suite_name}-autoupdate")"
+		if [ "$autoupdate_job" != "" ]; then
+			echo -e "${green}Autoupdate cron job is active.${no_color}\n"
+			update_schedule="$(echo "$autoupdate_job" | cut -f1 -d\")"
+			if [[ "$update_schedule" != "" && "$update_schedule" != " " ]]; then
+				echo -e "Autoupdate schedule: ${yellow}$update_schedule${no_color}\n"
+			else
+				echo -e "${red}Error:${no_color} Could not determine autoupdate schedule. Complete cron line:"; echo -e "${autoupdate_job}\n"
+			fi
+		else
+			echo -e "${yellow}NOTE${no_color}: Autoupdate cron job is ${red}missing${no_color}. Automatic ip list updates are ${red}disabled${no_color}.\n"
+		fi
+	fi
 }
 
 restore_from_config() {
@@ -376,7 +380,7 @@ if [ "$action" != "add" ] && [ "$action" != "remove" ]; then
 else
 
 	if [ -z "$tlds_to_change" ] && [ -z "$force_action" ]; then
-		config_tlds="$(getconfig "Countries")" || { die "Error: Couldn't read value for Countries from the config file."; }
+		config_tlds="$(getconfig "Countries")" || die "Error: Couldn't read value for Countries from the config file."
 		echo; echo "Countries in final $list_type config: '$config_tlds'."
 		die 254 "Nothing to do, exiting."
 	fi
@@ -398,7 +402,7 @@ else
 		echo "Error performing action '$action' for countries '$tlds_to_change'." >&2
 
 		if [ "$config_tlds" = "" ]; then
-			die "Can not restore previous countries set for $list_type because it is not found in the config file."
+			die "Can not restore previous countries set for the $list_type because it is not found in the config file."
 		fi
 		restore_from_config
 	fi
@@ -407,9 +411,10 @@ else
 	failed_tlds="$(find_lists_difference "$new_verified_tlds" "$planned_tlds")"
 
 	if [ "$failed_tlds" != "" ]; then
+		debugprint "planned_tlds: '$planned_tlds', new_verified_tlds: '$new_verified_tlds', failed_tlds: '$failed_tlds'."
 		echo "Warning: failed to apply new $list_type rules for countries: $failed_tlds." >&2
 		# if the error encountered during installation, exit with error in order to fail the installation
-		[ "$parent_short" = "install" ] && die
+		[ "$in_install" ] && die
 	fi
 
 	# if all 'add' actions failed
@@ -418,10 +423,9 @@ else
 	fi
 
 	debugprint "Writing new config to file: 'Countries=$new_verified_tlds'"
-	setconfig "Countries=$new_verified_tlds" || \
-		{ die "Failed to write updated tlds '$new_verified_tlds' to the config file"; }
+	setconfig "Countries=$new_verified_tlds" || die "Failed to write updated tlds '$new_verified_tlds' to the config file"
 
-	config_tlds="$(getconfig "Countries")" || { die "Error: Couldn't read value for Countries from the config file."; }
+	config_tlds="$(getconfig "Countries")" || die "Error: Couldn't read value for Countries from the config file."
 #	debugprint "current $list_type countries in config file: '$config_tlds'"
 
 ####### Fault recovery test: inject unrequested tld
@@ -438,8 +442,7 @@ else
 	echo
 	echo "Countries in final $list_type: '$config_tlds'."
 	echo
-	echo "View current geoblocking status with 'sudo ${suite_name} status'"
-	echo
+	[ ! "$in_install" ] && echo -e "View current geoblocking status with 'sudo ${suite_name} status'\n"
 fi
 
 
@@ -452,7 +455,7 @@ else
 	[[ "$cron_schedule" == "" ]] && cron_schedule="disable"
 
 	# write to the config file in order to communicate parameters to *cronsetup
-	setconfig "CronSchedule=$cron_schedule" || { die "Failed to write the updated CronSchedule value to the config file"; }
+	setconfig "CronSchedule=$cron_schedule" || die "Failed to write the updated CronSchedule value to the config file"
 
 	${suite_name}-cronsetup; rv=$?
 	echo
