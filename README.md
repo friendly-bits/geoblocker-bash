@@ -5,7 +5,7 @@ Fetches ipv4 subnet lists for user-specified countries, then uses them for eithe
 
 Implements persistence and automatic update of the ip lists. When creating iptables rules, employs ipsets for best performance. Implements lots of reliability features.
 
-The subnet lists are fetched from RIPE - regional Internet registry for Europe, the Middle East and parts of Central Asia. RIPE stores subnet lists for countries in other regions as well, so currently this can be used for any country in the world.
+The subnet lists are fetched from the official regional registries (selected automatically based on the country). Currently supports ARIN (American Registry for Internet Numbers) and RIPE (Regional Internet registry for Europe, the Middle East and parts of Central Asia). RIPE stores subnet lists for countries in other regions as well, so currently this can be used for any country in the world.
 
 Intended use case is a server/computer that needs to be publicly accessible only in a certain country or countries (whitelist), or should not be accessible from certain countries (blacklist).
 
@@ -20,9 +20,9 @@ Recommended to read the NOTES section below.
 2) Download the latest realease:
 https://github.com/blunderful-scripts/geoblocker-bash/releases
 3) Extract all scripts included in the release into the same folder somewhere in your home directory and cd into that directory in your terminal
-4) ****Optional: If intended use is whitelist and you want to install geoblocker-bash on a remote machine, run the check_ip_in_ripe.sh script before installation to make sure that your local public ip addresses are included in the whitelist fetched from RIPE, so you do not get locked out of your remote server. check_ip_in_ripe.sh has an additional pre-requisite: grepcidr. Install it with ```sudo apt install grepcidr```.
+4) ****Optional: If intended use is whitelist and you want to install geoblocker-bash on a remote machine, run the check_ip_in_ripe.sh script before installation to make sure that your local public ip addresses are included in the whitelist fetched from the internet registry, so you do not get locked out of your remote server. check_ip_in_ripe.sh has an additional pre-requisite: grepcidr. Install it with ```sudo apt install grepcidr```.
 - example (for US): ```bash check_ip_in_ripe.sh -c US -i <"ip_address ... ip_address">``` (if checking multiple ip addresses, use double quotation marks)
-5) ***Optional: inversely, if intended use is a blacklist and you know in advance some of the ip addresses you want to block, use check_ip_in_ripe.sh script before installation to verify that those ip addresses are included in the list fetched from RIPE
+5) ***Optional: inversely, if intended use is a blacklist and you know in advance some of the ip addresses you want to block, use check_ip_in_ripe.sh script before installation to verify that those ip addresses are included in the list fetched from the registry
 6) run ```sudo bash geoblocker-bash-install -m <whitelist|blacklist> -c <"country_codes">```
 - example (whitelist Germany and block all other countries): ```sudo bash geoblocker-bash-install -m whitelist -c DE```
 - example (blacklist Germany and Netherlands and allow all other countries): ```sudo bash geoblocker-bash-install -m blacklist -c "DE NL"```
@@ -64,7 +64,7 @@ where 'action' is either 'add', 'remove' or 'schedule'.
 - obviously, needs bash (*may* work on some other shells but I do not test on them)
 
 additional mandatory pre-requisites: to install, run ```sudo apt install ipset wget jq```
-- wget (or alternatively curl) is used by the "fetch" and "check_ip_in_ripe" scripts to download lists from RIPE
+- wget (or alternatively curl) is used by the "fetch" and "check_ip_in_ripe" scripts to download lists from the internet registry
 - ipset utility is a companion tool to iptables (used by the "apply" script to create efficient iptables rules)
 - jq - Json processor (used to parse ip lists downloaded from RIPE)
 
@@ -156,7 +156,7 @@ After installation, the user interface is provided by simply running "geoblocker
 ```geoblocker-bash-run update``` : intended for triggering from periodic cron jobs. Updates the ipsets for all country codes that had been previously configured. Also used by the reboot cron job to implement persistence.
 
 **The -fetch script**
-- Fetches ipv4 subnets lists for given country codes from RIPE.
+- Fetches ipv4 subnets lists for given country codes from the regional internet registry (automatically selected based on the country).
 - Parses, validates, compiles the downloaded lists, and saves each list to a separate file.
 - Implements extensive sanity checks at each stage (fetching, parsing, validating and saving) and handles errors if they occur.
 - If a "soft" error is encountered (mostly a temporary network error), retries the download up to 3 times.
@@ -185,11 +185,11 @@ After installation, the user interface is provided by simply running "geoblocker
 
 **The validate_cron_schedule.sh script** is used by the -cronsetup script. It accepts a cron schedule expression and attempts to make sure that it conforms to the crontab format.
 
-**The check_ip_in_ripe.sh script** can be used to verify that a certain ip address belongs to a subnet found in RIPE's records for a given country. It is intended for manual use and is not called from other scripts.
+**The check_ip_in_ripe.sh script** can be used to verify that a certain ip address belongs to a subnet found in regional registry's records for a given country. It is intended for manual use and is not called from other scripts.
 
 ## **Extra notes**
 
 - All scripts (except -common) display "usage" when called with the "-h" option. You can find out about some additional options specific for each script by running it with that option.
 - Most scripts accept the "-d" option for debug (and pass it on to any other scripts they call)
-- The fetch script can be easily modified to get the lists from another source instead of RIPE, for example from ipdeny.com
+- The fetch script can be easily modified to get the lists from another source, for example from ipdeny.com
 - If you install the suite in whitelist mode and then remove your country's whitelist using the -manage script, you will probably get locked out of your remote server. If you only have one country in your whitelist, the -manage script will not allow you to remove it in order to prevent exactly this situation. But you can fool it by adding another country and then removing your own country. You may not get locked out while you're still connected to the server but once you disconnect, you may no longer be able to reconnect.
