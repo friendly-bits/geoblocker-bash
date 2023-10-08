@@ -4,7 +4,8 @@
 
 # Based on a prior script by mivk, called get-ripe-ips.
 
-# Fetches ipv4 subnets for given country codes from RIPE
+# Fetches ipv4 subnets for given country codes from regional internet registry
+#     (currently only RIPE and ARIN implemented but RIPE seems to store lists for all countries)
 ## See https://stat.ripe.net/docs/data_api
 #
 # Parses, validates the downloaded lists, and saves each one to a separate file.
@@ -48,8 +49,10 @@ usage() {
     cat <<EOF
 
 This script:
-1) Fetches ipv4 subnets for given country codes (TLD's) from RIPE.
-2) Parses, validates, compiles the downloaded lists, and saves each one to a separate file.
+1) Fetches ipv4 subnets for given country codes (TLD's) from regional internet registries.
+     (currently only RIPE and ARIN implemented but RIPE seems to store lists for all countries)
+
+2) Parses, validates the downloaded lists, and saves each one to a separate file.
 
 Usage: $me -c <"tld [tld] ... [tld]"> -p <path> [-f] [-d] [-h]
 
@@ -96,9 +99,56 @@ export debugmode="$debugmode"
 debugentermsg
 
 
+#### FUNCTIONS
+
+parse_arin() {
+	# basically:
+	# 1) grep the fetched list to extract this:
+	# 	'subnet|ip_addresses_count'
+	#	(because this is the data in the ARIN file, don't ask me why they don't just use CIDR instead of ip_addresses_cnt)
+	# 2) tr replaces '|' delimiter with ' ' delimiter. now we have 'subnet ip_address_count'
+	# 3) awk uses the $cidr_lookup_table to replace ip_addr_count with matching CIDR pattern
+	# 	(e.g. '256' gets replaced by '/24')
+	#	(awk wants files for its input but we want to avoid creating yet more intermediate files, so we use the <() construct instead)
+	# 4) now we have 'subnet /CIDR'
+	# 5) tr deletes the ' '
+	# 6) finally, we have 'subnet/CIDR' (e.g. 217.10.224.0/24)
+	# 7) we write that into $parsed_file which we can use as input to grepcidr
+	#
+	# slightly crazy? yes. do you have a simpler solution? then please, do let me know.
+
+	awk 'NR==FNR {a[$1] = $2; next} {$2 = a[$2]} 1' <(echo "$cidr_lookup_table") \
+		<(grep -oP "(?<=arin\|$tld\|ipv4\|).*?(?=\|[0-9]*?\|allocated)" < "$fetched_file" | tr "|" " ") | \
+		tr -d " " > "$parsed_file"
+
+	# check that $parsed_file is non-empty
+	[ -s "$parsed_file" ] && rv=0 || rv=1
+	return "$rv"
+}
+
+parse_ripe() {
+	jq -r ".data.resources.$family | .[]" "$fetched_file" > "$parsed_file"; rv=$?
+	[[ "$rv" -ne 0 || ! -s "$parsed_file" ]] && rv=1
+	return "$rv"
+}
+
+get_db_time() {
+	case "$registry" in
+		RIPE ) db_time=$(jq -r '.data.query_time' "$fetched_file") ;;
+		ARIN ) header="$(head -n 1 "$fetched_file")"
+				db_time="$(cut -d '|' -f6 <<< "$header")" ;;
+	esac
+echo "$db_time"
+}
+
+
 #### VARIABLES
+
+arin_url="https://ftp.arin.net/pub/stats/arin/delegated-arin-extended-latest"
 ripe_url="https://stat.ripe.net/data/country-resource-list/data.json?v4_format=prefix&resource="
-family="ipv4"    ## only parsing the ipv4 section at this time
+
+## only parsing the ipv4 section at this time
+family="ipv4"
 
 # regex patterns used for ipv4 validation
 # using Perl regex syntax because grep is faster with it than with native grep syntax
@@ -108,8 +158,8 @@ ip_regex='^((25[0-5]|(2[0-4]|1\d|[1-9]|)\d)\.?\b){4}'
 mask_regex='(/([01]?\d\d?|2[0-4]\d|25[0-5]))$'
 subnet_regex="${ip_regex}${mask_regex}"
 
-curl_command="curl --retry 8 --fail-early --connect-timeout 7 --progress-bar"
-wget_command="wget --tries=8 --timeout=7 --show-progress"
+curl_command="curl --retry 8 --fail-early --connect-timeout 5 --progress-bar"
+wget_command="wget --tries=8 --timeout=5 --show-progress"
 
 apply_tlds=""
 failed_tlds=""
@@ -117,6 +167,39 @@ failed_tlds=""
 fetch_retries=3
 
 status_file="$iplist_dir/status"
+
+
+# needed to translate ARIN's quirky data to CIDR
+cidr_lookup_table=$(cat <<EOF
+1 /32
+2 /31
+4 /30
+8 /29
+16 /28
+32 /27
+64 /26
+128 /25
+256 /24
+512 /23
+1024 /22
+2048 /21
+4096 /20
+8192 /19
+16384 /18
+32768 /17
+65536 /16
+131072 /15
+262144 /14
+524288 /13
+1048576 /12
+2097152 /11
+4194304 /10
+8388608 /9
+16777216 /8
+33554432 /7
+67108864 /6
+EOF
+)
 
 
 #### Checks
@@ -145,10 +228,28 @@ command -v "wget" &> /dev/null && wget_exists="true"
 
 for tld in $tlds; do
 
-	url="$ripe_url$tld"
+	# capitalize $tld
+	tld="${tld^^}"
+
+	case "$tld" in
+		AI|AQ|AG|BS|BB|BM|BV|CA|KY|DM|GD|GP|HM|JM|MQ|MS|PR|BL|SH|KN|LC|PM|VC|MF|TC|US|UM|VG|VI )
+			registry="ARIN"
+			url="$arin_url"
+		;;
+		* ) registry="RIPE"
+			url="${ripe_url}${tld}"
+		;;
+	esac
+
 	filename="${family}_${tld}"
 	list_path="$iplist_dir/${filename}"
-	fetched_file=$(mktemp "/tmp/fetched-$tld-XXXX.json")
+	fetched_file=$(mktemp "/tmp/fetched-$tld-XXXX")
+
+	if [ "$wget_exists" ]; then
+		fetch_command="$wget_command $url -O"
+	elif [ "$curl_exists" ]; then
+		fetch_command="$curl_command $url -o"
+	fi
 
 	if [ -s "$list_path" ]; then
 		old_list_exists="true"
@@ -177,80 +278,67 @@ for tld in $tlds; do
 	while true; do
 		retry_cnt=$(( retry_cnt + 1 ))
 
-		if [ "$wget_exists" ]; then
-			fetch_command="$wget_command $url -O $fetched_file"
-		elif [ "$curl_exists" ]; then
-			fetch_command="$curl_command $url -o $fetched_file"
-		fi
+		$fetch_command "$fetched_file"; rv=$?
 
-		$fetch_command; rv=$?
-
-		if [ $rv -ne 0 ]; then
+		if [[ $rv -ne 0 || ! -s "$fetched_file" ]]; then
 			rm "$fetched_file" &>/dev/null
 			tld_status="failed"
 			echolog "Error when running '$fetch_command'."
 			[ "$retry_cnt" -ge "$fetch_retries" ] && break
 		else
-			status=$(jq -r '.status' "$fetched_file")
-			if [[ ! "$status" = "ok" || ! -s "$fetched_file" ]]; then
-				echolog -err "Failed to fetch subnets list for country '$tld'."
-				ripe_msg=$(jq -r -c '.messages' "$fetched_file")
-				debugprint "RIPE replied with message: '$ripe_msg'"
+			echo "Fetch successful."
+
+			# get the date of the fetched file
+			db_time="$(get_db_time)";
+			date_new=$(date -d "$db_time" +%s)
+
+			# skip list update if data timestamp didn't change, and there were no validation errors in the old list,
+			# and we are not in manual mode, and force_update wasn't requested
+			if [[ "$old_list_exists" &&  "$date_new" -le "$date_old" && "$force_update" != "true" && \
+							"$manualmode" != "true" && "$old_failed_subnets_cnt" -eq 0 ]]; then
+				echolog "Subnets list for country '$tld' is already up-to-date. Timestamp: '$(date --date=@$date_new)'."
+				tld_status="up_to_date"
 				rm "$fetched_file" &>/dev/null
+				break
+			fi
+
+			# Parse the fetched file
+			echo -n "Parsing... "
+			parsed_file=$(mktemp "/tmp/parsed-$tld-XXXX.list")
+
+			case "$registry" in
+				ARIN ) parse_arin; rv=$? ;;
+				RIPE ) parse_ripe; rv=$? ;;
+				* ) parse_ripe; rv=$? ;;
+			esac
+			rm "$fetched_file" &>/dev/null
+
+			if [ "$rv" -ne 0 ]; then
+				rm "$parsed_file" &>/dev/null
 				tld_status="failed"
+				echo -e "\nError: failed to parse the fetched file for country '$tld'." >&2
 				[ "$retry_cnt" -ge "$fetch_retries" ] && break
 			else
-				echo "Fetch successful."
+				echo "Ok."
+				# Validate the parsed file
+				parsed_subnets_cnt=$(wc -l < "$parsed_file")
 
-				# get the date of the fetched file
-				ripe_db_time=$(jq -r '.data.query_time' "$fetched_file")
-				date_new=$(date -d "$ripe_db_time" +%s)
+				echo -n "Validating... "
+				validated_file=$(mktemp "/tmp/validated-$tld-XXXX.list")
+				grep -P "$subnet_regex" "$parsed_file" > "$validated_file"
+				rm "$parsed_file" &>/dev/null
 
-				# skip list update if data timestamp didn't change, and there were no validation errors in the old list,
-				# and we are not in manual mode, and force_update wasn't requested
-				if [[ "$old_list_exists" &&  "$date_new" -le "$date_old" && "$force_update" != "true" && \
-								"$manualmode" != "true" && "$old_failed_subnets_cnt" -eq 0 ]]; then
-					echolog "Subnets list for country '$tld' is already up-to-date. Timestamp: '$(date --date=@$date_new)'."
-					tld_status="up_to_date"
-					rm "$fetched_file" &>/dev/null
-					break
-				fi
+				validated_subnets_cnt=$(wc -l < "$validated_file")
 
-				parsed_file=$(mktemp "/tmp/parsed-$tld-XXXX.list")
-
-				# Parse the fetched file
-				echo -n "Parsing... "
-				jq -r ".data.resources.$family | .[]" "$fetched_file" > "$parsed_file"; rv=$?
-
-				rm "$fetched_file" &>/dev/null
-
-				if [ "$rv" -ne 0 ]; then
-					rm "$parsed_file" &>/dev/null
-					tld_status="failed"
-					echolog -err "Error: failed to parse the fetched file for country '$tld'."
-					[ "$retry_cnt" -ge "$fetch_retries" ] && break
+				failed_subnets_cnt=$(( parsed_subnets_cnt - validated_subnets_cnt ))
+				if [ "$failed_subnets_cnt" -gt 0 ]; then
+					echolog -err "Note: Fetch attempt $retry_cnt for country '$tld': $failed_subnets_cnt subnets failed validation."
+					[ "$retry_cnt" -ge "$fetch_retries" ] && { tld_status="partial"; break; }
+					rm "$validated_file" &>/dev/null
 				else
 					echo "Ok."
-					# Validate the parsed file
-					parsed_subnets_cnt=$(wc -l < "$parsed_file")
-
-					echo -n "Validating... "
-					validated_file=$(mktemp "/tmp/validated-$tld-XXXX.list")
-					grep -P "$subnet_regex" "$parsed_file" > "$validated_file"
-					rm "$parsed_file" &>/dev/null
-
-					validated_subnets_cnt=$(wc -l < "$validated_file")
-
-					failed_subnets_cnt=$(( parsed_subnets_cnt - validated_subnets_cnt ))
-					if [ "$failed_subnets_cnt" -gt 0 ]; then
-						echolog -err "Note: Fetch attempt $retry_cnt for country '$tld': $failed_subnets_cnt subnets failed validation."
-						[ "$retry_cnt" -ge "$fetch_retries" ] && { tld_status="partial"; break; }
-						rm "$validated_file" &>/dev/null
-					else
-						echo "Ok."
-						tld_status="Ok"
-						break
-					fi
+					tld_status="Ok"
+					break
 				fi
 			fi
 		fi
@@ -258,7 +346,7 @@ for tld in $tlds; do
 	done
 
 	# Check if subnets count decreased dramatically compared to the old list
-	# This is to prevent a possible future situation where RIPE server decides to change API or spew out wrong data
+	# This is to prevent a possible future situation where a regional resistry server decides to change API or spew out wrong data
 	# and we get something like 0 subnets, all successfully validated and passed as a good list
 	if [[ "$old_list_exists" && "$tld_status" != "up_to_date" ]]; then
 		# compare fetched subnets count to old subnets count, get result in %
@@ -272,6 +360,12 @@ for tld in $tlds; do
 		else
 			debugprint "Validated subnets count for country '$tld' is ${subnets_percents}% of the count in the existing list"
 		fi
+	fi
+
+	if [[ "$tld_status" = "Ok" || "$tld_status" = "partial" ]] && [ "$validated_subnets_cnt" -eq 0 ]; then
+		rm "$validated_file" &>/dev/null
+		echolog "Error: validated 0 subnets for country '$tld'. Perhaps the country code is incorrect?" >&2
+		tld_status="failed"
 	fi
 
 	# If we have a partial list, decide whether to consider it Ok or not
@@ -312,13 +406,7 @@ for tld in $tlds; do
 
 	echo
 
-	if [[ "$tld_status" = "Ok" && "$validated_subnets_cnt" -eq 0 ]]; then
-		rm "$validated_file" &>/dev/null
-		echolog "Error: validated 0 subnets for country '$tld'. Perhaps the country code is incorrect?" >&2
-		tld_status="failed"
-	fi
-
-	if [[ "$tld_status" = "Ok" || "$tld_status" = "partial" ]]; then
+	if [ "$tld_status" = "Ok" ]; then
 		echo -e "Validated subnets count for country '$tld': $validated_subnets_cnt.\n"
 	fi
 
