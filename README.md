@@ -4,7 +4,7 @@ Reliable and easy to use geoip blocker for Linux. Front-end implemented in Bash 
 Intended use case is a server that needs to be publicly accessible only in a certain country or countries (whitelist), or should not be accessible from certain countries (blacklist).
 
 ## Features and operation
-_(if you are just looking for installation instructions, skip to **TL;DR** section)_
+_(if you are just looking for installation instructions, skip to the **TL;DR** section)_
 
 Basic functionality is automatic download of complete ipv4 subnet lists for user-specified countries, then using these lists to create either a whitelist or a blacklist (selected during installation) in the firewall, to either block all connections from these countries (blacklist), or only allow connections from them (whitelist).
 
