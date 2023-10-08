@@ -20,7 +20,7 @@ Recommended to read the NOTES section below.
 2) Download the latest realease:
 https://github.com/blunderful-scripts/geoblocker-bash/releases
 3) Extract all scripts included in the release into the same folder somewhere in your home directory and cd into that directory in your terminal
-4) ****Optional: If intended use is whitelist and you want to install geoblocker-bash on a remote machine, run the check-ip-in-registry.sh script before installation to make sure that your local public ip addresses are included in the whitelist fetched from the internet registry, so you do not get locked out of your remote server. check-ip-in-registry.sh has an additional pre-requisite: grepcidr. Install it with ```sudo apt install grepcidr```.
+4) ***Optional: If intended use is whitelist and you want to install geoblocker-bash on a remote machine, run the check-ip-in-registry.sh script before installation to make sure that your local public ip addresses are included in the whitelist fetched from the internet registry, so you do not get locked out of your remote server. check-ip-in-registry.sh has an additional pre-requisite: grepcidr. Install it with ```sudo apt install grepcidr```.
 - example (for US): ```bash check-ip-in-registry.sh -c US -i <"ip_address ... ip_address">``` (if checking multiple ip addresses, use double quotation marks)
 5) ***Optional: inversely, if intended use is a blacklist and you know in advance some of the ip addresses you want to block, use check-ip-in-registry.sh script before installation to verify that those ip addresses are included in the list fetched from the registry
 6) run ```sudo bash geoblocker-bash-install -m <whitelist|blacklist> -c <"country_codes">```
@@ -44,7 +44,7 @@ where 'action' is either 'add', 'remove' or 'schedule'.
  To disable/enable/change the autoupdate schedule, use the '-s' option followed by either cron schedule expression in doulbe quotes, or 'disable':
  ```sudo geoblocker-bash schedule -s <"cron_schdedule_expression">|disable```
 - example (to enable or change periodic cron job schedule): ```sudo geoblocker-bash schedule -s "1 4 * * *"```
-- example (to disable subnet lists autoupdate): ```sudo geoblocker-bash schedule -s disable```
+- example (to disable lists autoupdate): ```sudo geoblocker-bash schedule -s disable```
  
 **To check on current geoblocking status:**
 - run ```sudo geoblocker-bash status```
