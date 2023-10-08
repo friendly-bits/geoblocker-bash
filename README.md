@@ -1,11 +1,26 @@
 # geoblocker-bash
-Automatic and easy to use geoip blocker for Linux. Front-end implemented in Bash and the back-end utilizes iptables (nftables support will get implemented eventually).
+Reliable and easy to use geoip blocker for Linux. Front-end implemented in Bash and the back-end utilizes iptables (nftables support will get implemented eventually).
 
-Fetches ipv4 subnet lists for user-specified countries, then uses them for either a whitelist or a blacklist (selected during installation) to either block all connections from those countries (blacklist), or only allow connections from them (whitelist).
+## Features and operation
+Basic functionality is automatic download of complete ipv4 subnet lists for user-specified countries, then using these lists to create either a whitelist or a blacklist (selected during installation) in the firewall, to either block all connections from these countries (blacklist), or only allow connections from them (whitelist).
 
-Implements persistence and automatic update of the ip lists. When creating iptables rules, employs ipsets for best performance. Aims to be very reliable and implements lots of reliability features.
+Subnet lists are fetched from the official regional registries (selected automatically based on the country). Currently supports ARIN (American Registry for Internet Numbers) and RIPE (Regional Internet registry for Europe, the Middle East and parts of Central Asia). RIPE stores subnet lists for countries in other regions as well, so currently this can be used for any country in the world.
 
-The subnet lists are fetched from the official regional registries (selected automatically based on the country). Currently supports ARIN (American Registry for Internet Numbers) and RIPE (Regional Internet registry for Europe, the Middle East and parts of Central Asia). RIPE stores subnet lists for countries in other regions as well, so currently this can be used for any country in the world.
+All necessary configuration changes required for geoblocking to work are automatically applied to the firewall during installation or when changing config (read TL;DR for more info).
+
+Implements optional (enabled by default) persistence across system reboots and automatic update of the ip lists.
+
+Aims to be very reliable and implements lots of reliability features. Including:
+- Downloaded lists go through a validation process, with safeguards in place to prevent application of bad or incomplete lists to the firewall.
+- Error detection and handling at each stage and user notification through console messages or through syslog if an error occurs.
+- Automatic backup of the subnet lists and the firewall state before any changes, and automatic restore from backup in case an error occurs during these changes.
+- Implementation of an easy way for a user to check on current geoblocking status and config (read TL;DR for more info ).
+
+Aims to be very efficient both in the way the scripts operate and in the way the firewall operates:
+- When creating iptables rules, a list for each country is compiled into an ipset and that ipset is then used with a matching iptables rule, which is the most efficient way to implement whitelist or blacklist with iptables.
+- Only performs necessary actions. For example, if a list is up-to-date and already active in the firewall, it won't be re-validated and re-applied to the firewall until the data timestamp changes.
+- Scripts are only active when invoked either directly by the user or by a cron job (once after a reboot and then periodically for an auto-update).
+- Lists validation is implemented through efficient regex processing, so validation is normally very quick (less than a second, of course depending on the CPU, the number of lists and the size of each list).
 
 Intended use case is a server/computer that needs to be publicly accessible only in a certain country or countries (whitelist), or should not be accessible from certain countries (blacklist).
 
