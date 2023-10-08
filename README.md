@@ -197,9 +197,9 @@ After installation, the user interface is provided by simply running "geoblocker
 - Restores ipsets and iptables state from last known good backup
 - If restore from backup fails, either gives up (default behavior) or (if you ran the -install script with the -e option for Emergency Deactivation) deactivates geoblocking entirely
 
-**The -reset script:**: is called by the *install script to clean up previous geoblocking rules in the firewall and reset the config (just in case you install again without uninstalling first)
+**The -reset script** is called by the *install script to clean up previous geoblocking rules in the firewall and reset the config (just in case you install again without uninstalling first)
 
-**The -common script:** : Stores common functions and variables for the geoblocker-bash suite. Does nothing if called directly. Most other scripts won't work without it.
+**The -common script** : Stores common functions and variables for the geoblocker-bash suite. Does nothing if called directly. Most other scripts won't work without it.
 
 **The validate-cron-schedule.sh script** is used by the -cronsetup script. It accepts a cron schedule expression and attempts to make sure that it conforms to the crontab format.
 
