@@ -1,11 +1,27 @@
 # geoblocker-bash
-Automatic and easy to use geoip blocker for Linux. Front-end implemented in Bash and the back-end utilizes iptables (nftables support will get implemented eventually).
+Reliable and easy to use geoip blocker for Linux. Front-end implemented in Bash and the back-end utilizes iptables (nftables support will get implemented eventually).
 
-Fetches ipv4 subnet lists for user-specified countries, then uses them for either a whitelist or a blacklist (selected during installation) to either block all connections from those countries (blacklist), or only allow connections from them (whitelist).
+## Features and operation
+Basic functionality is automatic download of complete ipv4 subnet lists for user-specified countries, then using these lists to create either a whitelist or a blacklist (selected during installation) in the firewall, to either block all connections from these countries (blacklist), or only allow connections from them (whitelist).
 
-Implements persistence and automatic update of the ip lists. When creating iptables rules, employs ipsets for best performance. Implements lots of reliability features.
+Subnet lists are fetched from the official regional registries (selected automatically based on the country). Currently supports ARIN (American Registry for Internet Numbers) and RIPE (Regional Internet registry for Europe, the Middle East and parts of Central Asia). RIPE stores subnet lists for countries in other regions as well, so currently this can be used for any country in the world.
 
-The subnet lists are fetched from the official regional registries (selected automatically based on the country). Currently supports ARIN (American Registry for Internet Numbers) and RIPE (Regional Internet registry for Europe, the Middle East and parts of Central Asia). RIPE stores subnet lists for countries in other regions as well, so currently this can be used for any country in the world.
+All necessary configuration changes required for geoblocking to work are automatically applied to the firewall during installation or when changing config (read TL;DR for more info).
+
+Implements optional (enabled by default) persistence across system reboots and automatic update of the ip lists.
+
+Aims to be very reliable and implements lots of reliability features. Including:
+- Downloaded lists go through a validation process, with safeguards in place to prevent application of bad or incomplete lists to the firewall.
+- Error detection and handling at each stage and user notification through console messages or through syslog if an error occurs.
+- Automatic backup of the active ipsets and the firewall state before any changes, and automatic restore from backup in case an error occurs during these changes (which normally should never happen but implemented just in case).
+- Implementation of an easy way for a user to check on current geoblocking status and config (read TL;DR for more info ).
+
+Aims to be very efficient both in the way the scripts operate and in the way the firewall operates:
+- When creating iptables rules, a list for each country is compiled into an ipset and that ipset is then used with a matching iptables rule, which is the most efficient way to implement whitelist or blacklist with iptables.
+- When creating a new ipset, uses the 'ipset restore' command which is the fastest and most efficient way to do that and normally only takes a second or so for a very large list (depending on the CPU of course).
+- Only performs necessary actions. For example, if a list is up-to-date and already active in the firewall, it won't be re-validated and re-applied to the firewall until the data timestamp changes.
+- Scripts are only active for a short time when invoked either directly by the user or by a cron job (once after a reboot and then periodically for an auto-update).
+- Lists parsing and validation are implemented through efficient regex processing, so this is very quick (validation takes a few milliseconds and parsing takes a fraction of a second for a large list, depending on the CPU).
 
 Intended use case is a server/computer that needs to be publicly accessible only in a certain country or countries (whitelist), or should not be accessible from certain countries (blacklist).
 
@@ -20,18 +36,18 @@ Recommended to read the NOTES section below.
 2) Download the latest realease:
 https://github.com/blunderful-scripts/geoblocker-bash/releases
 3) Extract all scripts included in the release into the same folder somewhere in your home directory and cd into that directory in your terminal
-4) ****Optional: If intended use is whitelist and you want to install geoblocker-bash on a remote machine, run the check-ip-in-registry.sh script before installation to make sure that your local public ip addresses are included in the whitelist fetched from the internet registry, so you do not get locked out of your remote server. check-ip-in-registry.sh has an additional pre-requisite: grepcidr. Install it with ```sudo apt install grepcidr```.
+4) ***Optional: If intended use is whitelist and you want to install geoblocker-bash on a remote machine, run the check-ip-in-registry.sh script before installation to make sure that your local public ip addresses are included in the whitelist fetched from the internet registry, so you do not get locked out of your remote server. check-ip-in-registry.sh has an additional pre-requisite: grepcidr. Install it with ```sudo apt install grepcidr```.
 - example (for US): ```bash check-ip-in-registry.sh -c US -i <"ip_address ... ip_address">``` (if checking multiple ip addresses, use double quotation marks)
-5) ***Optional: inversely, if intended use is a blacklist and you know in advance some of the ip addresses you want to block, use check-ip-in-registry.sh script before installation to verify that those ip addresses are included in the list fetched from the registry
+5) ***Optional: if intended use is a blacklist and you know in advance some of the ip addresses you want to block, use check-ip-in-registry.sh script before installation to verify that those ip addresses are included in the list fetched from the registry. The syntax is the same as above.
 6) run ```sudo bash geoblocker-bash-install -m <whitelist|blacklist> -c <"country_codes">```
 - example (whitelist Germany and block all other countries): ```sudo bash geoblocker-bash-install -m whitelist -c DE```
 - example (blacklist Germany and Netherlands and allow all other countries): ```sudo bash geoblocker-bash-install -m blacklist -c "DE NL"```
 
 (when specifying multiple countries, put the list in double quotes)
 
-7) If any significant errors are encountered during the installation, the installation will revert itself. Once installation completes successfully, most likely everything is good.
+7) If any significant errors are encountered during installation, the installation will revert itself. Once installation completes successfully, most likely everything is good.
 8) That's it! By default, subnet lists will be updated daily at 4am - you can verify that automatic updates work by running ```sudo cat /var/log/syslog | grep geoblocker-bash``` on the next day (change syslog path if necessary, according to the location assigned by your distro).
-9) You can check on geoblocking status by running ```geoblocker-bash status```.
+9) You can check on geoblocking status by running ```sudo geoblocker-bash status```.
  
 **To change configuration:**
 
@@ -44,7 +60,7 @@ where 'action' is either 'add', 'remove' or 'schedule'.
  To disable/enable/change the autoupdate schedule, use the '-s' option followed by either cron schedule expression in doulbe quotes, or 'disable':
  ```sudo geoblocker-bash schedule -s <"cron_schdedule_expression">|disable```
 - example (to enable or change periodic cron job schedule): ```sudo geoblocker-bash schedule -s "1 4 * * *"```
-- example (to disable subnet lists autoupdate): ```sudo geoblocker-bash schedule -s disable```
+- example (to disable lists autoupdate): ```sudo geoblocker-bash schedule -s disable```
  
 **To check on current geoblocking status:**
 - run ```sudo geoblocker-bash status```

@@ -139,21 +139,21 @@ remove_cron_job() {
 
 	if [[ "$crondisabled" != "true" && -n "$job_type" ]] ; then
 
-	if [[ "$job_type" != "autoupdate" && "$job_type" != "persistence" ]]; then
-			die -nolog "Error running the crontab command."
+		if [[ "$job_type" != "autoupdate" && "$job_type" != "persistence" ]]; then
+				die -nolog "Error running the crontab command."
+		fi
+
+
+		debugprint "Removing $job_type cron job for ${suite_name}... "
+		crontab -u root -l 2>/dev/null | grep -v "${suite_name}-${job_type}" | sudo crontab -u root -
+		rv=$?
+
+		if [ $rv -ne 0 ]; then
+			die -nolog "Error: failed to remove $job_type cron job!"
+		else
+			debugprint "Ok."
+		fi
 	fi
-
-
-	debugprint "Removing $job_type cron job for ${suite_name}... "
-	crontab -u root -l 2>/dev/null | grep -v "${suite_name}-${job_type}" | sudo crontab -u root -
-	rv=$?
-
-	if [ $rv -ne 0 ]; then
-		die -nolog "Error: failed to remove $job_type cron job!"
-	else
-		debugprint "Ok."
-	fi
-fi
 }
 
 
