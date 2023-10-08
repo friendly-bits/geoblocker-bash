@@ -1,6 +1,8 @@
 # geoblocker-bash
 Reliable and easy to use geoip blocker for Linux. Front-end implemented in Bash and the back-end utilizes iptables (nftables support will get implemented eventually).
 
+Intended use case is a server/computer that needs to be publicly accessible only in a certain country or countries (whitelist), or should not be accessible from certain countries (blacklist).
+
 ## Features and operation
 _(if you are just looking for installation instructions, skip to **TL;DR** section)_
 
@@ -24,8 +26,6 @@ Aims to be very efficient both in the way the scripts operate and in the way the
 - Only performs necessary actions. For example, if a list is up-to-date and already active in the firewall, it won't be re-validated and re-applied to the firewall until the data timestamp changes.
 - Scripts are only active for a short time when invoked either directly by the user or by a cron job (once after a reboot and then periodically for an auto-update).
 - List parsing and validation are implemented through efficient regex processing, so this is very quick (a fraction of a second for parsing and a few milliseconds for validation, for a very large list, depending on the CPU).
-
-Intended use case is a server/computer that needs to be publicly accessible only in a certain country or countries (whitelist), or should not be accessible from certain countries (blacklist).
 
 I created this project for running on my own server, and it's being doing its job since the early releases, reducing the bot scans/attacks (which I'd been seeing a lot in the logs) to virtually zero. As I wanted it to be useful to other people as well, I implemented many reliability features which should make it unlikely that the scripts will misbehave on systems other than my own. But of course, use at your own risk. Before publishing a new release, I run the code through shellcheck to test for potential issues, and test the scripts on my server.
 
