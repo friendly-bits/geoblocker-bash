@@ -70,6 +70,8 @@ EOF
 action="$1"
 shift 1
 
+[ -z "$action" ] && { usage; die 1 "Specify action!"; }
+
 # check for valid action
 case "$action" in
 	add | remove ) ;;
@@ -124,7 +126,7 @@ round_up_to_power2() {
 destroy_temp_ipsets() {
 	curr_temp_ipsets="$(ipset list -n | grep "$suite_name" | grep "temp" | tr '\n' ' ' | awk '{$1=$1};1')"
 	for temp_ipset in $curr_temp_ipsets; do
-		ipset destroy "$temp_ipset" > /dev/null
+		ipset destroy "$temp_ipset" &> /dev/null
 	done
 }
 
@@ -163,7 +165,7 @@ exitvalue="0"
 [ -z "$tlds" ] && { usage; die 254 "Specify country codes!"; }
 
 # check for datadir path
-[ -z "$datadir" ] && { usage; die 254 "Error: failed to read the 'datadir' variable from the config file."; }
+[ -z "$datadir" ] && die 254 "Error: failed to read the 'datadir' variable from the config file."
 
 # Check for ipset utility
 ! command -v "ipset" &> /dev/null && die 254 "Error: Can not find 'ipset'. Install it with 'apt install ipset' or similar."
@@ -173,17 +175,6 @@ exitvalue="0"
 
 # Check for bc utility
 ! command -v "bc" &> /dev/null && die 254 "Error: Can not find 'bc'."
-
-
-# check for valid action
-
-[ -z "$action" ] && { usage; die 1 "Specify action!"; }
-
-case "$action" in
-	add) ;;
-	remove) ;;
-	*) usage; die 254 "Error: unsupported action '$action'" ;;
-esac
 
 [ -z "$list_type" ] && die "\$list_type variable should not be empty! Something is wrong!"
 
@@ -200,9 +191,7 @@ if [ "$action" = "add" ]; then
 		# check that the iplist file exists
 		[ ! -f "$iplist_file" ] && die 254 "Error: Can not find the iplist file in path: '$iplist_file'."
 
-		### Create a temporary ipset and load subnets from file into it
-
-		# destroy temporary ipset in case it exists
+		# first destroy temporary ipset with that name in case it exists
 		ipset destroy "$temp_ipset" &>/dev/null
 
 		# count lines in the iplist file
