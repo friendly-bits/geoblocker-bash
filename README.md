@@ -31,7 +31,7 @@ I created this project for running on my own server, and it's being doing its jo
 
 ## **TL;DR**
 
-Recommended to read the NOTES section below.
+_Recommended to read the NOTES section below._
 
 **To install:**
 1) Install pre-requisites. On Debian, Ubuntu and derivatives run: ```sudo apt install ipset jq wget``` (on other distributions, use their built-in package manager. Note that I only test on Debian, Ubuntu and Mint)
