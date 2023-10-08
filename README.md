@@ -23,7 +23,7 @@ Aims to be very efficient both in the way the scripts operate and in the way the
 - When creating a new ipset, uses the 'ipset restore' command which is the fastest and most efficient way to do that and normally only takes a second or so for a very large list (depending on the CPU of course).
 - Only performs necessary actions. For example, if a list is up-to-date and already active in the firewall, it won't be re-validated and re-applied to the firewall until the data timestamp changes.
 - Scripts are only active for a short time when invoked either directly by the user or by a cron job (once after a reboot and then periodically for an auto-update).
-- Lists parsing and validation are implemented through efficient regex processing, so this is very quick (a fraction of a second for parsing and a few milliseconds for validation, for a large list, depending on the CPU).
+- List parsing and validation are implemented through efficient regex processing, so this is very quick (a fraction of a second for parsing and a few milliseconds for validation, for a very large list, depending on the CPU).
 
 Intended use case is a server/computer that needs to be publicly accessible only in a certain country or countries (whitelist), or should not be accessible from certain countries (blacklist).
 
