@@ -110,7 +110,7 @@ The suite currently includes 12 scripts:
 8. geoblocker-bash-backup
 9. geoblocker-bash-common
 10. geoblocker-bash-reset
-11. validate_cron_schedule.sh
+11. validate-cron-schedule.sh
 12. check-ip-in-registry.sh
 
 The scripts intended as user interface are **-install**, **-uninstall**, **-manage** and **check-ip-in-registry.sh**. All the other scripts are intended as a back-end, although they can be run by the user as well. If you just want to install and move on, you only need to run the -install script, specify mode with the -m option and specify country codes with the "-c" option. Provided you are not missing any pre-requisites, it should be as easy as that.
@@ -183,7 +183,7 @@ After installation, the user interface is provided by simply running "geoblocker
 
 **The -common script:** : Stores common functions and variables for the geoblocker-bash suite. Does nothing if called directly. Most other scripts won't work without it.
 
-**The validate_cron_schedule.sh script** is used by the -cronsetup script. It accepts a cron schedule expression and attempts to make sure that it conforms to the crontab format.
+**The validate-cron-schedule.sh script** is used by the -cronsetup script. It accepts a cron schedule expression and attempts to make sure that it conforms to the crontab format.
 
 **The check-ip-in-registry.sh script** can be used to verify that a certain ip address belongs to a subnet found in regional registry's records for a given country. It is intended for manual use and is not called from other scripts.
 
