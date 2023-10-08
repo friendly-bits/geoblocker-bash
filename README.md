@@ -31,7 +31,7 @@ https://github.com/blunderful-scripts/geoblocker-bash/releases
 
 7) If any significant errors are encountered during installation, the installation will revert itself. Once installation completes successfully, most likely everything is good.
 8) That's it! By default, subnet lists will be updated daily at 4am - you can verify that automatic updates work by running ```sudo cat /var/log/syslog | grep geoblocker-bash``` on the next day (change syslog path if necessary, according to the location assigned by your distro).
-9) You can check on geoblocking status by running ```geoblocker-bash status```.
+9) You can check on geoblocking status by running ```sudo geoblocker-bash status```.
  
 **To change configuration:**
 
