@@ -279,7 +279,7 @@ while true; do
 	echo -e "Fetching subnets list for country ${yellow}'$tld'${no_color} from ${yellow}$registry${no_color}...\n"
 	$fetch_command; rv=$?
 
-	if [[ $rv -ne 0 || ! -s "$fetched_file" ]; then
+	if [[ $rv -ne 0 || ! -s "$fetched_file" ]]; then
 		rm "$fetched_file" &>/dev/null
 		echo "Failed to fetch subnets list from $registry for country '$tld'." >&2
 		[ "$debug" ] && echo -e "\nDebug: Error $rv when running '$fetch_command'." >&2
