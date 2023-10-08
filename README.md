@@ -15,7 +15,7 @@ All necessary configuration changes required for geoblocking to work are automat
 Implements optional (enabled by default) persistence across system reboots and automatic update of the ip lists.
 
 Aims to be very reliable and implements lots of reliability features. Including:
-- Downloaded lists go through a validation process, with safeguards in place to prevent application of bad or incomplete lists to the firewall.
+- Downloaded lists go through a validation process, with safeguards in place to prevent application of corrupted or incomplete lists to the firewall.
 - Error detection and handling at each stage and user notification through console messages or through syslog if an error occurs.
 - Automatic backup of the active ipsets and the firewall state before any changes, and automatic restore from backup in case an error occurs during these changes (which normally should never happen but implemented just in case).
 - Implementation of an easy way for a user to check on current geoblocking status and config (read TL;DR for more info ).
