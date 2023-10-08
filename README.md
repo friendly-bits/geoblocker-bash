@@ -50,6 +50,9 @@ https://github.com/blunderful-scripts/geoblocker-bash/releases
 7) If any significant errors are encountered during installation, the installation will revert itself. Once installation completes successfully, most likely everything is good.
 8) That's it! By default, subnet lists will be updated daily at 4am - you can verify that automatic updates work by running ```sudo cat /var/log/syslog | grep geoblocker-bash``` on the next day (change syslog path if necessary, according to the location assigned by your distro).
  
+**To check on current geoblocking status:**
+- run ```sudo geoblocker-bash status```
+
 **To change configuration:**
 
 run ```sudo geoblocker-bash <action> [-c <"country_codes">] | [-s <"cron_schedule">|disable]```
@@ -63,9 +66,6 @@ where 'action' is either 'add', 'remove' or 'schedule'.
 - example (to enable or change periodic cron job schedule): ```sudo geoblocker-bash schedule -s "1 4 * * *"```
 - example (to disable lists autoupdate): ```sudo geoblocker-bash schedule -s disable```
  
-**To check on current geoblocking status:**
-- run ```sudo geoblocker-bash status```
-
 **To uninstall:**
 - run ```sudo geoblocker-bash-uninstall```
 
