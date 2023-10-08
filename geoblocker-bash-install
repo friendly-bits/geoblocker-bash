@@ -8,7 +8,7 @@
 # Requires the following additional scripts (included in the distribution):
 # geoblocker-bash-apply, geoblockder_bash-backup, geoblocker-bash-common, geoblocker-bash-cronsetup,
 # geoblocker-bash-fetch, geoblocker-bash-manage, geoblocker-bash-run, geoblocker-bash-uninstall,
-# geoblocker-bash-reset, validate_cron_schedule.sh, check_ip_in_ripe.sh
+# geoblocker-bash-reset, validate-cron-schedule.sh, check-ip-in-registry.sh
 
 
 #### Initial setup
@@ -245,8 +245,8 @@ check_file_exists "${suite_name}-cronsetup"
 check_file_exists "${suite_name}-backup"
 check_file_exists "${suite_name}-uninstall"
 check_file_exists "${suite_name}-reset"
-check_file_exists "validate_cron_schedule.sh"
-check_file_exists "check_ip_in_ripe.sh"
+check_file_exists "validate-cron-schedule.sh"
+check_file_exists "check-ip-in-registry.sh"
 
 
 #### MAIN
@@ -306,8 +306,8 @@ if [ "$script_dir" != "$install_dir" ]; then
 	copyscript "${suite_name}-backup" "${install_dir}/"
 	copyscript "${suite_name}-uninstall" "${install_dir}/"
 	copyscript "${suite_name}-reset" "${install_dir}/"
-	copyscript "validate_cron_schedule.sh" "${install_dir}/"
-	copyscript "check_ip_in_ripe.sh" "${install_dir}/"
+	copyscript "validate-cron-schedule.sh" "${install_dir}/"
+	copyscript "check-ip-in-registry.sh" "${install_dir}/"
 	echo "Ok."
 fi
 
