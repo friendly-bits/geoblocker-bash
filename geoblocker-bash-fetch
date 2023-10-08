@@ -345,8 +345,14 @@ for tld in $tlds; do
 		echo -e "Retrying fetch for country '$tld'...\n"
 	done
 
+	if [[ "$tld_status" = "Ok" || "$tld_status" = "partial" ]] && [ "$validated_subnets_cnt" -eq 0 ]; then
+		rm "$validated_file" &>/dev/null
+		echolog "Error: validated 0 subnets for country '$tld'. Perhaps the country code is incorrect?" >&2
+		tld_status="failed"
+	fi
+
 	# Check if subnets count decreased dramatically compared to the old list
-	# This is to prevent a possible future situation where a regional resistry server decides to change API or spew out wrong data
+	# This is to prevent a possible future situation where a regional registry server decides to change API or spew out wrong data
 	# and we get something like 0 subnets, all successfully validated and passed as a good list
 	if [[ "$old_list_exists" && "$tld_status" != "up_to_date" ]]; then
 		# compare fetched subnets count to old subnets count, get result in %
@@ -360,12 +366,6 @@ for tld in $tlds; do
 		else
 			debugprint "Validated subnets count for country '$tld' is ${subnets_percents}% of the count in the existing list"
 		fi
-	fi
-
-	if [[ "$tld_status" = "Ok" || "$tld_status" = "partial" ]] && [ "$validated_subnets_cnt" -eq 0 ]; then
-		rm "$validated_file" &>/dev/null
-		echolog "Error: validated 0 subnets for country '$tld'. Perhaps the country code is incorrect?" >&2
-		tld_status="failed"
 	fi
 
 	# If we have a partial list, decide whether to consider it Ok or not
