@@ -8,7 +8,7 @@ Basic functionality is automatic download of complete ipv4 subnet lists for user
 
 Subnet lists are fetched from the official regional registries (selected automatically based on the country). Currently supports ARIN (American Registry for Internet Numbers) and RIPE (Regional Internet registry for Europe, the Middle East and parts of Central Asia). RIPE stores subnet lists for countries in other regions as well, so currently this can be used for any country in the world.
 
-All necessary configuration changes required for geoblocking to work are automatically applied to the firewall during installation or when changing config (read TL;DR for more info).
+All necessary configuration changes required for geoblocking to work are automatically applied to the firewall during installation or post-installation when changing config (read TL;DR for more info).
 
 Implements optional (enabled by default) persistence across system reboots and automatic update of the ip lists.
 
