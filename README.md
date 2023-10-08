@@ -19,7 +19,7 @@ Aims to be very reliable and implements lots of reliability features. Including:
 Aims to be very efficient both in the way the scripts operate and in the way the firewall operates:
 - When creating iptables rules, a list for each country is compiled into an ipset and that ipset is then used with a matching iptables rule, which is the most efficient way to implement whitelist or blacklist with iptables.
 - Only performs necessary actions. For example, if a list is up-to-date and already active in the firewall, it won't be re-validated and re-applied to the firewall until the data timestamp changes.
-- Scripts are only active when invoked either directly by the user or by a cron job (once after a reboot and then periodically for an auto-update).
+- Scripts are only active for a short time when invoked either directly by the user or by a cron job (once after a reboot and then periodically for an auto-update).
 - Lists validation is implemented through efficient regex processing, so validation is normally very quick (less than a second, of course depending on the CPU, the number of lists and the size of each list).
 
 Intended use case is a server/computer that needs to be publicly accessible only in a certain country or countries (whitelist), or should not be accessible from certain countries (blacklist).
