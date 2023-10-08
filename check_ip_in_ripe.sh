@@ -1,10 +1,9 @@
 #!/bin/bash
 
-# check_ip_in_ripe.sh
+# check_ip_in_registry.sh
 
-# For each of the specified ip addresses, checks whether it belongs to one of the subnets in the list fetched from RIPE for a given country code.
-
-## For RIPE API, see https://stat.ripe.net/docs/data_api
+# For each of the specified ip addresses, checks whether it belongs to one of the subnets
+#      in the list fetched from a regional internet registry for a given country code.
 
 # Based on a prior script by mivk, called get-ripe-ips.
 
@@ -17,7 +16,8 @@ usage() {
     cat <<EOF
 
 $me
-    For each of the specified ip addresses, checks whether it belongs to one of the subnets in the list fetched from RIPE for a given country code.
+    For each of the specified ip addresses, checks whether it belongs to one of the subnets
+          in the list fetched from a regional internet registry for a given country code.
 
 Requires "jq" and "grepcidr" utilities.
 Requires GNU 'grep' and 'awk' utilities (most Linux distributions include these by default).
@@ -39,7 +39,7 @@ EOF
 #### Functions
 
 die() {
-	echo -e "$@\n" >&2
+	echo -e "\n$@\n" >&2
 	exit 1
 }
 
@@ -59,6 +59,37 @@ process_grep_results() {
 	# calculate the truth table sum
 	truth_table_result=$(( 2#$rv1 + 2#$rv2))
 	return "$truth_table_result"
+}
+
+parse_arin() {
+	# basically:
+	# 1) grep the fetched list to extract this:
+	# 	'subnet|ip_addresses_count'
+	#	(because this is the data in the ARIN file, don't ask me why they don't just use CIDR instead of ip_addresses_cnt)
+	# 2) tr replaces '|' delimiter with ' ' delimiter. now we have 'subnet ip_address_count'
+	# 3) awk uses the $cidr_lookup_table to replace ip_addr_count with matching CIDR pattern
+	# 	(e.g. '256' gets replaced by '/24')
+	#	(awk wants files for its input but we want to avoid creating yet more intermediate files, so we use the <() construct instead)
+	# 4) now we have 'subnet /CIDR'
+	# 5) tr deletes the ' '
+	# 6) finally, we have 'subnet/CIDR' (e.g. 217.10.224.0/24)
+	# 7) we write that into $parsed_file which we can use as input to grepcidr
+	#
+	# slightly crazy? yes. do you have a simpler solution? then please, do let me know.
+
+	awk 'NR==FNR {a[$1] = $2; next} {$2 = a[$2]} 1' <(echo "$cidr_lookup_table") \
+		<(grep -oP "(?<=arin\|$tld\|ipv4\|).*?(?=\|[0-9]*?\|allocated)" < "$fetched_file" | tr "|" " ") | \
+		tr -d " " > "$parsed_file"
+
+	# check that $parsed_file is non-empty
+	[ -s "$parsed_file" ] && rv=0 || rv=1
+	return "$rv"
+}
+
+parse_ripe() {
+	jq -r ".data.resources.$family | .[]" "$fetched_file" > "$parsed_file"; rv=$?
+	[[ "$rv" -ne 0 || ! -s "$parsed_file" ]] && rv=1
+	return "$rv"	
 }
 
 
@@ -83,12 +114,19 @@ shift $((OPTIND -1))
 
 #### Initialize variables
 
+# color escape codes
 red='\033[0;31m'
 green='\033[0;32m'
+yellow='\033[1;33m'
+purple='\033[0;35m'
 no_color='\033[0m'
 
-ripe_url="https://stat.ripe.net/data/country-resource-list/data.json?v4_format=prefix&resource="
-url="$ripe_url$tld"
+# convert to upper case
+tld="${tld^^}"
+
+arin_url="https://ftp.arin.net/pub/stats/arin/delegated-arin-extended-latest"
+ripe_url="https://stat.ripe.net/data/country-resource-list/data.json?v4_format=prefix&resource=$tld"
+
 ## only parsing the ipv4 section at this time
 family="ipv4"
 
@@ -111,21 +149,54 @@ ip_check_rv=0
 # trim extra whitespaces
 arg_ipv4s="$(awk '{$1=$1};1' <<< "$arg_ipv4s")"
 
+cidr_lookup_table=$(cat <<EOF
+1 /32
+2 /31
+4 /30
+8 /29
+16 /28
+32 /27
+64 /26
+128 /25
+256 /24
+512 /23
+1024 /22
+2048 /21
+4096 /20
+8192 /19
+16384 /18
+32768 /17
+65536 /16
+131072 /15
+262144 /14
+524288 /13
+1048576 /12
+2097152 /11
+4194304 /10
+8388608 /9
+16777216 /8
+33554432 /7
+67108864 /6
+EOF
+)
+
 
 #### Checks
 
-if [ -z "$tld" ]; then
-	usage
-	echo
-	die "Specify country with \"-c <country>\"!"
-fi
+[ -z "$tld" ] && { usage; die "Specify country with \"-c <country>\"!"; }
+
+case "$tld" in
+	AI|AQ|AG|BS|BB|BM|BV|CA|KY|DM|GD|GP|HM|JM|MQ|MS|PR|BL|SH|KN|LC|PM|VC|MF|TC|US|UM|VG|VI )
+		registry="ARIN"
+		url="$arin_url"
+	;;
+	* ) registry="RIPE"
+		url="$ripe_url"
+	;;
+esac
 
 # make sure that we have ip addresses to check
-if [ -z "$arg_ipv4s" ]; then
-	usage
-	echo
-	die "Specify the ip addresses you want to check with \"-i <ip>\"!"
-fi
+[ -z "$arg_ipv4s" ] &&	{ usage; die "Specify the ip addresses you want to check with \"-i <ip>\"!"; }
 
 # check for awk
 if ! command -v awk &> /dev/null; then
@@ -187,7 +258,7 @@ if [ -z "$validated_ipv4s" ]; then
 	die "Error: all ipv4 addresses failed validation."
 fi
 
-fetched_file=$(mktemp "/tmp/fetched-$country-XXXX.json")
+fetched_file=$(mktemp "/tmp/fetched-$country-XXXX")
 
 if [ "$wget_exists" ]; then
 	fetch_command="$wget_command $url -O $fetched_file"
@@ -202,64 +273,59 @@ validated_subnets_cnt=0
 failed_subnets_cnt=0
 parsed_subnets_cnt=0
 
-echo -e "Fetching subnets list for country '$tld'...\n"
 
 # Make $fetch_retries attempts to fetch the list (or until successful fetch and no validation errors)
 while true; do
+	echo -e "Fetching subnets list for country ${yellow}'$tld'${no_color} from ${yellow}$registry${no_color}...\n"
 	$fetch_command; rv=$?
 
-	if [ $rv -ne 0 ]; then
+	if [[ $rv -ne 0 || ! -s "$fetched_file" ]; then
 		rm "$fetched_file" &>/dev/null
-		echo "Failed to fetch subnets list for country '$tld'." >&2
+		echo "Failed to fetch subnets list from $registry for country '$tld'." >&2
 		[ "$debug" ] && echo -e "\nDebug: Error $rv when running '$fetch_command'." >&2
 		tld_status="failed"
 		[ "$retry_cnt" -ge "$fetch_retries" ] && break
 	else
-		status=$(jq -r '.status' "$fetched_file")
-		if [[ ! "$status" = "ok" || ! -s "$fetched_file" ]]; then
-			echo "Fetch failed." >&2
-			ripe_msg=$(jq -r -c '.messages' "$fetched_file")
-			[ "$debug"] && echo -e "Debug: RIPE replied with message: '$ripe_msg'\n" >&2
-			rm "$fetched_file" &>/dev/null
+		echo "Fetch successful."
+
+		# Parse the fetched file
+		echo -n "Parsing... "
+
+		parsed_file=$(mktemp "/tmp/parsed-$tld-XXXX.list")
+
+		case "$registry" in
+			ARIN ) parse_arin; rv=$? ;;
+			RIPE ) parse_ripe; rv=$? ;;
+			* ) parse_ripe; rv=$? ;;
+		esac
+		rm "$fetched_file" &>/dev/null
+
+		if [ "$rv" -ne 0 ]; then
+			rm "$parsed_file" &>/dev/null
 			tld_status="failed"
+			echo -e "\nError: failed to parse the fetched file for country '$tld'." >&2
 			[ "$retry_cnt" -ge "$fetch_retries" ] && break
 		else
-			echo "Fetch successful."
+			echo "Ok."
+			# Validate the parsed file
+			parsed_subnets_cnt=$(wc -l < "$parsed_file")
 
-			parsed_file=$(mktemp "/tmp/parsed-$tld-XXXX.list")
+			echo -n "Validating... "
+			validated_file=$(mktemp "/tmp/validated-$tld-XXXX.list")
+			grep -P "$subnet_regex" "$parsed_file" > "$validated_file"
+			rm "$parsed_file" &>/dev/null
 
-			# Parse the fetched file
-			echo -n "Parsing... "
-			jq -r ".data.resources.$family | .[]" "$fetched_file" > "$parsed_file"; rv=$?
-			rm "$fetched_file" &>/dev/null
+			validated_subnets_cnt=$(wc -l < "$validated_file")
 
-			if [ "$rv" -ne 0 ]; then
-				rm "$parsed_file" &>/dev/null
-				tld_status="failed"
-				echo "Error: failed to parse the fetched file for country '$tld'." >&2
-				[ "$retry_cnt" -ge "$fetch_retries" ] && break
+			failed_subnets_cnt=$(( parsed_subnets_cnt - validated_subnets_cnt ))
+			if [ "$failed_subnets_cnt" -gt 0 ]; then
+				echo "Note: Fetch attempt $retry_cnt: $failed_subnets_cnt subnets failed validation." >&2
+				[ "$retry_cnt" -ge "$fetch_retries" ] && { tld_status="partial"; break; }
+				rm "$validated_file" &>/dev/null
 			else
 				echo "Ok."
-				# Validate the parsed file
-				parsed_subnets_cnt=$(wc -l < "$parsed_file")
-
-				echo -n "Validating... "
-				validated_file=$(mktemp "/tmp/validated-$tld-XXXX.list")
-				grep -P "$subnet_regex" "$parsed_file" > "$validated_file"
-				rm "$parsed_file" &>/dev/null
-
-				validated_subnets_cnt=$(wc -l < "$validated_file")
-
-				failed_subnets_cnt=$(( parsed_subnets_cnt - validated_subnets_cnt ))
-				if [ "$failed_subnets_cnt" -gt 0 ]; then
-					echo "Note: Fetch attempt $retry_cnt: $failed_subnets_cnt subnets failed validation." >&2
-					[ "$retry_cnt" -ge "$fetch_retries" ] && { tld_status="partial"; break; }
-					rm "$validated_file" &>/dev/null
-				else
-					echo "Ok."
-					tld_status="Ok"
-					break
-				fi
+				tld_status="Ok"
+				break
 			fi
 		fi
 	fi
@@ -269,7 +335,7 @@ done
 
 echo
 
-if [[ "$tld_status" = "Ok" && "$validated_subnets_cnt" -eq 0 ]]; then
+if [[ "$tld_status" = "Ok" || "$tld_status" = "partial" ]] && [ "$validated_subnets_cnt" -eq 0 ]; then
 	rm "$validated_file" &>/dev/null
 	echo "Error: validated 0 subnets for country code '$tld'. Perhaps the country code is incorrect?" >&2
 	tld_status="failed"
@@ -295,8 +361,8 @@ fi
 
 case "$tld_status" in
 	Ok ) ;;
-	failed ) rm "$validated_file" &>/dev/null; die "Failed to check the ip address in RIPE for country '$tld'." ;;
-	* ) rm "$validated_file" &>/dev/null; die "Error: unrecognized \$tld_status '$tld_status'. Failed to check the ip address in RIPE for country '$tld'." ;;
+	failed ) rm "$validated_file" &>/dev/null; die "Failed to check the ip address in $registry for country '$tld'." ;;
+	* ) rm "$validated_file" &>/dev/null; die "Error: unrecognized \$tld_status '$tld_status'. Failed to check the ip address in $registry for country '$tld'." ;;
 esac
 
 echo -e "\nValidated subnets count for country '$tld': $validated_subnets_cnt.\n"
@@ -308,12 +374,12 @@ for validated_ipv4 in $validated_ipv4s; do
 	process_grep_results "$rv" "$filtered_ipv4"; true_grep_rv=$?
 
 	case "$true_grep_rv" in
-		0) echo -e "Result: '$validated_ipv4' ${green}*BELONGS*${no_color} to a subnet in RIPE's list for country '$tld'." ;;
+		0) echo -e "Result: '$validated_ipv4' ${green}*BELONGS*${no_color} to a subnet in ${registry}'s list for country '$tld'." ;;
 		1) echo -e "${red}Error${no_color}: grepcidr reported an error but returned a non-empty '\$filtered_ipv4'. Something is wrong."
 			fatal_error="true" ;;
 		2) echo -e "${red}Error${no_color}: grepcidr didn't report any error but returned an empty '\$filtered_ipv4'. Something is wrong."
 			fatal_error="true" ;;
-		3) echo -e "Result: '$validated_ipv4' ${red}*DOES NOT BELONG*${no_color} to a subnet in RIPE's list for country '$tld'." ;;
+		3) echo -e "Result: '$validated_ipv4' ${red}*DOES NOT BELONG*${no_color} to a subnet in ${registry}'s list for country '$tld'." ;;
 		*) echo -e "${red}Error${no_color}: unexpected \$truth_table_result: '$truth_table_result'. Something is wrong."
 			fatal_error="true" ;;
 	esac
