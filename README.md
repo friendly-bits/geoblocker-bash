@@ -2,7 +2,7 @@
 Reliable and easy to use geoip blocker for Linux. Front-end implemented in Bash and the back-end utilizes iptables (nftables support will get implemented eventually).
 
 ## Features and operation
-(if you are just looking for installation instructions, skip to **TL;DR** section)
+_(if you are just looking for installation instructions, skip to **TL;DR** section)_
 
 Basic functionality is automatic download of complete ipv4 subnet lists for user-specified countries, then using these lists to create either a whitelist or a blacklist (selected during installation) in the firewall, to either block all connections from these countries (blacklist), or only allow connections from them (whitelist).
 
