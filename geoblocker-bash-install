@@ -143,6 +143,9 @@ copyscript() {
 
 #### VARIABLES
 
+# convert input country codes (tlds) to upper case
+tlds_arg="${tlds_arg^^}"
+
 # set environment variable "nolog" to avoid daughter scripts writing errors
 #	to syslog when encountering incorrect arguments from the user
 export nolog="true"
