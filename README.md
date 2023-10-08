@@ -3,7 +3,7 @@ Automatic and easy to use geoip blocker for Linux. Front-end implemented in Bash
 
 Fetches ipv4 subnet lists for user-specified countries, then uses them for either a whitelist or a blacklist (selected during installation) to either block all connections from those countries (blacklist), or only allow connections from them (whitelist).
 
-Implements persistence and automatic update of the ip lists. When creating iptables rules, employs ipsets for best performance. Implements lots of reliability features.
+Implements persistence and automatic update of the ip lists. When creating iptables rules, employs ipsets for best performance. Aims to be very reliable and implements lots of reliability features.
 
 The subnet lists are fetched from the official regional registries (selected automatically based on the country). Currently supports ARIN (American Registry for Internet Numbers) and RIPE (Regional Internet registry for Europe, the Middle East and parts of Central Asia). RIPE stores subnet lists for countries in other regions as well, so currently this can be used for any country in the world.
 
