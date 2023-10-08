@@ -20,9 +20,9 @@ Recommended to read the NOTES section below.
 2) Download the latest realease:
 https://github.com/blunderful-scripts/geoblocker-bash/releases
 3) Extract all scripts included in the release into the same folder somewhere in your home directory and cd into that directory in your terminal
-4) ****Optional: If intended use is whitelist and you want to install geoblocker-bash on a remote machine, run the check_ip_in_ripe.sh script before installation to make sure that your local public ip addresses are included in the whitelist fetched from the internet registry, so you do not get locked out of your remote server. check_ip_in_ripe.sh has an additional pre-requisite: grepcidr. Install it with ```sudo apt install grepcidr```.
-- example (for US): ```bash check_ip_in_ripe.sh -c US -i <"ip_address ... ip_address">``` (if checking multiple ip addresses, use double quotation marks)
-5) ***Optional: inversely, if intended use is a blacklist and you know in advance some of the ip addresses you want to block, use check_ip_in_ripe.sh script before installation to verify that those ip addresses are included in the list fetched from the registry
+4) ****Optional: If intended use is whitelist and you want to install geoblocker-bash on a remote machine, run the check-ip-in-registry.sh script before installation to make sure that your local public ip addresses are included in the whitelist fetched from the internet registry, so you do not get locked out of your remote server. check-ip-in-registry.sh has an additional pre-requisite: grepcidr. Install it with ```sudo apt install grepcidr```.
+- example (for US): ```bash check-ip-in-registry.sh -c US -i <"ip_address ... ip_address">``` (if checking multiple ip addresses, use double quotation marks)
+5) ***Optional: inversely, if intended use is a blacklist and you know in advance some of the ip addresses you want to block, use check-ip-in-registry.sh script before installation to verify that those ip addresses are included in the list fetched from the registry
 6) run ```sudo bash geoblocker-bash-install -m <whitelist|blacklist> -c <"country_codes">```
 - example (whitelist Germany and block all other countries): ```sudo bash geoblocker-bash-install -m whitelist -c DE```
 - example (blacklist Germany and Netherlands and allow all other countries): ```sudo bash geoblocker-bash-install -m blacklist -c "DE NL"```
@@ -64,16 +64,16 @@ where 'action' is either 'add', 'remove' or 'schedule'.
 - obviously, needs bash (*may* work on some other shells but I do not test on them)
 
 additional mandatory pre-requisites: to install, run ```sudo apt install ipset wget jq```
-- wget (or alternatively curl) is used by the "fetch" and "check_ip_in_ripe" scripts to download lists from the internet registry
+- wget (or alternatively curl) is used by the "fetch" and "check-ip-in-registry" scripts to download lists from the internet registry
 - ipset utility is a companion tool to iptables (used by the "apply" script to create efficient iptables rules)
 - jq - Json processor (used to parse ip lists downloaded from RIPE)
 
-optional: the check_ip_in_ripe.sh script requires grepcidr. install it with ```sudo apt install grepcidr```
-- grepcidr - efficiently filters ip addresses matching CIDR patterns (used by check_ip_in_ripe.sh to check if an ip address belongs to a subnet from a list of subnets)
+optional: the check-ip-in-registry.sh script requires grepcidr. install it with ```sudo apt install grepcidr```
+- grepcidr - efficiently filters ip addresses matching CIDR patterns (used to check if an ip address belongs to a subnet from a list of subnets)
 
 ## **Notes**
 
-1) Only the *install, *uninstall, *manage (also called by running 'geoblocker-bash' after installation) and check_ip_in_ripe.sh scripts are intended as user interface. The *manage script saves the config to a file and implements coherency checks between that file and the actual firewall state. While you can run the other scripts individually, if you make changes to firewall geoblocking rules, next time you run the *manage script it may insist on reverting those changes since they are not reflected in the config file.
+1) Only the *install, *uninstall, *manage (also called by running 'geoblocker-bash' after installation) and check-ip-in-registry.sh scripts are intended as user interface. The *manage script saves the config to a file and implements coherency checks between that file and the actual firewall state. While you can run the other scripts individually, if you make changes to firewall geoblocking rules, next time you run the *manage script it may insist on reverting those changes since they are not reflected in the config file.
 
 2) Firewall config, as well as automatic subnet list updates, is made persistent via cron jobs: a periodic job running by default on a daily schedule, and a job that runs at system reboot (after 30 seconds delay). Either or both cron jobs can be disabled (run the *install script with the -h option to find out how).
 
@@ -111,9 +111,9 @@ The suite currently includes 12 scripts:
 9. geoblocker-bash-common
 10. geoblocker-bash-reset
 11. validate_cron_schedule.sh
-12. check_ip_in_ripe.sh
+12. check-ip-in-registry.sh
 
-The scripts intended as user interface are **-install**, **-uninstall**, **-manage** and **check_ip_in_ripe.sh**. All the other scripts are intended as a back-end, although they can be run by the user as well. If you just want to install and move on, you only need to run the -install script, specify mode with the -m option and specify country codes with the "-c" option. Provided you are not missing any pre-requisites, it should be as easy as that.
+The scripts intended as user interface are **-install**, **-uninstall**, **-manage** and **check-ip-in-registry.sh**. All the other scripts are intended as a back-end, although they can be run by the user as well. If you just want to install and move on, you only need to run the -install script, specify mode with the -m option and specify country codes with the "-c" option. Provided you are not missing any pre-requisites, it should be as easy as that.
 After installation, the user interface is provided by simply running "geoblocker-bash", which is a symlink to the -manage script.
 
 **The -install script**
@@ -185,7 +185,7 @@ After installation, the user interface is provided by simply running "geoblocker
 
 **The validate_cron_schedule.sh script** is used by the -cronsetup script. It accepts a cron schedule expression and attempts to make sure that it conforms to the crontab format.
 
-**The check_ip_in_ripe.sh script** can be used to verify that a certain ip address belongs to a subnet found in regional registry's records for a given country. It is intended for manual use and is not called from other scripts.
+**The check-ip-in-registry.sh script** can be used to verify that a certain ip address belongs to a subnet found in regional registry's records for a given country. It is intended for manual use and is not called from other scripts.
 
 ## **Extra notes**
 
