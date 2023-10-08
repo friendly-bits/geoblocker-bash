@@ -269,8 +269,8 @@ list_type="$(getconfig "ListType")" || die "Error: Couldn't read value for ListT
 
 [[ "$list_type" != "whitelist" && "$list_type" != "blacklist" ]] &&  die "Error: Unrecognized list type '$list_type'!"
 
-# convert input country codes (tlds) to lower case
-tlds_arg="${tlds_arg,,}"
+# convert input country codes (tlds) to upper case
+tlds_arg="${tlds_arg^^}"
 
 # remove duplicates etc
 tlds_arg="$(sanitize_string "$tlds_arg")"
