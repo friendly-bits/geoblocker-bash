@@ -226,11 +226,11 @@ if [ "$action" = "add" ]; then
 
 		# reads $iplist_file, transforms each line into 'ipset add' command and redirects the result into "ipset restore"
 		# this is about 50x faster than issuing discrete "ipset add" commands in a loop
+		# using awk to process the text lines rather than native bash construct "while read -r line ... do < $iplist_file"
+		#    is yet about 4x faster for a large iplist
 		# the '-exist' option prevents the restore command from getting stuck when encountering duplicates
-		while read -r subnet; do
-			echo "add \"$temp_ipset\" $subnet";
-		done < "$iplist_file" |\
-			ipset restore -exist; rv=$?
+
+		awk -v P="add \"$temp_ipset\"" '{ print P " " $0 }' "$iplist_file" | ipset restore -exist; rv=$?
 
 		if [ $rv -ne 0 ]; then
 			destroy_temp_ipsets
