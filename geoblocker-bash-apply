@@ -134,15 +134,15 @@ destroy_temp_ipsets() {
 #### VARIABLES
 
 # get datadir from the config file
-datadir="$(getconfig "Datadir")" || { die "Error: Couldn't read value for Datadir from the config file."; }
+datadir="$(getconfig "Datadir")" || die "Error: Couldn't read value for Datadir from the config file."
 
 # get list_type from the config file
-list_type="$(getconfig "ListType")" || { die "Error: Couldn't read value for ListType from the config file."; }
+list_type="$(getconfig "ListType")" || die "Error: Couldn't read value for ListType from the config file."
 
 # set global variable
 export list_type="$list_type"
 
-nodrop="$(getconfig "NoDrop")" || { die "Error: Couldn't read value for NoDrop from the config file."; }
+nodrop="$(getconfig "NoDrop")" || die "Error: Couldn't read value for NoDrop from the config file."
 iplist_dir="${datadir}/ip_lists"
 iptables_comment_global="${suite_name}_global"
 family="inet"
@@ -158,6 +158,8 @@ exitvalue="0"
 
 #### CHECKS
 
+missing_deps="$(check_deps iptables-save iptables-restore ipset)" || die "Error: missing dependencies: $missing_deps."
+
 # check that the config file exists
 [ ! -f "$conf_file" ] && die "Config file '$conf_file' doesn't exist! Run the installation script again."
 
@@ -166,15 +168,6 @@ exitvalue="0"
 
 # check for datadir path
 [ -z "$datadir" ] && die 254 "Error: failed to read the 'datadir' variable from the config file."
-
-# Check for ipset utility
-! command -v "ipset" &> /dev/null && die 254 "Error: Can not find 'ipset'. Install it with 'apt install ipset' or similar."
-
-# Check for iptables-save utility
-! command -v "iptables-save" &> /dev/null && die 254 "Error: Can not find 'iptables-save'."
-
-# Check for bc utility
-! command -v "bc" &> /dev/null && die 254 "Error: Can not find 'bc'."
 
 [ -z "$list_type" ] && die "\$list_type variable should not be empty! Something is wrong!"
 
@@ -269,7 +262,7 @@ for tld in $tlds; do
 	# sed executes iptables -D (delete) command on matching rules. execution is promtped by the switch /e (only available in GNU sed)
 	iptables-save | sed -r "/INPUT.*comment.*${iptables_comment}/s/-A/iptables -D/e" &>/dev/null; rv="${PIPESTATUS[0]}"
 	if [ $rv -ne 0 ]; then
-		echo "Failure."
+		echo "Failed."
 		destroy_temp_ipsets
 		die "Error removing existing rules with command: 'iptables-save | sed -r \"/INPUT.*comment.*$iptables_comment/s/-A/iptables -D/e\" '."
 	fi
