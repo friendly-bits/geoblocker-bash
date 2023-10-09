@@ -40,9 +40,10 @@ debugprint() {
 }
 
 debugentermsg() {
-	args="$(for arg in "${arguments[@]}"; do echo -n "'$arg' "; done)"
+	args="$(for arg in "${arguments[@]}"; do printf "%s" "'$arg' "; done)"
 	debugprint "\033[1;33mStarted *${me_short_cap}* with args: ${args}\033[0m"
 }
+
 debugexitmsg() {
 	[ -n "$parent_short_cap" ] && debugprint "\033[1;33mBack to *$parent_short_cap*...\033[0m"
 }
@@ -59,16 +60,16 @@ die() {
 	done
 
 	if [ -n "${die_args[*]}" ]; then
-		echo "" 1>&2
+		echo >&2
 		# loop through arguments and print them to stderr and to the syslog
 		# "$nolog" is set either when calling die() or as environment variable (used in *manage and *install scripts)
 		for arg in "${die_args[@]}"; do
-			echo "$me_short: $arg" 1>&2
+			echo "$me_short: $arg" >&2
 			[ "$nolog" != "true" ] && logger -t "$me" "$arg"
 		done
 	fi
 	[ -n "$parent_short_cap" ] && debugprint "\033[1;33mBack to $parent_short_cap...\033[0m"
-	echo "" 1>&2
+	echo >&2
 	exit "$rv"
 }
 
@@ -83,7 +84,7 @@ getconfig() {
 	entry="$(grep "$key_conf=" "$target_file" 2>/dev/null)" || return 2
 
 	value_conf="${entry//$key_conf=}"
-	echo "$value_conf"
+	printf "%s" "$value_conf"
 
 	return 0
 }
@@ -95,7 +96,7 @@ getstatus() {
 	target_file="$1"
 	shift 1
 	[ -n "$target_file" ] && { status_value="$(getconfig "$*" "$target_file")"; rv=$?; } || rv=1
-	echo "$status_value"
+	printf "%s" "$status_value"
 	return $rv
 }
 
@@ -107,7 +108,7 @@ setconfig() {
 	### Parse arguments into associative array
 	declare -A arguments_arr
 	for argument_conf in "$@"; do
-   		key_conf="$(echo "$argument_conf" | cut -f1 -d=)"
+   		key_conf="$(cut -f1 -d= <<< "$argument_conf")"
    		key_length=${#key_conf}
    		value_conf="${argument_conf:$key_length+1}"
    		if [ "$key_conf" = "target_file" ]; then
@@ -134,7 +135,7 @@ setconfig() {
 		value_conf="${arguments_arr[$key_conf]}"
 
 		# remove corresponding config line if it exists
-		config_var="$(echo "$config_var" | awk "!/$key_conf/")"
+		config_var="$(awk "!/$key_conf/" <<< "$config_var")"
 
 		# add updated config line - new line is here on purpose!
 		config_var="$config_var
@@ -162,8 +163,8 @@ sanitize_string() {
 # replaces new lines (if any) with spaces
 # also sorts and removes duplicates
 	input_str="$*"
-	result_str="$(echo "$input_str" | tr ' ' '\n' | sort -ibu |  tr '\n' ' ' | awk '{$1=$1};1')"
-	echo "$result_str"
+	result_str="$(printf "%s" "$input_str" | tr ' ' '\n' | sort -ibu |  tr '\n' ' ' | awk '{$1=$1};1')"
+	printf "%s" "$result_str"
 }
 
 find_lists_intersection() {
@@ -171,15 +172,15 @@ find_lists_intersection() {
 #      and outputs the intersection as a string
 
 	# convert space-separated lists to newline-separated sorted lists
-	str1="$(echo "$1" | tr ' ' '\n' | sort -u)"
-	str2="$(echo "$2" | tr ' ' '\n' | sort -u)"
+	str1="$(printf "%s\n" "$1" | tr ' ' '\n' | sort -u)"
+	str2="$(printf "%s\n" "$2" | tr ' ' '\n' | sort -u)"
 
 
 	# piping into comm is not allowed so using the "<()" constructions
 	# result is space separated intersection list
-	intersect_str="$(comm -12 <(echo "$str1") <(echo "$str2"))"
+	intersect_str="$(comm -12 <(printf "%s" "$str1") <(printf "%s" "$str2"))"
 	result_str="$(sanitize_string "$intersect_str")"
-	echo "$result_str"
+	printf "%s" "$result_str"
 }
 
 find_lists_difference() {
@@ -187,14 +188,14 @@ find_lists_difference() {
 #      and outputs the difference as a string
 
 	# convert space-separated lists to newline-separated sorted lists
-	str1="$(echo "$1" | tr ' ' '\n' | sort -u)"
-	str2="$(echo "$2" | tr ' ' '\n' | sort -u)"
+	str1="$(printf "%s\n" "$1" | tr ' ' '\n' | sort -u)"
+	str2="$(printf "%s\n" "$2" | tr ' ' '\n' | sort -u)"
 
 	# can't pipe into comm so using the "<()" constructions
 	# result is space separated difference list
-	diff_str="$(comm -3 <(echo "$str1") <(echo "$str2"))"
+	diff_str="$(comm -3 <(printf "%s" "$str1") <(printf "%s" "$str2"))"
 	result_str="$(sanitize_string "$diff_str")"
-	echo "$result_str"
+	printf "%s" "$result_str"
 }
 
 subtract_list_a_from_b() {
@@ -203,16 +204,16 @@ subtract_list_a_from_b() {
 	str1="$1"; str2="$2"
 	while read -r field_str; do
 		str2="${str2//$field_str/}"
-	done < <(echo "$str1" | tr ' ' '\n' )
+	done < <(printf "%s\n" "$str1" | tr ' ' '\n' )
 	result_str="$(sanitize_string "$str2")"
-	echo "$result_str"
+	printf "%s" "$result_str"
 }
 
 merge_lists() {
 # merges string lists then sanitizes the list by removing extra white spaces and replacing \n with " "
 	merged_list="$*"
 	result_list="$(sanitize_string "$merged_list")"
-	echo "$result_list"
+	printf "%s" "$result_list"
 }
 
 
@@ -267,9 +268,9 @@ find_active_tlds() {
 	tlds_merged="$(merge_lists "$current_ipset_tlds" "$current_iprules_tlds")"
 
 	if [ "$1" = "all" ]; then
-		echo "$tlds_merged"
+		printf "%s" "$tlds_merged"
 	else
-		echo "$tlds_intersection"
+		printf "%s" "$tlds_intersection"
 	fi
 
 	[ "$tlds_difference" == "" ] && return 0 || { ipsets_incoherent="true"; return 1; }
@@ -305,16 +306,16 @@ getlocalsubnet() {
 	localip="$(ip addr | grep 'state UP' -A2 | tail -n1 | awk '{print $2}')"
 
 	# Change last ipv4 octet to 0
-	lsubnet="$(echo "$localip" | sed 's|\([0-9]*\.[0-9]*\.[0-9]*\.\)[0-9]*|\10|')"
+	lsubnet="$(printf "%s" "$localip" | sed 's|\([0-9]*\.[0-9]*\.[0-9]*\.\)[0-9]*|\10|')"
 
 	# Verifies that the argument is a valid ipv4 subnet
-	echo "$lsubnet" | grep -P "$subnet_regex" &>/dev/null; rv=$?
+	printf "%s" "$lsubnet" | grep -P "$subnet_regex" &>/dev/null; rv=$?
 
 	if [ $rv -ne 0 ]; then
 		# if validation fails, output empty string
-		echo ""
+		printf "%s" ""
 	else
-		echo "$lsubnet"
+		printf "%s" "$lsubnet"
 	fi
 	return $rv
 }
