@@ -137,19 +137,17 @@ remove_cron_job() {
 
 	job_type="$1"
 
-	if [[ "$crondisabled" != "true" && -n "$job_type" ]] ; then
-
+	if [ -n "$job_type" ] ; then
 		if [[ "$job_type" != "autoupdate" && "$job_type" != "persistence" ]]; then
-				die -nolog "Error running the crontab command."
+				die -nolog "Error: unknown cron job type '$job_type'."
 		fi
-
 
 		debugprint "Removing $job_type cron job for ${suite_name}... "
 		crontab -u root -l 2>/dev/null | grep -v "${suite_name}-${job_type}" | sudo crontab -u root -
 		rv=$?
 
 		if [ $rv -ne 0 ]; then
-			die -nolog "Error: failed to remove $job_type cron job!"
+			die -nolog "Error: failed to remove $job_type cron job."
 		else
 			debugprint "Ok."
 		fi
@@ -157,10 +155,15 @@ remove_cron_job() {
 }
 
 
-#### Variables
-
 # check if cron service is enabled
-(systemctl is-enabled cron.service) > /dev/null || crondisabled="true"
+(systemctl is-enabled cron.service) > /dev/null || {
+	err1="Error: cron service seems to be disabled."
+	err2="On Debian and derivatives, enable the cron service with 'systemctl enable cron.service' before using this script."
+	die -nolog "$err1" "$err2"
+}
+
+
+#### Variables
 
 cron_schedule_conf="$(getconfig CronSchedule)" || { die -nolog "Error: Couldn't read value for CronSchedule from the config file."; }
 cron_schedule_default="$(getconfig DefaultSchedule)" || { die -nolog "Error: Couldn't read value for Defaultschedule from the config file."; }
@@ -175,16 +178,6 @@ run_command="${install_dir}/${suite_name}-run"
 
 # get sleeptime (for reboot) from the config file
 sleeptime="$(getconfig "RebootSleep")" || { die -nolog "Error: Couldn't read value for RebootSleep from the config file."; }
-
-
-
-#### Checks
-
-if [ "$crondisabled" = "true" ]; then
-	err1="Error: cron service seems to be disabled."
-	err2="On Debian and derivatives, enable the cron service with 'systemctl enable cron.service' before using this script."
-	die -nolog "$err1" "$err2"
-fi
 
 
 #### Main
