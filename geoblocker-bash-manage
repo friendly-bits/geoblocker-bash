@@ -287,6 +287,8 @@ run_command="${install_dir}/${suite_name}-run"
 
 #### CHECKS
 
+missing_deps="$(check_deps "curl|wget" jq iptables-save iptables-restore ipset)" || die "Error: missing dependencies: $missing_deps."
+
 # check that the config file exists
 [ ! -f "$conf_file" ] && die "Config file '$conf_file' doesn't exist! Run the installation script again."
 
