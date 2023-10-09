@@ -7,6 +7,43 @@
 
 ### Functions
 
+check_deps(){
+# tests commands specified in arguments
+# if an argument contains '|' then tests for all alternatives and only if all are missing, complains
+
+	local missing_deps=""
+	local err=0
+
+	# implicitly loops over arguments
+	for dep; do
+		if [[ "$dep" = *'|'* ]]; then
+			dep_alt="${dep//'|'/' '}"
+			local test_alt_cnt=0
+			local err_alt_cnt=0
+			local alt_dep_list=""
+
+			for dep in $dep_alt; do
+				let test_alt_cnt++
+				! command -v "$dep" &> /dev/null && let err_alt_cnt++
+				[ -z "$alt_dep_list" ] && alt_dep_list="'$dep'" || alt_dep_list="$alt_dep_list or '$dep'"
+			done
+
+			if [ "$err_alt_cnt" -ge "$test_alt_cnt" ]; then
+				[ -z "$missing_deps" ] && missing_deps="$alt_dep_list" || missing_deps="${missing_deps}, $alt_dep_list"
+				let err++
+			fi
+
+		else
+			if ! command -v "$dep" &> /dev/null; then
+				[ -z "$missing_deps" ] && missing_deps="'$dep'" || missing_deps="${missing_deps}, '$dep'"
+				let err++
+			fi
+		fi
+	done
+
+	[ "$err" -gt 0 ] && { echo "$missing_deps"; return 1; } || return 0
+}
+
 echolog() {
 # outputs arguments to stdout and writes them to syslog
 # if one of the arguments is "-err" then redirect output to stderr
@@ -105,17 +142,30 @@ setconfig() {
 # if one of the value pairs is "target_file=[file]" then writes to $file instead
 # returns 0 if successful, 1 if not
 
+#	local arguments=("$@")
+#	local args="$(for arg in "${arguments[@]}"; do printf "%s" "'$arg' "; done)"
+#	debugprint "\033[1;33mStarted *setconfig* with args: ${args}\033[0m"
+
 	### Parse arguments into associative array
 	declare -A arguments_arr
+
+	# loop through arguments
 	for argument_conf in "$@"; do
-   		key_conf="$(cut -f1 -d= <<< "$argument_conf")"
-   		key_length=${#key_conf}
-   		value_conf="${argument_conf:$key_length+1}"
-   		if [ "$key_conf" = "target_file" ]; then
-			arguments_target_file="$value_conf"
-		else
-			arguments_arr["$key_conf"]="$(awk '{$1=$1};1' <<< "$value_conf")"
-		fi
+		# in case an argument contains multiple lines, we read each line into a separate lines_arr element
+		readarray -t lines_arr <<< "$argument_conf"
+		for line in "${lines_arr[@]}"; do
+			# only process the line if it contains '='
+			if [[ "$line" = *'='* ]]; then
+		   		key_conf="$(cut -f1 -d= <<< "$line")"
+		   		key_length=${#key_conf}
+		   		value_conf="${line:$key_length+1}"
+		   		if [ "$key_conf" = "target_file" ]; then
+					arguments_target_file="$value_conf"
+				else
+					[ -n "$key_conf" ] && arguments_arr["$key_conf"]="$(awk '{$1=$1};1' <<< "$value_conf")"
+				fi
+			fi
+		done
 	done
 
 	target_file="${arguments_target_file:-$conf_file}"
@@ -138,8 +188,8 @@ setconfig() {
 		config_var="$(awk "!/$key_conf/" <<< "$config_var")"
 
 		# add updated config line - new line is here on purpose!
-		config_var="$config_var
-$key_conf=$value_conf"
+		config_var="$key_conf=$value_conf
+$config_var"
 	done
 
 	# write modified config file
@@ -332,6 +382,10 @@ done
 }
 
 ### Variables
+
+# check for common deps
+missing_deps="$(check_deps tr cut sort wc awk sed grep comm logger bc)" || die "Error: missing dependencies: $missing_deps."
+
 
 # colors
 red='\033[0;31m'
