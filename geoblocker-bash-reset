@@ -89,11 +89,7 @@ iptables_comment="${suite_name}"
 
 #### CHECKS
 
-# Check for ipset utility
-! command -v "ipset" &> /dev/null && die 254 "Error: Can not find 'ipset'. Install it with 'apt install ipset' or similar."
-
-# Check for iptables-save utility
-! command -v "iptables-save" &> /dev/null && die 254"Error: Can not find 'iptables-save'."
+missing_deps="$(check_deps iptables-save ipset)" || die "Error: missing dependencies: $missing_deps."
 
 
 #### MAIN
