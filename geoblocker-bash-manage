@@ -127,7 +127,17 @@ report_status() {
 
 	# check ipsets and iptables rules for active tlds
 	active_tlds="$(find_active_tlds)"; rv=$?
-	echo -e "$list_type is configured for country codes: '${yellow}$active_tlds${no_color}'.\n"
+	[ -z "$active_tlds" ] && echo -e "${red}Warning${no_color}: no firewall rules found for any country codes!" || \
+		echo -e "$list_type is configured for country codes: '${yellow}$active_tlds${no_color}'.\n"
+
+	check_tlds_coherency; rv=$?
+	if [ "$rv" -ne 0 ]; then
+		echo -e "${red}Error${no_color}: discrepancy detected between the config file and iptables rules!\n" >&2
+		[ "$ipsets_incoherent" = "true" ] && \
+			echo "${purple}Warning:${no_color} discrepancy detected between existing geoblocking ipsets and geoblocking firewall rules!\n" >&2
+	else
+		echo -e "Country codes in the firewall rules ${green}match${no_color} the config.\n"
+	fi
 
 	# report INPUT and FORWARD chain policies
 	[ "$input_policy" = "$expected_policy" ] && input_policy_colored="${green}${input_policy}${no_color}" || \
@@ -159,17 +169,8 @@ report_status() {
 	# report specific rules for the active geoblocking mode
 	echo -e "\n${yellow}$list_type iptables rules${no_color} for $suite_name:"
 	geoblocking_rules="$(iptables -L -v | grep "match-set ${suite_name}" | grep "$expected_rule_type")"
-	[ "$geoblocking_rules" = "" ] && echo -e "${red}None.${no_color}\n ${red}Error${no_color}: expected geoblocking rules are not found in the firewall!\n" || \
+	[ "$geoblocking_rules" = "" ] && echo -e "${red}None.${no_color}\n\n${red}Error${no_color}: expected geoblocking rules are not found in the firewall!\n" || \
 		echo -e "$geoblocking_rules\n"
-
-	check_tlds_coherency; rv=$?
-	if [ "$rv" -ne 0 ]; then
-		echo -e "${red}Error${no_color}: discrepancy detected between the config file and iptables rules!\n" >&2
-		[ "$ipsets_incoherent" = "true" ] && \
-			echo "${purple}Warning:${no_color} discrepancy detected between existing geoblocking ipsets and geoblocking firewall rules!\n" >&2
-	else
-		echo -e "Coherency check: Country codes in the firewall config ${green}are coherent${no_color} with the config file.\n"
-	fi
 
 	# check if cron service is enabled
 	(systemctl is-enabled cron.service) > /dev/null || crondisabled="true"
