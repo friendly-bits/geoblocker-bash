@@ -149,7 +149,10 @@ status_file="$iplist_dir/status"
 
 failed_tlds_cnt=0
 
+
 #### CHECKS
+
+missing_deps="$(check_deps "curl|wget" jq iptables-save iptables-restore ipset)" || die "Error: missing dependencies: $missing_deps."
 
 # check that the config file exists
 [ ! -f "$conf_file" ] && die "Config file '$conf_file' doesn't exist! Run the installation script again."
@@ -197,19 +200,14 @@ esac
 
 if [ ! "$skipfetch" ] && [ "$action_run" != "remove" ]; then
 
-	# mark all tlds as failed before launching *fetch. if *fetch completes successfully, it will reset this
-	setstatus "$status_file" "failed_tlds=$tlds"
+	# mark all tlds as failed in the status file before launching *fetch. if *fetch completes successfully, it will reset this
+	setstatus "$status_file" "failed_tlds=$tlds" || die "Error: Failed to write to status file '$status_file'."
 
-	${suite_name}-fetch -c "$tlds" -p "$iplist_dir"; rv=$?
+	${suite_name}-fetch -c "$tlds" -p "$iplist_dir" -s "$status_file"
 
-	if [ "$rv" -ne 0 ]; then
-		failed_tlds="$tlds"
-		die "Errors encountered in the *fetch script, something is broken."
-	fi
-
-	# read *fetch results from the config file
-	apply_tlds="$(getstatus "$status_file" "apply_tlds")" || { die "Error: Couldn't read value for 'apply_tlds' from the status file '$status_file'."; }
-	failed_tlds="$(getstatus "$status_file" "failed_tlds")" || { die "Error: Couldn't read value for 'failed_tlds' from the status file '$status_file'."; }
+	# read *fetch results from the status file
+	tlds_to_update="$(getstatus "$status_file" "tlds_to_update")" || { die "Error: Couldn't read value for 'tlds_to_update' from status file '$status_file'."; }
+	failed_tlds="$(getstatus "$status_file" "failed_tlds")" || { die "Error: Couldn't read value for 'failed_tlds' from status file '$status_file'."; }
 
 	if [ "$failed_tlds" != "" ]; then
 		echolog -err "Failed to fetch and validate subnet lists for countries '$failed_tlds'."
@@ -220,7 +218,7 @@ if [ ! "$skipfetch" ] && [ "$action_run" != "remove" ]; then
 	[ "$failed_tlds_cnt" -ge "$tlds_cnt" ] && die 254 "All fetch attempts failed."
 
 else
-	apply_tlds="$tlds"
+	tlds_to_update="$tlds"
 	debugprint "Skipped fetch because '-s' switch was used"
 fi
 
@@ -229,10 +227,10 @@ echo
 
 ### Apply ip lists
 
-if [ "$apply_tlds" = "" ]; then
+if [ "$tlds_to_update" = "" ]; then
 	echolog "Ip lists don't require firewall reconfiguration."
 else
-	${suite_name}-apply "$action_apply" -c "$apply_tlds"; rv=$?
+	${suite_name}-apply "$action_apply" -c "$tlds_to_update"; rv=$?
 	if [ $rv -eq 254 ]; then
 		debugprint "NOTE: *apply exited with error code 254."
 		echo ""
@@ -248,7 +246,7 @@ else
 		# exit with the same exit code as backup-restore operation
 		die "$rv" ""
 	else
-		echolog "Successfully applied action '$action_run' for countries '$apply_tlds'."
+		echolog "Successfully applied action '$action_run' for countries '$tlds_to_update'."
 	fi
 
 	if [ -z "$nobackup" ]; then
@@ -280,7 +278,5 @@ else
 fi
 
 debugexitmsg
-
-unset apply_tlds
 
 exit "$rv"
