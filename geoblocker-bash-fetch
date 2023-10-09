@@ -19,14 +19,6 @@
 
 me=$(basename "$0")
 
-# check for root
-[ "$EUID" -ne 0 ] && {
-	err="Error: $me needs to be run as root."
-	echo "$err" >&2
-	[ ! "$nolog" ] && logger "$err"
-	exit 1
-}
-
 suite_name="geoblocker-bash"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 [ -n "$script_dir" ] && cd "$script_dir" || { err="$me: Error: Couldn't cd into '$script_dir'."; echo "$err" >&2; \
@@ -54,11 +46,15 @@ This script:
 
 2) Parses, validates the downloaded lists, and saves each one to a separate file.
 
-Usage: $me -c <"tld [tld] ... [tld]"> -p <path> [-f] [-d] [-h]
+Usage: $me -c <"tld [tld] ... [tld]"> -p <path> [-o <output_file>] [-s <status_file>] [-f] [-d] [-h]
 
 Options:
     -c <"country_codes">   : tld's (country codes). if passing multiple country codes, use double quotes
     -p <path>              : Path to directory where downloaded and compiled subnet lists will be stored
+    -o <output_file>       : Path to output file where fetched list will be stored
+                                (use either '-p' or '-o' but not both)
+    -s <status_file>       : write fetch results to status file
+                                (use when running this script with the suite)
 
     -f                     : force using fetched lists even if list timestamp didn't change compared to existing list
     -d                     : Debug
@@ -70,10 +66,12 @@ EOF
 
 #### Parse arguments
 
-while getopts ":c:p:fdh" opt; do
+while getopts ":c:p:s:o:fdh" opt; do
 	case $opt in
 		c) tlds=$OPTARG;;
 		p) iplist_dir=$OPTARG;;
+		s) status_file=$OPTARG;;
+		o) output_file=$OPTARG;;
 
 		f) force_update="true";;
 		d) debugmode_args="true";;
@@ -102,22 +100,24 @@ debugentermsg
 #### FUNCTIONS
 
 parse_arin() {
-	# basically:
-	# 1) grep the fetched list to extract this:
+
+	# what this next quasi-one-liner does (through pipes):
+	# 1) grep fetched_file to extract this (in each matching line):
 	# 	'subnet|ip_addresses_count'
 	#	(because this is the data in the ARIN file, don't ask me why they don't just use CIDR instead of ip_addresses_cnt)
 	# 2) tr replaces '|' delimiter with ' ' delimiter. now we have 'subnet ip_address_count'
-	# 3) awk uses the $cidr_lookup_table to replace ip_addr_count with matching CIDR pattern
+	# 3) awk uses the $cidr_lookup_table to replace ip_address_count with matching CIDR pattern
 	# 	(e.g. '256' gets replaced by '/24')
-	#	(awk wants files for its input but we want to avoid creating yet more intermediate files, so we use the <() construct instead)
+	#	(awk wants files for its inputs but we want to avoid creating intermediate files, so we use the <() construct instead)
 	# 4) now we have 'subnet /CIDR'
 	# 5) tr deletes the ' '
 	# 6) finally, we have 'subnet/CIDR' (e.g. 217.10.224.0/24)
-	# 7) we write that into $parsed_file which we can use as input to grepcidr
+	# 7) we write that into $parsed_file which we can later validate and feed to the firewall
 	#
-	# slightly crazy? yes. do you have a simpler solution? then please, do let me know.
+	# so the pipe chain is: fetched_file->grep->tr->awk(sideloading $cidr_lookup_table)->tr->parsed_file
+	# tr commands can be replaced with gsub's in awk but this is not any faster while being more cpu-intensive
 
-	awk 'NR==FNR {a[$1] = $2; next} {$2 = a[$2]} 1' <(echo "$cidr_lookup_table") \
+	awk 'NR==FNR {a[$1] = $2; next} {$2 = a[$2]} 1' <(printf "%s" "$cidr_lookup_table") \
 		<(grep -oP "(?<=arin\|$tld\|ipv4\|).*?(?=\|[0-9]*?\|allocated)" < "$fetched_file" | tr "|" " ") | \
 		tr -d " " > "$parsed_file"
 
@@ -161,15 +161,18 @@ subnet_regex="${ip_regex}${mask_regex}"
 curl_command="curl --retry 8 --fail-early --connect-timeout 5 --progress-bar"
 wget_command="wget --tries=8 --timeout=5 --show-progress"
 
-apply_tlds=""
+tlds_to_update=""
 failed_tlds=""
+up_to_date_tlds=""
+failed_subnets_cnt_str=""
 
-fetch_retries=3
+# associative array
+declare -A failed_subnets_cnt_arr
 
-status_file="$iplist_dir/status"
-
+fetch_retries=2
 
 # needed to translate ARIN's quirky data to CIDR
+# ip scope on the left, matching CIDR pattern on the right
 cidr_lookup_table=$(cat <<EOF
 1 /32
 2 /31
@@ -204,10 +207,7 @@ EOF
 
 #### Checks
 
-[ -z "$tlds" ] && { usage; die 1 "Specify country codes!"; }
-
-# check that we have iplist file path
-[ -z "$iplist_dir" ] && { usage; die 1 "Specify iplist directory with '-p <path-to-dir>'!"; }
+missing_deps="$(check_deps jq)" || die "Error: missing dependencies: $missing_deps."
 
 # check for curl
 command -v "curl" &> /dev/null && curl_exists="true"
@@ -215,13 +215,24 @@ command -v "curl" &> /dev/null && curl_exists="true"
 # check for wget
 command -v "wget" &> /dev/null && wget_exists="true"
 
-[[ ! "$curl_exists" && ! "$wget_exists" ]] && die 1 "Error: Neither curl nor wget found."
+[[ ! "$curl_exists" && ! "$wget_exists" ]] && die "Error: Neither curl nor wget found."
 
-# check for jq
-! command -v jq &> /dev/null && die 1 "Error: Can not find 'jq' - Json processor. Install it with 'apt install jq' or similar."
+tlds_cnt="$(wc -l <<< "$tlds")"
+
+[ "$tlds_cnt" -eq 0 ] && { usage; die "Specify country code/s!"; }
+
+# check that either $iplist_dir or $output_file is set
+[[ -z "$iplist_dir" && -z "$output_file" ]] && { usage; die "Specify iplist directory with '-p <path-to-dir>' or output file with '-o <output_file>'."; }
+# ... but not both
+[[ -n "$iplist_dir" && -n "$output_file" ]] && { usage; die "Use either '-p <path-to-dir>' or '-o <output_file>' but not both."; }
+
+# if $output_file is set, make sure that no more than 1 tld was specified
+[[ -n "$output_file" && "$tlds_cnt" -gt 1 ]] && { usage; die "To fetch lists for multiple country codes, use '-p <path-to-dir>' instead of '-o <output_file>'."; }
 
 # check that iplist directory exists
-[ ! -d "$iplist_dir" ] && die 1 "Directory '$iplist_dir' doesn't exist!"
+[[ -n "$iplist_dir" && ! -d "$iplist_dir" ]] && die "Error: Directory '$iplist_dir' doesn't exist!"
+
+[[ -n "$status_file" && ! -f "$status_file" ]] && die "Error: Can not find status file '$status_file'."
 
 
 #### Main
@@ -242,7 +253,8 @@ for tld in $tlds; do
 	esac
 
 	filename="${family}_${tld}"
-	list_path="$iplist_dir/${filename}"
+	# set list_path to $output_file if it is set, or to $iplist_dir/$filename otherwise
+	list_path="${output_file:-$iplist_dir/$filename}"
 	fetched_file=$(mktemp "/tmp/fetched-$tld-XXXX")
 
 	if [ "$wget_exists" ]; then
@@ -251,7 +263,16 @@ for tld in $tlds; do
 		fetch_command="$curl_command $url -o"
 	fi
 
-	if [ -s "$list_path" ]; then
+	# reset variables
+	retry_cnt=0
+	tld_status="unknown"
+	validated_subnets_cnt=0
+	failed_subnets_cnt=0
+	parsed_subnets_cnt=0
+	old_failed_subnets_cnt=""
+
+	# if old list exists and $status_file is set, get LastFailedSubnetsCnt_$tld from the status file
+	if [[ -s "$list_path" && -n "$status_file" ]]; then
 		old_list_exists="true"
 		date_old=$(stat --printf "%Y" "$list_path")
 		old_subnets_cnt="$(wc -l < "$list_path")"
@@ -263,14 +284,6 @@ for tld in $tlds; do
 		old_list_exists=""
 		date_old=0
 	fi
-
-	# reset variables
-	retry_cnt=0
-	tld_status="unknown"
-	validated_subnets_cnt=0
-	failed_subnets_cnt=0
-	parsed_subnets_cnt=0
-	old_failed_subnets_cnt=""
 
 	echo -e "Fetching subnets list for country '$tld'...\n"
 
@@ -411,7 +424,7 @@ for tld in $tlds; do
 	fi
 
 	case "$tld_status" in
-		Ok | up_to_date ) setstatus "$status_file" "LastFailedSubnetsCnt_${tld}=$failed_subnets_cnt" ;;
+		Ok | up_to_date ) ;;
 
 		partial | failed ) failed_tlds="$failed_tlds $tld" ;;
 
@@ -431,16 +444,38 @@ for tld in $tlds; do
 		else
 			echo "Ok."
 			touch -d "$ripe_db_time" "$list_path"
-			apply_tlds="$apply_tlds $tld"
+			tlds_to_update="$tlds_to_update $tld"
+			failed_subnets_cnt_arr["$tld"]="$failed_subnets_cnt"
 		fi
 
+	fi
+
+	if [ "$tld_status" = "up_to_date" ]; then
+		up_to_date_tlds="$up_to_date_tlds $tld"
+		failed_subnets_cnt_arr["$tld"]="$failed_subnets_cnt"
 	fi
 
 	rm "$validated_file" &>/dev/null
 done
 
-# report fetch results back to *run via the config file
-setstatus "$status_file" "apply_tlds=$apply_tlds" "failed_tlds=$failed_tlds"
+# report fetch results back to caller via status file
+if [ -n "$status_file" ]; then
+	# convert array contents to formatted string for writing to the status file
+	for tld in "${!failed_subnets_cnt_arr[@]}"; do
+
+		# new line is intentional
+		failed_subnets_cnt_str="$failed_subnets_cnt_str
+LastFailedSubnetsCnt_${tld}=${failed_subnets_cnt_arr[$tld]}"
+	done
+
+#	debugprint "failed_subnets_cnt_str: '$failed_subnets_cnt_str'"
+
+	setstatus "$status_file" "tlds_to_update=$tlds_to_update" "up_to_date_tlds=$up_to_date_tlds" "failed_tlds=$failed_tlds" "$failed_subnets_cnt_str" || \
+		die "Error: Failed to write to the status file '$status_file'."
+fi
+
+#debugprint "status file contents:"
+#[ "$debugmode" ] && { echo "'" >&2; cat "$status_file"; echo "'" >&2; }
 
 debugexitmsg
 
