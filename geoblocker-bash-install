@@ -30,6 +30,7 @@ source "$script_dir/${suite_name}-common" || { echo "$me: Error: Can't source '$
 
 # **NOTE** that some functions and variables are sourced from the *common script
 
+
 # sanitize arguments
 sanitize_args "$@"
 # replace arguments with sanitized ones
@@ -120,24 +121,37 @@ debugentermsg
 
 #### FUNCTIONS
 
+check_files_exist() {
+	local missing_files=""
+	local err=0
+
+	# implicitly loops over arguments
+	for dep_file; do
+
+		if [ ! -s "$dep_file" ]; then
+			[ -z "$missing_files" ] && missing_files="'$dep_file'" || missing_deps="${missing_files}, '$dep_file'"
+			let err++
+		fi
+	done
+	[ "$err" -gt 0 ] && { echo "$missing_files"; return 1; } || return 0
+}
+
+copyscripts() {
+	local destination="${install_dir}/"
+
+	# implicitly loops over arguments
+	for scriptfile; do
+		cp "$scriptfile" "$destination" || install_failed "Error copying file '$scriptfile' to '$destination'."
+		chmod a+x "${destination}${scriptfile}" || install_failed "Error: failed to set 'a+x' permissions for file '${destination}${scriptfile}'."
+	done
+}
+
 install_failed() {
 	echo "$*" >&2
 	echo -e "\nInstallation failed." >&2
 	echo "Uninstalling ${suite_name}..." >&2
 	bash ${suite_name}-uninstall
 	exit 1
-}
-
-check_file_exists() {
-if [ ! -f "$1" ]; then
-	die "Error: Can not find the file '$1'."
-fi
-}
-
-copyscript() {
-	scriptfile="$1"; destination="$2"
-	cp "$scriptfile" "$destination" || install_failed "Error copying script '$scriptfile' to '$destination'."
-	chmod a+x "${install_dir}/$scriptfile" || install_failed "Error: failed to set 'a+x' permissions for file '${install_dir}/$scriptfile'."
 }
 
 
@@ -175,6 +189,11 @@ fi
 
 #### CHECKS
 
+# check for systemd
+[ "$(! ps -p 1 -o comm=)" != "systemd" ] && die "Error: systemd is required but this sytem does not appear to be running systemd."
+
+missing_deps="$(check_deps "curl|wget" jq iptables-save iptables-restore ipset)" || die "Error: missing dependencies: $missing_deps."
+
 if [ -z "$tlds" ]; then
 	usage
 	die "Specify countries with '-c <tlds>'!"
@@ -187,66 +206,10 @@ fi
 
 [[ "$list_type" != "whitelist" && "$list_type" != "blacklist" ]] &&  die "Error: Unrecognized list type '$list_type'! Use either 'whitelist' or 'blacklist'!"
 
-# check for systemd
-if [ "$(! ps -p 1 -o comm=)" != "systemd" ]; then
-	die "Error: systemd is required but this sytem does not appear to be running systemd."
-fi
-
-# check for awk
-if ! command -v awk &> /dev/null; then
-	die "Error: Cannot find awk. Install it with 'sudo apt install gawk' or similar."
-fi
-
-# check for grep
-if ! command -v grep &> /dev/null; then
-	die "Error: Cannot find grep. Install it with 'sudo apt install grep' or similar."
-fi
-
-# check for curl
-command -v "curl" &> /dev/null && curl_exists="true"
-
-# check for wget
-command -v "wget" &> /dev/null && wget_exists="true"
-
-[[ ! "$curl_exists" && ! "$wget_exists" ]] && die "Error: Neither curl nor wget found."
-
-# Check for ipset
-if ! command -v "ipset" &> /dev/null; then
-	die "Error: Can not find 'ipset'. Install it with 'apt install ipset' or similar."
-fi
-
-# Check for iptables-save
-if ! command -v "iptables-save" &> /dev/null; then
-	die "Error: Can not find 'iptables-save'."
-fi
-
-# Check for iptables-restore
-if ! command -v "iptables-restore" &> /dev/null; then
-	die "Error: Can not find 'iptables-restore'."
-fi
-
-# check for jq
-if ! command -v jq &> /dev/null; then
-	die "Error: Can not find 'jq'. Install it with 'apt install jq' or similar."
-fi
-
-# check for bc
-if ! command -v bc &> /dev/null; then
-	die "Error: Can not find the 'bc' utility. Install it with 'apt install bc' or similar."
-fi
-
-
-check_file_exists "${suite_name}-fetch"
-check_file_exists "${suite_name}-common"
-check_file_exists "${suite_name}-apply"
-check_file_exists "${suite_name}-run"
-check_file_exists "${suite_name}-manage"
-check_file_exists "${suite_name}-cronsetup"
-check_file_exists "${suite_name}-backup"
-check_file_exists "${suite_name}-uninstall"
-check_file_exists "${suite_name}-reset"
-check_file_exists "validate-cron-schedule.sh"
-check_file_exists "check-ip-in-registry.sh"
+missing_files=$"(check_files_exist "${suite_name}-fetch" "${suite_name}-common" "${suite_name}-apply" \
+	"${suite_name}-run" "${suite_name}-manage" "${suite_name}-cronsetup" "${suite_name}-backup" \
+	"${suite_name}-uninstall" "${suite_name}-reset" "validate-cron-schedule.sh" "bruuuh" "check-ip-in-registry.sh")" || \
+	install_failed "Error: missing files: $missing_files."
 
 
 #### MAIN
@@ -297,17 +260,8 @@ bash ${suite_name}-reset
 # if we are running from $install_dir, assume that all other necessary scripts have already been installed, skip copying
 if [ "$script_dir" != "$install_dir" ]; then
 	echo -n "Copying scripts to $install_dir... "
-	copyscript "${suite_name}-common" "${install_dir}/"
-	copyscript "${suite_name}-fetch" "${install_dir}/"
-	copyscript "${suite_name}-apply" "${install_dir}/"
-	copyscript "${suite_name}-run" "${install_dir}/"
-	copyscript "${suite_name}-manage" "${install_dir}/"
-	copyscript "${suite_name}-cronsetup" "${install_dir}/"
-	copyscript "${suite_name}-backup" "${install_dir}/"
-	copyscript "${suite_name}-uninstall" "${install_dir}/"
-	copyscript "${suite_name}-reset" "${install_dir}/"
-	copyscript "validate-cron-schedule.sh" "${install_dir}/"
-	copyscript "check-ip-in-registry.sh" "${install_dir}/"
+	copyscripts "${suite_name}-common" "${suite_name}-fetch" "${suite_name}-apply" "${suite_name}-run" "${suite_name}-manage" \
+		"${suite_name}-cronsetup" "${suite_name}-backup" "${suite_name}-uninstall" "${suite_name}-reset" "validate-cron-schedule.sh" "check-ip-in-registry.sh"
 	echo "Ok."
 fi
 
