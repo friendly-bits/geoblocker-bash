@@ -178,9 +178,10 @@ restoreknowngood() {
 		echo "Ok."
 	fi
 
+	sleep 1
 	for curr_ipset in $(ipset list -n | grep "$ipset_tag"); do
 		echo -n "Destroying ipset '$curr_ipset'... "
-		ipset destroy "$curr_ipset"; rv=$?
+		ipset destroy "$curr_ipset"
 		if [[ $rv -ne 0 ]]; then
 			knowngood_failed "Error destroying ipset '$curr_ipset'."
 		else
