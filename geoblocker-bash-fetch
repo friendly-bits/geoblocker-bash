@@ -289,7 +289,7 @@ for tld in $tlds; do
 
 	# Make $fetch_retries attempts to fetch the list for each TLD (or until successful fetch and no validation errors)
 	while true; do
-		retry_cnt=$(( retry_cnt + 1 ))
+		let retry_cnt++
 
 		$fetch_command "$fetched_file"; rv=$?
 
