@@ -74,7 +74,7 @@ where 'action' is either 'add', 'remove' or 'schedule'.
 
 ## **Pre-requisites**:
 (if a pre-requisite is missing, the -install script will tell you which)
-- bash v4.3 or later (should be included with any relatively modern linux distribution)
+- bash v4.0 or later (should be included with any relatively modern linux distribution)
 - Linux with systemd (tested on Debian, Ubuntu and Mint, should work on any Debian derivative, may work or may require slight modifications to work on other distributions)
 - iptables - firewall management utility (nftables support will likely get implemented later)
 - standard GNU utilities including awk, sed, grep, bc
