@@ -387,7 +387,7 @@ me_short_cap="${me_short^^}"
 
 parent="$(basename "$(ps -o args= $PPID)" 2>/dev/null | awk -v RS='/| ' '/^.*'$suite_name'/ {a=$0} END{print a}')"
 
-[ "$parent" = "$me" ]] && parent=""
+[[ "$parent" = "$me" ]] && parent=""
 parent_short="${parent//"${suite_name}-"/}"
 parent_short_cap="${parent_short^^}"
 
