@@ -199,13 +199,13 @@ for validated_arg_ipv4 in $validated_arg_ipv4s; do
 	[ "$grepcidr_error" = true ] && { rm "$list_file" &>/dev/null; die "Failed to process grepcidr results."; }
 
 	# increment the return value if matching didn't succeed for any reason
-	[ "$truth_table_result" -ne 0 ] && ip_check_rv=$(( ip_check_rv + 1 ))
+	[ "$truth_table_result" -ne 0 ] && let ip_check_rv++
 done
 
 
 if [ -n "$invalid_arg_ipv4s" ]; then
 	echo -e "${red}Invalid${no_color} ipv4 addresses: '$invalid_arg_ipv4s'"
-	ip_check_rv=$(( ip_check_rv + 1 ))
+	let ip_check_rv++
 fi
 
 rm "$list_file" &>/dev/null
