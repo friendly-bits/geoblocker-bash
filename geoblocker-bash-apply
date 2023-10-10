@@ -399,11 +399,11 @@ if [[ "$action" = "add" ]]; then
 
 		ipset_length=$(ipset -L "$perm_ipset" 2>/dev/null |  wc -l)
 
-		if [[ "$ipset_length" -ge "7" ]]; then
+		if [[ "$ipset_length" -ge 7 ]]; then
 			perm_ipset_exists="true"
 			debugprint "found existing permanent ipset '$perm_ipset'."
 		else
-			perm_ipset_exists="false"
+			perm_ipset_exists=""
 		fi
 
 		if [[ "$ipset_length" -eq 0 ]]; then
