@@ -21,11 +21,11 @@ me=$(basename "$0")
 
 suite_name="geoblocker-bash"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-[ -n "$script_dir" ] && cd "$script_dir" || { err="$me: Error: Couldn't cd into '$script_dir'."; echo "$err" >&2; \
-	[ ! "$nolog" ] && logger "$err"; exit 1; }
+[[ -n "$script_dir" ]] && cd "$script_dir" || { err="$me: Error: Couldn't cd into '$script_dir'."; echo "$err" >&2; \
+	[[ ! "$nolog" ]] && logger "$err"; exit 1; }
 
 source "$script_dir/${suite_name}-common" || { err="$me: Error: Can't source ${suite_name}-common."; echo "$err" >&2; \
-	[ ! "$nolog" ] && logger "$err"; exit 1; }
+	[[ ! "$nolog" ]] && logger "$err"; exit 1; }
 
 # **NOTE** that some functions and variables are sourced from the *common script
 
@@ -81,7 +81,7 @@ while getopts ":c:p:s:o:fdh" opt; do
 done
 shift $((OPTIND -1))
 
-[[ "$*" != "" ]] && {
+[[ -n "$*" ]] && {
 	usage
 	err1="Error in arguments. First unrecognized argument: '$1'."
 	err2="Note: If specifying multiple country codes, put them between double quotation marks."
@@ -122,7 +122,7 @@ parse_arin() {
 		tr -d " " > "$parsed_file"
 
 	# check that $parsed_file is non-empty
-	[ -s "$parsed_file" ] && rv=0 || rv=1
+	[[ -s "$parsed_file" ]] && rv=0 || rv=1
 	return "$rv"
 }
 
@@ -219,7 +219,7 @@ command -v "wget" &> /dev/null && wget_exists="true"
 
 tlds_cnt="$(wc -l <<< "$tlds")"
 
-[ "$tlds_cnt" -eq 0 ] && { usage; die "Specify country code/s!"; }
+[[ "$tlds_cnt" -eq 0 ]] && { usage; die "Specify country code/s!"; }
 
 # check that either $iplist_dir or $output_file is set
 [[ -z "$iplist_dir" && -z "$output_file" ]] && { usage; die "Specify iplist directory with '-p <path-to-dir>' or output file with '-o <output_file>'."; }
@@ -257,9 +257,9 @@ for tld in $tlds; do
 	list_path="${output_file:-$iplist_dir/$filename}"
 	fetched_file=$(mktemp "/tmp/fetched-$tld-XXXX")
 
-	if [ "$wget_exists" ]; then
+	if [[ "$wget_exists" ]]; then
 		fetch_command="$wget_command $url -O"
-	elif [ "$curl_exists" ]; then
+	elif [[ "$curl_exists" ]]; then
 		fetch_command="$curl_command $url -o"
 	fi
 
@@ -297,7 +297,7 @@ for tld in $tlds; do
 			rm "$fetched_file" &>/dev/null
 			tld_status="failed"
 			echolog "Error when running '$fetch_command'."
-			[ "$retry_cnt" -ge "$fetch_retries" ] && break
+			[[ "$retry_cnt" -ge "$fetch_retries" ]] && break
 		else
 			echo "Fetch successful."
 
@@ -307,8 +307,8 @@ for tld in $tlds; do
 
 			# skip list update if data timestamp didn't change, and there were no validation errors in the old list,
 			# and we are not in manual mode, and force_update wasn't requested
-			if [[ "$old_list_exists" &&  "$date_new" -le "$date_old" && "$force_update" != "true" && \
-							"$manualmode" != "true" && "$old_failed_subnets_cnt" -eq 0 ]]; then
+			if [[ "$old_list_exists" &&  "$date_new" -le "$date_old" && ! "$force_update" && \
+							! "$manualmode" && "$old_failed_subnets_cnt" -eq 0 ]]; then
 				echolog "Subnets list for country '$tld' is already up-to-date. Timestamp: '$(date --date=@$date_new)'."
 				tld_status="up_to_date"
 				rm "$fetched_file" &>/dev/null
@@ -326,11 +326,11 @@ for tld in $tlds; do
 			esac
 			rm "$fetched_file" &>/dev/null
 
-			if [ "$rv" -ne 0 ]; then
+			if [[ "$rv" -ne 0 ]]; then
 				rm "$parsed_file" &>/dev/null
 				tld_status="failed"
 				echo -e "\nError: failed to parse the fetched file for country '$tld'." >&2
-				[ "$retry_cnt" -ge "$fetch_retries" ] && break
+				[[ "$retry_cnt" -ge "$fetch_retries" ]] && break
 			else
 				echo "Ok."
 				# Validate the parsed file
@@ -344,9 +344,9 @@ for tld in $tlds; do
 				validated_subnets_cnt=$(wc -l < "$validated_file")
 
 				failed_subnets_cnt=$(( parsed_subnets_cnt - validated_subnets_cnt ))
-				if [ "$failed_subnets_cnt" -gt 0 ]; then
+				if [[ "$failed_subnets_cnt" -gt 0 ]]; then
 					echolog -err "Note: Fetch attempt $retry_cnt for country '$tld': $failed_subnets_cnt subnets failed validation."
-					[ "$retry_cnt" -ge "$fetch_retries" ] && { tld_status="partial"; break; }
+					[[ "$retry_cnt" -ge "$fetch_retries" ]] && { tld_status="partial"; break; }
 					rm "$validated_file" &>/dev/null
 				else
 					echo "Ok."
@@ -358,7 +358,7 @@ for tld in $tlds; do
 		echo -e "Retrying fetch for country '$tld'...\n"
 	done
 
-	if [[ "$tld_status" = "Ok" || "$tld_status" = "partial" ]] && [ "$validated_subnets_cnt" -eq 0 ]; then
+	if [[ "$tld_status" = "Ok" || "$tld_status" = "partial" ]] && [[ "$validated_subnets_cnt" -eq 0 ]]; then
 		rm "$validated_file" &>/dev/null
 		echolog "Error: validated 0 subnets for country '$tld'. Perhaps the country code is incorrect?" >&2
 		tld_status="failed"
@@ -370,7 +370,7 @@ for tld in $tlds; do
 	if [[ "$old_list_exists" && "$tld_status" != "up_to_date" ]]; then
 		# compare fetched subnets count to old subnets count, get result in %
 		subnets_percents="$(echo "scale=0 ; $validated_subnets_cnt * 100 / $old_subnets_cnt" | bc)"
-		if [ "$subnets_percents" -lt 90 ]; then
+		if [[ "$subnets_percents" -lt 90 ]]; then
 			tld_status="failed"
 			rm "$validated_file" &>/dev/null
 			echolog -err "Warning: validated subnets count '$validated_subnets_cnt' in the fetched list for country '$tld'..."
@@ -382,13 +382,13 @@ for tld in $tlds; do
 	fi
 
 	# If we have a partial list, decide whether to consider it Ok or not
-	if [ "$tld_status" = "partial" ]; then
+	if [[ "$tld_status" = "partial" ]]; then
 			echolog -err "Warning: out of $parsed_subnets_cnt, $failed_subnets_cnt subnets for country '$tld' failed validation."
 			echolog -err "Invalid subnets removed from the list."
 
-		if [ "$old_list_exists" = "true" ]; then
+		if [[ "$old_list_exists" ]]; then
 			## don't update the list if it is partial and the count of failed validations increased compared to the old list
-			if [ "$failed_subnets_cnt" -gt "$old_failed_subnets_cnt" ]; then
+			if [[ "$failed_subnets_cnt" -gt "$old_failed_subnets_cnt" ]]; then
 				rm "$validated_file" &>/dev/null
 				tld_status="failed"
 				err1="Warning: failed subnets count '$failed_subnets_cnt' for country '$tld' is higher than '$old_failed_subnets_cnt' in the old list."
@@ -400,7 +400,7 @@ for tld in $tlds; do
 		else
 			# old list does not exist
 			# if we are in manual mode, meaning we were launched from either the *install or the *manage script
-			if [ "$manualmode" = "true" ]; then
+			if [[ "$manualmode" ]]; then
 				# if an older existing list is unavailable, ask the user what to do
 				echo -e "\n\nWarning: Ip list for country '$tld' has been fetched but may be incomplete, and there is no older downloaded file for this list."
 				echo "Use the incomplete list anyway?"
@@ -419,7 +419,7 @@ for tld in $tlds; do
 
 	echo
 
-	if [ "$tld_status" = "Ok" ]; then
+	if [[ "$tld_status" = "Ok" ]]; then
 		echo -e "Validated subnets count for country '$tld': $validated_subnets_cnt.\n"
 	fi
 
@@ -432,11 +432,11 @@ for tld in $tlds; do
 		* ) echolog -err "Error: validation status for country '$tld' is '$tld_status' which I don't understand. This should not happen. Please file a bug report." ;;
 	esac
 
-	if [ "$tld_status" = "Ok" ]; then
+	if [[ "$tld_status" = "Ok" ]]; then
 
 		echo -n "Updating $list_path... "
 		mv "$validated_file" "$list_path"; rv=$?
-		if [ $rv -ne 0 ]; then
+		if [[ $rv -ne 0 ]]; then
 			echo "Failed."
 			rm "$validated_file" &>/dev/null
 			echolog -err "Failed to overwrite the file '$list_path'"
@@ -450,7 +450,7 @@ for tld in $tlds; do
 
 	fi
 
-	if [ "$tld_status" = "up_to_date" ]; then
+	if [[ "$tld_status" = "up_to_date" ]]; then
 		up_to_date_tlds="$up_to_date_tlds $tld"
 		failed_subnets_cnt_arr["$tld"]="$failed_subnets_cnt"
 	fi
@@ -459,7 +459,7 @@ for tld in $tlds; do
 done
 
 # report fetch results back to caller via status file
-if [ -n "$status_file" ]; then
+if [[ -n "$status_file" ]]; then
 	# convert array contents to formatted string for writing to the status file
 	for tld in "${!failed_subnets_cnt_arr[@]}"; do
 

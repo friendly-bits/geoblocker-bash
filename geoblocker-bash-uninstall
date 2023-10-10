@@ -10,7 +10,7 @@
 me=$(basename "$0")
 
 # check for root
-[ "$EUID" -ne 0 ] && {
+[[ "$EUID" -ne 0 ]] && {
 	err="Error: $me needs to be run as root."
 	echo "$err" >&2
 	exit 1
@@ -18,7 +18,7 @@ me=$(basename "$0")
 
 suite_name="geoblocker-bash"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-[ -n "$script_dir" ] && cd "$script_dir" || { echo "Error: Couldn't cd into '$script_dir'." >&2; exit 1; }
+[[ -n "$script_dir" ]] && cd "$script_dir" || { echo "Error: Couldn't cd into '$script_dir'." >&2; exit 1; }
 
 source "$script_dir/${suite_name}-common" || { echo "Error: Can't source ${suite_name}-common." >&2; exit 1; }
 
@@ -58,7 +58,7 @@ while getopts ":dh" opt; do
 done
 shift $((OPTIND -1))
 
-[[ "$*" != "" ]] && {
+[[ -n "$*" ]] && {
 	usage
 	echo "Error in arguments. First unrecognized argument: '$1'." >&2
 	exit 1
@@ -79,7 +79,7 @@ debugentermsg
 install_dir="/usr/local/bin"
 
 datadir="$(getconfig "Datadir")"; rv=$?
-if [ "$rv" -ne 0 ] || [ -z "$datadir" ]; then datadir="/var/lib/${suite_name}"; fi
+if [[ "$rv" -ne 0 || -z "$datadir" ]]; then datadir="/var/lib/${suite_name}"; fi
 preinstall_policies_file="$datadir/preinstall_policies.bak"
 iptables_comment="$suite_name"
 
@@ -89,14 +89,14 @@ crontab -u root -l 2>/dev/null |  grep -v "${suite_name}-run" | sudo crontab -u 
 
 ### Restore pre-install state of default policies for INPUT and FORWARD chains
 
-if [ -f "$preinstall_policies_file" ]; then
+if [[ -f "$preinstall_policies_file" ]]; then
 	while read -r preinstall_policy; do
 		chain_name=$(echo "$preinstall_policy" | cut -f 1 -d " ")
 		oldpolicy=$(echo "$preinstall_policy" | cut -f 2 -d " ")
-		if [ -n "$chain_name" ] && [ -n "$oldpolicy" ]; then
+		if [[ -n "$chain_name" && -n "$oldpolicy" ]]; then
 			echo "Restoring pre-install iptables policy '$oldpolicy' for chain '$chain_name'"
 			iptables -P "$chain_name" "$oldpolicy"; rv=$?
-			if [ $rv -ne 0 ]; then
+			if [[ $rv -ne 0 ]]; then
 				echo "Error $rv trying to change iptables policy with command 'iptables -P $chain_name $oldpolicy'. Exiting." >&2
 				exit 1
 				fi

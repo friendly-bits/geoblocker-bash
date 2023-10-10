@@ -16,7 +16,7 @@
 me=$(basename "$0")
 
 # check for root
-[ "$EUID" -ne 0 ] && {
+[[ "$EUID" -ne 0 ]] && {
 	err="Error: $me needs to be run as root."
 	echo "$err" >&2
 	exit 1
@@ -24,7 +24,7 @@ me=$(basename "$0")
 
 suite_name="geoblocker-bash"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-[ -n "$script_dir" ] && cd "$script_dir" || { echo "$me: Error: Couldn't cd into '$script_dir'." >&2; exit 1; }
+[[ -n "$script_dir" ]] && cd "$script_dir" || { echo "$me: Error: Couldn't cd into '$script_dir'." >&2; exit 1; }
 
 source "$script_dir/${suite_name}-common" || { echo "$me: Error: Can't source '${suite_name}-common'." >&2; exit 1; }
 
@@ -101,7 +101,7 @@ while getopts ":c:m:s:enpdh" opt; do
 done
 shift $((OPTIND -1))
 
-[[ "$*" != "" ]] && {
+[[ -n "$*" ]] && {
 	usage
 	err1="Error in arguments. First unrecognized argument: '$1'."
 	err2="Note: If specifying multiple country codes, put them in double quotation marks."
@@ -128,12 +128,12 @@ check_files_exist() {
 	# implicitly loops over arguments
 	for dep_file; do
 
-		if [ ! -s "$dep_file" ]; then
-			[ -z "$missing_files" ] && missing_files="'$dep_file'" || missing_deps="${missing_files}, '$dep_file'"
+		if [[ ! -s "$dep_file" ]]; then
+			[[ -z "$missing_files" ]] && missing_files="'$dep_file'" || missing_deps="${missing_files}, '$dep_file'"
 			let err++
 		fi
 	done
-	[ "$err" -gt 0 ] && { echo "$missing_files"; return 1; } || return 0
+	[[ "$err" -gt 0 ]] && { echo "$missing_files"; return 1; } || return 0
 }
 
 copyscripts() {
@@ -179,7 +179,7 @@ default_schedule="0 4 * * *"
 cron_schedule="${cron_schedule:-$default_schedule}"
 sleeptime="30"
 
-if [ -n "$list_type" ]; then
+if [[ -n "$list_type" ]]; then
 	# convert to lower case
 	list_type="${list_type,,}"
 
@@ -190,16 +190,16 @@ fi
 #### CHECKS
 
 # check for systemd
-[ "$(! ps -p 1 -o comm=)" != "systemd" ] && die "Error: systemd is required but this sytem does not appear to be running systemd."
+[[ "$(! ps -p 1 -o comm=)" != "systemd" ]] && die "Error: systemd is required but this sytem does not appear to be running systemd."
 
 missing_deps="$(check_deps "curl|wget" jq iptables-save iptables-restore ipset)" || die "Error: missing dependencies: $missing_deps."
 
-if [ -z "$tlds" ]; then
+if [[ -z "$tlds" ]]; then
 	usage
 	die "Specify countries with '-c <tlds>'!"
 fi
 
-if [ -z "$list_type" ]; then
+if [[ -z "$list_type" ]]; then
 	usage
 	die "Specify firewall mode with '-m whitelist' or '-m blacklist'!"
 fi
@@ -224,7 +224,7 @@ setconfig "Countries=" "ListType=$list_type" "Installdir=$install_dir" "Datadir=
 	"RebootSleep=$sleeptime" "Backup_script=$backup_script" "EmergencyDeactivation=$emergency_deactivation" \
 	"NoPersistence=$no_persistence" "NoDrop=$nodrop"; rv=$?
 
-if [ "$rv" -ne 0 ]; then
+if [[ "$rv" -ne 0 ]]; then
 	echo "Failed." >&2
 	install_failed "Error writing initial config to the config file."
 else echo "Ok."
@@ -239,11 +239,11 @@ mkdir -p "$iplist_dir"
 echo -n "Creating file for backup of iptables state..."
 
 # if a backup file already exists, continue installing but skip overwriting the backup file
-if [ -f "$knowngood_file" ]; then
+if [[ -f "$knowngood_file" ]]; then
 	echo "Backup file already exists, skipping."
 else
 	touch "$knowngood_file"; rv=$?
-	if [ $rv -ne 0 ]; then
+	if [[ $rv -ne 0 ]]; then
 		echo "Error." >&2
 		install_failed
 	fi
@@ -258,7 +258,7 @@ bash ${suite_name}-reset
 ## Copy scripts to $install_dir
 
 # if we are running from $install_dir, assume that all other necessary scripts have already been installed, skip copying
-if [ "$script_dir" != "$install_dir" ]; then
+if [[ "$script_dir" != "$install_dir" ]]; then
 	echo -n "Copying scripts to $install_dir... "
 	copyscripts "${suite_name}-common" "${suite_name}-fetch" "${suite_name}-apply" "${suite_name}-run" "${suite_name}-manage" \
 		"${suite_name}-cronsetup" "${suite_name}-backup" "${suite_name}-uninstall" "${suite_name}-reset" "validate-cron-schedule.sh" "check-ip-in-registry.sh"
@@ -276,12 +276,12 @@ ln -s "${install_dir}/${suite_name}-manage" "${install_dir}/${suite_name}" ||
 echo -n "Creating backup of current INPUT and FORWARD iptables chains policies... "
 
 # if a backup file already exists, continue installing but skip overwriting the backup file
-if [ -f "$preinstall_policies_file" ]; then
+if [[ -f "$preinstall_policies_file" ]]; then
 	echo "Backup file already exists, skipping creation of iptables policies backup." >&2
 else
 	preinstall_input_policy=$(iptables -nL | grep "Chain INPUT" | awk -F'policy |)' '{print $2}')
 	preinstall_forward_policy=$(iptables -nL | grep "Chain FORWARD" | awk -F'policy |)' '{print $2}')
-	if [ -z "$preinstall_input_policy" ] || [ -z "$preinstall_forward_policy" ]; then
+	if [[ -z "$preinstall_input_policy" || -z "$preinstall_forward_policy" ]]; then
 		install_failed "Error: failed to determine current iptables policies."
 	fi
 	touch "$preinstall_policies_file" || install_failed "Error: failed to create pre-install policies backup file."
@@ -294,14 +294,14 @@ fi
 
 # cd into the install directory
 # exit in case "cd" fails
-[ -n "$install_dir" ] && cd "$install_dir" || install_failed "Error: Couldn't cd into '$install_dir'."
+[[ -n "$install_dir" ]] && cd "$install_dir" || install_failed "Error: Couldn't cd into '$install_dir'."
 
 
 ### Add iplist(s) for $tlds to managed iplists, then fetch and apply the iplist(s)
 ${suite_name}-manage add -f -c "$tlds"; rv=$?
 
 # the *manage script exits with return value 254 if requested country is already included in the config
-if [ $rv -ne 0 ] && [ $rv -ne 254 ]; then
+if [[ $rv -ne 0 && $rv -ne 254 ]]; then
 	install_failed "Failed to create and apply the iplist."
 fi
 
@@ -309,7 +309,7 @@ if [[ ! "$no_persistence" && "$cron_schedule" != "disable" ]]; then
 	### Set up cron jobs
 	${suite_name}-manage schedule -s "$cron_schedule"; rv=$?
 
-	if [ $rv -ne 0 ]; then
+	if [[ $rv -ne 0 ]]; then
 		install_failed "Error: failed to set up cron jobs."
 	fi
 else

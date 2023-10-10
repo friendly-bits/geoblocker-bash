@@ -15,20 +15,20 @@
 me=$(basename "$0")
 
 # check for root
-[ "$EUID" -ne 0 ] && {
+[[ "$EUID" -ne 0 ]] && {
 	err="Error: $me needs to be run as root."
 	echo "$err" >&2
-	[ ! "$nolog" ] && logger "$err"
+	[[ ! "$nolog" ]] && logger "$err"
 	exit 1
 }
 
 suite_name="geoblocker-bash"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-[ -n "$script_dir" ] && cd "$script_dir" || { err="$me: Error: Couldn't cd into '$script_dir'."; echo "$err" >&2; \
-	[ ! "$nolog" ] && logger "$err"; exit 1; }
+[[ -n "$script_dir" ]] && cd "$script_dir" || { err="$me: Error: Couldn't cd into '$script_dir'."; echo "$err" >&2; \
+	[[ ! "$nolog" ]] && logger "$err"; exit 1; }
 
 source "$script_dir/${suite_name}-common" || { err="$me: Error: Can't source ${suite_name}-common."; echo "$err" >&2; \
-	[ ! "$nolog" ] && logger "$err"; exit 1; }
+	[[ ! "$nolog" ]] && logger "$err"; exit 1; }
 
 # **NOTE** that some functions and variables are sourced from the *common script
 
@@ -70,7 +70,7 @@ EOF
 action="$1"
 shift 1
 
-[ -z "$action" ] && { usage; die 1 "Specify action!"; }
+[[ -z "$action" ]] && { usage; die 1 "Specify action!"; }
 
 # check for valid action
 case "$action" in
@@ -90,7 +90,7 @@ while getopts ":c:dht" opt; do
 done
 shift $((OPTIND -1))
 
-[[ "$*" != "" ]] && {
+[[ -n "$*" ]] && {
 	usage
 	err1="Error in arguments. First unrecognized argument: '$1'."
 	err2="Note: If specifying multiple country codes, put them in double quotation marks."
@@ -130,6 +130,35 @@ destroy_temp_ipsets() {
 	done
 }
 
+getlocalsubnet() {
+# attempts to find local subnet for the main network interface
+
+	# regex patterns used for ipv4 validation
+	# using Perl regex syntax because grep is faster with it than with native grep syntax
+	# regex compiled from 2 suggestions found here:
+	# https://stackoverflow.com/questions/5284147/validating-ipv4-addresses-with-regexp
+	ip_regex='^((25[0-5]|(2[0-4]|1\d|[1-9]|)\d)\.?\b){4}'
+	mask_regex='(/([01]?\d\d?|2[0-4]\d|25[0-5]))$'
+	subnet_regex="${ip_regex}${mask_regex}"
+
+	# returns local ip with subnet mask
+	localip="$(ip addr | grep 'state UP' -A2 | tail -n1 | awk '{print $2}')"
+
+	# Change last ipv4 octet to 0
+	lsubnet="$(printf "%s" "$localip" | sed 's|\([0-9]*\.[0-9]*\.[0-9]*\.\)[0-9]*|\10|')"
+
+	# Verifies that the argument is a valid ipv4 subnet
+	printf "%s" "$lsubnet" | grep -P "$subnet_regex" &>/dev/null; rv=$?
+
+	if [[ $rv -ne 0 ]]; then
+		# if validation fails, output empty string
+		printf "%s" ""
+	else
+		printf "%s" "$lsubnet"
+	fi
+	return $rv
+}
+
 
 #### VARIABLES
 
@@ -161,20 +190,20 @@ exitvalue="0"
 missing_deps="$(check_deps iptables-save iptables-restore ipset)" || die "Error: missing dependencies: $missing_deps."
 
 # check that the config file exists
-[ ! -f "$conf_file" ] && die "Config file '$conf_file' doesn't exist! Run the installation script again."
+[[ ! -f "$conf_file" ]] && die "Config file '$conf_file' doesn't exist! Run the installation script again."
 
 # check for country tlds
-[ -z "$tlds" ] && { usage; die 254 "Specify country codes!"; }
+[[ -z "$tlds" ]] && { usage; die 254 "Specify country codes!"; }
 
 # check for datadir path
-[ -z "$datadir" ] && die 254 "Error: failed to read the 'datadir' variable from the config file."
+[[ -z "$datadir" ]] && die 254 "Error: failed to read the 'datadir' variable from the config file."
 
-[ -z "$list_type" ] && die "\$list_type variable should not be empty! Something is wrong!"
+[[ -z "$list_type" ]] && die "\$list_type variable should not be empty! Something is wrong!"
 
 
 #### MAIN
 
-if [ "$action" = "add" ]; then
+if [[ "$action" = "add" ]]; then
 ### create temporary ipsets and load ip lists into them
 
 	for tld in $tlds; do
@@ -182,7 +211,7 @@ if [ "$action" = "add" ]; then
 		temp_ipset="${suite_name}_${tld}_temp"
 
 		# check that the iplist file exists
-		[ ! -f "$iplist_file" ] && die 254 "Error: Can not find the iplist file in path: '$iplist_file'."
+		[[ ! -f "$iplist_file" ]] && die 254 "Error: Can not find the iplist file in path: '$iplist_file'."
 
 		# first destroy temporary ipset with that name in case it exists
 		ipset destroy "$temp_ipset" &>/dev/null
@@ -198,7 +227,7 @@ if [ "$action" = "add" ]; then
 		# set hashsize to (512) or (ipset_maxelements / 4), whichever is larger
 		prelim_hashsize=$(echo "scale=0 ; $ipset_maxelem / 4" | bc)
 	#	debugprint "calculated hashsize: $prelim_hashsize"
-		if [ "$prelim_hashsize" -lt 512 ]; then
+		if [[ "$prelim_hashsize" -lt 512 ]]; then
 			ipset_hash=512
 		else
 			ipset_hash="$prelim_hashsize"
@@ -208,7 +237,7 @@ if [ "$action" = "add" ]; then
 		# create new temporary ipset
 		debugprint "Creating new ipset '$temp_ipset'... "
 		ipset create "$temp_ipset" hash:net family "$family" hashsize "$ipset_hash" maxelem "$ipset_maxelem"; rv=$?
-		if [ $rv -ne 0 ]; then
+		if [[ $rv -ne 0 ]]; then
 			destroy_temp_ipsets
 			die "Error creating ipset '$temp_ipset' with hashsize '$ipset_hash' and maxelements '$ipset_maxelem'."
 		fi
@@ -225,14 +254,14 @@ if [ "$action" = "add" ]; then
 
 		awk -v P="add \"$temp_ipset\"" '{ print P " " $0 }' "$iplist_file" | ipset restore -exist; rv=$?
 
-		if [ $rv -ne 0 ]; then
+		if [[ $rv -ne 0 ]]; then
 			destroy_temp_ipsets
 			die 254 "Error when importing the list from '$iplist_file' into ipset '$temp_ipset'."
 		fi
 
 		echo "Ok."
 
-		[ "$debugmode" ] && ipset_lines_cnt="$(ipset save "$temp_ipset" | grep "add $temp_ipset" | wc -l)"
+		[[ "$debugmode" ]] && ipset_lines_cnt="$(ipset save "$temp_ipset" | grep "add $temp_ipset" | wc -l)"
 		debugprint "subnets in the temporary ipset: $ipset_lines_cnt"
 
 		ipset_hashsizes["$tld"]="$ipset_hash"
@@ -244,11 +273,11 @@ fi
 
 ### Remove existing geoblocker rules for iptables
 
-if [ "$list_type" = "whitelist" ]; then
+if [[ "$list_type" = "whitelist" ]]; then
 	## Temporarily set the policy for the INPUT chain to ACCEPT, in order to prevent user lock out in case of an error
 	echo -n "Setting INPUT chain policy to ACCEPT... "
 	iptables -P INPUT ACCEPT; rv=$?
-	[ $rv -ne 0 ] && die "Error trying to change iptables policy with command 'iptables -P INPUT ACCEPT'."
+	[[ $rv -ne 0 ]] && die "Error trying to change iptables policy with command 'iptables -P INPUT ACCEPT'."
 	echo "Ok."
 	echo
 fi
@@ -261,7 +290,7 @@ for tld in $tlds; do
 	# sed looks for rules with the comment which we use to stamp our rules
 	# sed executes iptables -D (delete) command on matching rules. execution is promtped by the switch /e (only available in GNU sed)
 	iptables-save | sed -r "/INPUT.*comment.*${iptables_comment}/s/-A/iptables -D/e" &>/dev/null; rv="${PIPESTATUS[0]}"
-	if [ $rv -ne 0 ]; then
+	if [[ $rv -ne 0 ]]; then
 		echo "Failed."
 		destroy_temp_ipsets
 		die "Error removing existing rules with command: 'iptables-save | sed -r \"/INPUT.*comment.*$iptables_comment/s/-A/iptables -D/e\" '."
@@ -275,7 +304,7 @@ echo
 ## delete existing iptables rules matching comment "$iptables_comment_global"
 echo -n "Removing existing global iptables rules for '${suite_name}'... "
 iptables-save | sed -r "/INPUT.*comment.*${iptables_comment_global}/s/-A/iptables -D/e" &>/dev/null; rv="${PIPESTATUS[0]}"
-if [ $rv -ne 0 ]; then
+if [[ $rv -ne 0 ]]; then
 	echo "Failed."
 	destroy_temp_ipsets
 	die "Error removing existing rules with command: 'iptables-save | sed -r \"/INPUT.*comment.*${iptables_comment_global}/s/-A/iptables -D/e\" '."
@@ -286,19 +315,19 @@ echo
 
 ### Apply the "remove" action
 
-if [ "$action" = "remove" ]; then
+if [[ "$action" = "remove" ]]; then
 	for tld in $tlds; do
 		perm_ipset="${suite_name}_${tld}"
 
 		# Check if given ipset exists
 		matching_ipset="$(ipset list -n | grep "$perm_ipset")"
-		if [ "$matching_ipset" = "" ]; then
+		if [[ -z "$matching_ipset" ]]; then
 			echo "Warning: Can't remove ipset '$perm_ipset' because it doesn't appear to exist."
 			exitvalue="254"
 		else
 			echo -n "Destroying ipset for country '$tld'... "
 			ipset destroy "$perm_ipset"; rv=$?
-			if [ $rv -ne 0 ]; then
+			if [[ $rv -ne 0 ]]; then
 				echo "Failed."
 				destroy_temp_ipsets
 				die "Error destroying ipset '$perm_ipset'."
@@ -312,13 +341,13 @@ fi
 
 
 # global rules are only used for whitelists. when working with blacklists, don't touch these
-if [ "$list_type" = "whitelist" ]; then
+if [[ "$list_type" = "whitelist" ]]; then
 
 	### Set global iptables rules
 
 	# Add rule to allow connections from the local subnet
 	localsubnet="$(getlocalsubnet)"
-	if [ -z "$localsubnet" ]; then
+	if [[ -z "$localsubnet" ]]; then
 		destroy_temp_ipsets
 		die "Error: couldn't determine local subnet."
 	else
@@ -326,7 +355,7 @@ if [ "$list_type" = "whitelist" ]; then
 		echo -n "Appending rule to allow all traffic from the local subnet... "
 		iptables -A INPUT -s "$localsubnet" -j ACCEPT -m comment --comment "${iptables_comment_global}"; rv=$?
 
-		if [ $rv -ne 0 ]; then
+		if [[ $rv -ne 0 ]]; then
 			destroy_temp_ipsets
 			die "Failed to append rule with command 'iptables -A INPUT -s \"$localsubnet\" -j ACCEPT'."
 		fi
@@ -337,7 +366,7 @@ if [ "$list_type" = "whitelist" ]; then
 	echo -n "Inserting rule to allow all traffic from the loopback interface... "
 	iptables -I INPUT -i lo -j ACCEPT -m comment --comment "${iptables_comment_global}"; rv=$?
 
-	if [ $rv -ne 0 ]; then
+	if [[ $rv -ne 0 ]]; then
 		destroy_temp_ipsets
 		die "Failed to insert rule with command 'iptables -I INPUT -i lo -j ACCEPT'."
 	fi
@@ -347,7 +376,7 @@ if [ "$list_type" = "whitelist" ]; then
 	echo -n "Inserting rule to allow established/related connections... "
 	iptables -I INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT -m comment --comment "${iptables_comment_global}"; rv=$?
 
-	if [ $rv -ne 0 ]; then
+	if [[ $rv -ne 0 ]]; then
 		destroy_temp_ipsets
 		die "Failed to insert rules with command 'iptables -I INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT'."
 	fi
@@ -358,7 +387,7 @@ fi
 
 
 ### Create permanent ipsets if they don't exist, add iptables rules for them, then swap them with temp ipsets
-if [ "$action" = "add" ]; then
+if [[ "$action" = "add" ]]; then
 	for tld in $tlds; do
 		perm_ipset="${suite_name}_${tld}"
 		temp_ipset="${suite_name}_${tld}_temp"
@@ -370,14 +399,14 @@ if [ "$action" = "add" ]; then
 
 		ipset_length=$(ipset -L "$perm_ipset" 2>/dev/null |  wc -l)
 
-		if [ "$ipset_length" -ge "7" ]; then
+		if [[ "$ipset_length" -ge "7" ]]; then
 			perm_ipset_exists="true"
 			debugprint "found existing permanent ipset '$perm_ipset'."
 		else
 			perm_ipset_exists="false"
 		fi
 
-		if [ "$ipset_length" -eq 0 ]; then
+		if [[ "$ipset_length" -eq 0 ]]; then
 			debugprint "Ipset '$perm_ipset' doesn't exist yet."
 			# to avoid being dependent on ipset output staying constant down the road,
 			# still trying to destroy the ipset, just in case, but not checking the return value
@@ -385,11 +414,11 @@ if [ "$action" = "add" ]; then
 		fi
 
 		## if permanent ipset doesn't exist yet, create it
-		if [ ! "$perm_ipset_exists" = "true" ]; then
+		if [[ ! "$perm_ipset_exists" ]]; then
 			# create new permanent ipset
 			debugprint "Creating permanent ipset '$perm_ipset'... "
 			ipset create "$perm_ipset" hash:net family "$family" hashsize "$ipset_hash" maxelem "$ipset_maxelem"; rv=$?
-			if [ $rv -ne 0 ]; then
+			if [[ $rv -ne 0 ]]; then
 				echo "Failed."
 				ipset destroy "$perm_ipset"
 				destroy_temp_ipsets
@@ -401,12 +430,12 @@ if [ "$action" = "add" ]; then
 		## append the iplist rule to the INPUT chain
 
 
-		if [ "$list_type" = "whitelist" ]; then iptables_action="ACCEPT"; else iptables_action="DROP"; fi
+		if [[ "$list_type" = "whitelist" ]]; then iptables_action="ACCEPT"; else iptables_action="DROP"; fi
 
 		echo -n "Appending $list_type rule for country '$tld' to the INPUT chain... "
 		iptables -A INPUT -m set --match-set "$perm_ipset" src -j "$iptables_action" -m comment --comment "$iptables_comment"; rv=$?
 
-		if [ $rv -ne 0 ]; then
+		if [[ $rv -ne 0 ]]; then
 			ipset destroy "$perm_ipset"
 			destroy_temp_ipsets
 			die "Failed to append ipset rules with command: iptables -I INPUT -m set --match-set \"$perm_ipset\" src -j \"$iptables_action\"."
@@ -416,7 +445,7 @@ if [ "$action" = "add" ]; then
 		## swap the new (temporary) ipset with the old (permanent) ipset
 		echo -n "Making the new $list_type ipset for country '$tld' permanent... "
 		ipset swap "$temp_ipset" "$perm_ipset"; rv=$?
-		if [ $rv -ne 0 ]; then
+		if [[ $rv -ne 0 ]]; then
 			destroy_temp_ipsets
 			die "Failed to swap temporary and permanent ipsets."
 		fi
@@ -426,7 +455,7 @@ if [ "$action" = "add" ]; then
 		## destroy the old ipset (now it's called temporary)
 		debugprint "Destroying the temporary ipset for country '$tld'... "
 		ipset destroy "$temp_ipset"; rv=$?
-		[ $rv -ne 0 ] && die "Failed to destroy ipset '$temp_ipset'. Strange........."
+		[[ $rv -ne 0 ]] && die "Failed to destroy ipset '$temp_ipset'. Strange........."
 		debugprint "Ok."
 	done
 fi
@@ -436,15 +465,15 @@ echo
 ### Configure iptables policies
 
 # DROP policies are only used for whitelists
-if [ "$list_type" = "whitelist" ]; then
-	if [ "$nodrop" != "true" ]; then
+if [[ "$list_type" = "whitelist" ]]; then
+	if [[ ! "$nodrop" ]]; then
 		# set policy on INPUT and FORWARD chains to DROP
 		echo -n "Setting default iptables policies for INPUT and FORWARD chains to DROP... "
 		iptables -P INPUT DROP; rv=$?
-		[ $rv -ne 0 ] && die "Failed to change iptables policy with command 'iptables -P INPUT DROP'."
+		[[ $rv -ne 0 ]] && die "Failed to change iptables policy with command 'iptables -P INPUT DROP'."
 
 		iptables -P FORWARD DROP; rv=$?
-		[ $rv -ne 0 ] && die "Failed to change iptables policy with command 'iptables -P FORWARD DROP'."
+		[[ $rv -ne 0 ]] && die "Failed to change iptables policy with command 'iptables -P FORWARD DROP'."
 		echo "Ok."
 	else
 		echo "WARNING: nodrop was requested. Leaving INPUT and FORWARD chains with ACCEPT policies (geoblocking is inactive)."
@@ -453,15 +482,15 @@ else
 	# set policy on INPUT chain to ACCEPT
 	echo -n "Setting default iptables policy for INPUT chains to ACCEPT... "
 	iptables -P INPUT ACCEPT; rv=$?
-	[ $rv -ne 0 ] && die "Failed to change iptables policy with command 'iptables -P INPUT ACCEPT'."
+	[[ $rv -ne 0 ]] && die "Failed to change iptables policy with command 'iptables -P INPUT ACCEPT'."
 
 fi
 
 # This line is to simulate a simple fault and test recovery from backup
 # Activates when running the script with the -t switch
-[ "$test" ] && die "Test test test"
+[[ "$test" ]] && die "Test test test"
 
-echo ""
+echo
 
 debugexitmsg
 

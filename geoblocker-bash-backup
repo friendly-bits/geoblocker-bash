@@ -15,20 +15,20 @@
 me=$(basename "$0")
 
 # check for root
-[ "$EUID" -ne 0 ] && {
+[[ "$EUID" -ne 0 ]] && {
 	err="Error: $me needs to be run as root."
 	echo "$err" >&2
-	[ ! "$nolog" ] && logger "$err"
+	[[ ! "$nolog" ]] && logger "$err"
 	exit 1
 }
 
 suite_name="geoblocker-bash"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-[ -n "$script_dir" ] && cd "$script_dir" || { err="$me: Error: Couldn't cd into '$script_dir'."; echo "$err" >&2; \
-	[ ! "$nolog" ] && logger "$err"; exit 1; }
+[[ -n "$script_dir" ]] && cd "$script_dir" || { err="$me: Error: Couldn't cd into '$script_dir'."; echo "$err" >&2; \
+	[[ ! "$nolog" ]] && logger "$err"; exit 1; }
 
 source "$script_dir/${suite_name}-common" || { err="$me: Error: Can't source ${suite_name}-common."; echo "$err" >&2; \
-	[ ! "$nolog" ] && logger "$err"; exit 1; }
+	[[ ! "$nolog" ]] && logger "$err"; exit 1; }
 
 # **NOTE** that some functions and variables are sourced from the *common script
 
@@ -84,7 +84,7 @@ while getopts ":dh" opt; do
 done
 shift $((OPTIND -1))
 
-[[ "$*" != "" ]] && {
+[[ -n "$*" ]] && {
 	usage
 	echo "Error in arguments. First unrecognized argument: '$1'." >&2
 	exit 1
@@ -116,7 +116,7 @@ restore_from_file() {
 	esac
 	debugprint "$restoretarget lines number in backup: $line_cnt"
 
-	if [ "$line_cnt" -gt 0 ]; then
+	if [[ "$line_cnt" -gt 0 ]]; then
 		echo -n "Restoring $restoretarget state from backup... "
 
 		case "$restoretarget" in
@@ -127,7 +127,7 @@ restore_from_file() {
 			ipset) sed -n "/create ${suite_name}/,\$p" "$restorefile" 2>&1 | ipset restore; rv="${PIPESTATUS[1]}" ;;
 		esac
 
-		if [ $rv -eq 0 ]; then
+		if [[ $rv -eq 0 ]]; then
 			echo "Success."
 
 			return 0
@@ -144,14 +144,14 @@ restore_from_file() {
 	err2="*** Deactivating geoblocking and removing cron jobs ***"
 
 	# if -t switch wasn't specified at launch then it's not a test
-	if [ ! "$test" ]; then
+	if [[ ! "$test" ]]; then
 		knowngood_failed "$err1" "$err2"
 	else
 		echo "$err1" >&2
 		echo "-t switch was specified, which means we are in test mode. Skipping emergency deactivation." >&2
 		echo "WARNING: RECOVERY TEST FAILED AND GEOBLOCKER IS CURRENTLY INACTIVE" >&2
 
-		if [ "$restoretarget" = "iptables" ]; then
+		if [[ "$restoretarget" = "iptables" ]]; then
 			die -nolog
 		fi
 	fi
@@ -170,7 +170,7 @@ restoreknowngood() {
 	# sed looks for rules with the comment which we use to stamp our rules
 	# sed executes iptables -D (delete) command on matching rules. execution is promtped by the switch /e (only available in GNU sed)
 	iptables-save | sed -r "/INPUT.*comment.*${iptables_comment}/s/-A/iptables -D/e" &>/dev/null; rv=$?
-	if [ $rv -ne 0 ]; then
+	if [[ $rv -ne 0 ]]; then
 		echo "Failed."
 		err1="Error removing existing iptables rules with command: 'iptables-save | sed -r \"/INPUT.*comment.*$iptables_comment/s/-A/iptables -D/e\" '."
 		knowngood_failed "$err1"
@@ -181,7 +181,7 @@ restoreknowngood() {
 	for curr_ipset in $(ipset list -n | grep "$ipset_tag"); do
 		echo -n "Destroying ipset '$curr_ipset'... "
 		ipset destroy "$curr_ipset"; rv=$?
-		if [ $rv -ne 0 ]; then
+		if [[ $rv -ne 0 ]]; then
 			knowngood_failed "Error destroying ipset '$curr_ipset'."
 		else
 			echo "Ok."
@@ -198,7 +198,7 @@ restoreknowngood() {
 knowngood_failed() {
 	echo
 	echolog -err "$1" "$2"
-	if [[ "$emergency_deactivation" != "" ]]; then ${suite_name}-reset; fi
+	if [[ -n "$emergency_deactivation" ]]; then ${suite_name}-reset; fi
 	debugexitmsg
 	exit 1
 }
@@ -223,16 +223,16 @@ knowngood_file="$datadir/iptables_knowngood.bak"
 missing_deps="$(check_deps iptables-save iptables-restore ipset)" || die "Error: missing dependencies: $missing_deps."
 
 # check that the config file exists
-[ ! -f "$conf_file" ] && die "Config file '$conf_file' doesn't exist! Run the installation script again."
+[[ ! -f "$conf_file" ]] && die "Config file '$conf_file' doesn't exist! Run the installation script again."
 
 # check for knowngood file path
-if [ -z "$knowngood_file" ]; then
+if [[ -z "$knowngood_file" ]]; then
 	die "Error: Could not read the backup file path from config."
 fi
 
 # check for valid action
 
-[ -z "$action" ] && { usage; die "Specify action!"; }
+[[ -z "$action" ]] && { usage; die "Specify action!"; }
 
 case "$action" in
 	create-backup) ;;
@@ -243,14 +243,14 @@ esac
 
 #### MAIN
 
-if [ "$action" = "create-backup" ]; then
+if [[ "$action" = "create-backup" ]]; then
 ### Create backup file for known-good iptables state and save current state to the file
 
 	echo -n "Creating backup of current iptables state... "
 	touch "${knowngood_file}.new"
 
 	iptables-save > "${knowngood_file}.new"; rv=$?
-	[ "$rv" -ne 0 ] && die "Error creating backup of iptables state with command: 'iptables-save > ${knowngood_file}.new'."
+	[[ "$rv" -ne 0 ]] && die "Error creating backup of iptables state with command: 'iptables-save > ${knowngood_file}.new'."
 	echo "Ok."
 
 		# we use the same file for iptables and ipset backup
@@ -264,27 +264,27 @@ if [ "$action" = "create-backup" ]; then
 		curr_ipset="${suite_name}_${curr_tld}"
 		echo -n "Creating backup of ipset '$curr_ipset'... "
 		ipset save "$curr_ipset" >> "${knowngood_file}.new"; rv=$?
-		[ "$rv" -ne 0 ] && die "Error creating backup of ipset '$curr_ipset'."
+		[[ "$rv" -ne 0 ]] && die "Error creating backup of ipset '$curr_ipset'."
 	echo "Ok."
 	done
 
 	cp "$conf_file" "$conf_file_backup"; rv=$?
-	[ "$rv" -ne 0 ] && die "Error creating a backup copy of the config file."
+	[[ "$rv" -ne 0 ]] && die "Error creating a backup copy of the config file."
 
 	mv "$knowngood_file.new" "$knowngood_file"; rv=$?
-	[ "$rv" -ne 0 ] && die "Error overwriting the backup file."
+	[[ "$rv" -ne 0 ]] && die "Error overwriting the backup file."
 
 	echo -e "\nSuccessfully created backup of config, ipsets and iptables rules."
 	echo "Backup file: '$knowngood_file'"
 fi
 
-if [ "$action" = "restore" ]; then
+if [[ "$action" = "restore" ]]; then
 ### Restore iptables and ipsets to known-good state from backup file
 	restoreknowngood "$knowngood_file"
 	echolog "Successfully restored known-good ipset and iptables state from backup."
 	echo
 	cp "$conf_file_backup" "$conf_file"; rv=$?
-	[ "$rv" -ne 0 ] && die "Error restoring the config file from backup."
+	[[ "$rv" -ne 0 ]] && die "Error restoring the config file from backup."
 fi
 
 debugexitmsg

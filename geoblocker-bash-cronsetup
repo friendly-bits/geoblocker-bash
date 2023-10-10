@@ -10,7 +10,7 @@
 me=$(basename "$0")
 
 # check for root
-[ "$EUID" -ne 0 ] && {
+[[ "$EUID" -ne 0 ]] && {
 	err="Error: $me needs to be run as root."
 	echo "$err" >&2
 	exit 1
@@ -18,7 +18,7 @@ me=$(basename "$0")
 
 suite_name="geoblocker-bash"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-[ -n "$script_dir" ] && cd "$script_dir" || { echo "$me: Error: Couldn't cd into '$script_dir'." >&2; exit 1; }
+[[ -n "$script_dir" ]] && cd "$script_dir" || { echo "$me: Error: Couldn't cd into '$script_dir'." >&2; exit 1; }
 
 source "$script_dir/${suite_name}-common" || { echo "$me: Error: Can't source ${suite_name}-common." >&2; exit 1; }
 
@@ -52,7 +52,7 @@ while getopts ":dh" opt; do
 done
 shift $((OPTIND -1))
 
-[[ "$*" != "" ]] && {
+[[ -n "$*" ]] && {
 	usage
 	echo "Error in arguments. First unrecognized argument: '$1'." >&2
 	echo "Note: When specifying cron schedule, put it in double braces." >&2
@@ -78,7 +78,7 @@ create_cron_job() {
 	# check that countries list in config is not empty
 	config_tlds="$(getconfig "Countries")" || { die -nolog "Error: Couldn't read value for Countries from the config file."; }
 
-	if [ -z "$config_tlds" ]; then
+	if [[ -z "$config_tlds" ]]; then
 		die -nolog "Error: Countries list in the config file is empty! No point in creating autoupdate job."
 	fi
 
@@ -86,11 +86,11 @@ create_cron_job() {
 
 		autoupdate)
 
-			[ -z "$cron_schedule" ] && die -nolog "Error: cron schedule in the config file is empty!"
+			[[ -z "$cron_schedule" ]] && die -nolog "Error: cron schedule in the config file is empty!"
 			# Validate cron schedule
 			debugprint "Validating cron schedule: '$cron_schedule'."
 			validate-cron-schedule.sh -x "$cron_schedule"; rv=$?
-			if [ "$rv" -ne 0 ]; then
+			if [[ "$rv" -ne 0 ]]; then
 				die -nolog "Error validating cron schedule '$cron_schedule'."
 			else
 				debugprint "Successfully validated cron schedule: '$cron_schedule'."
@@ -121,7 +121,7 @@ create_cron_job() {
 	echo -e "$(sudo crontab -u root -l 2>/dev/null)\n$cron_command" | sudo crontab -u root -
 	rv=$?
 
-	if [ $rv -ne 0 ]; then
+	if [[ $rv -ne 0 ]]; then
 		die -nolog "Error creating $job_type cron job!"
 	else
 		debugprint "Ok."
@@ -136,7 +136,7 @@ remove_cron_job() {
 
 	job_type="$1"
 
-	if [ -n "$job_type" ] ; then
+	if [[ -n "$job_type" ]] ; then
 		if [[ "$job_type" != "autoupdate" && "$job_type" != "persistence" ]]; then
 				die -nolog "Error: unknown cron job type '$job_type'."
 		fi
@@ -145,7 +145,7 @@ remove_cron_job() {
 		crontab -u root -l 2>/dev/null | grep -v "${suite_name}-${job_type}" | sudo crontab -u root -
 		rv=$?
 
-		if [ $rv -ne 0 ]; then
+		if [[ $rv -ne 0 ]]; then
 			die -nolog "Error: failed to remove $job_type cron job."
 		else
 			debugprint "Ok."
@@ -182,33 +182,33 @@ sleeptime="$(getconfig "RebootSleep")" || { die -nolog "Error: Couldn't read val
 #### Main
 
 echo -n "Updating crontab..."
-[ "$debugmode" ] && echo
+[[ "$debugmode" ]] && echo
 
 ### remove the persistence cron job before any other action since this will be done anyway
 remove_cron_job "persistence"
 
 # only remove the autoupdate cron job now if we know that autoupdate should be disabled
-if [ "$cron_schedule" = "disable" ]; then
+if [[ "$cron_schedule" = "disable" ]]; then
 	remove_cron_job "autoupdate"
 fi
 
 ### create new persistence cron job
-if [[ "$no_persistence" != "true" ]]; then
+if [[ ! "$no_persistence" ]]; then
 	create_cron_job "persistence"
 fi
 
 ### create new autoupdate cron job
-if [ "$cron_schedule" != "disable" ]; then
+if [[ "$cron_schedule" != "disable" ]]; then
 	create_cron_job "autoupdate"
 fi
 
 cron_lines="$(crontab -u root -l 2>/dev/null | grep "${suite_name}")"
-[ "$debugmode" ] && echo
+[[ "$debugmode" ]] && echo
 debugprint "Updated crontab: \n$cron_lines\n"
 
 echo "Ok."
 
-if [[ "$no_persistence" = "true" ]]; then
+if [[ "$no_persistence" ]]; then
 	echo
 	echo "Note: no persistence was configured during installation. Geoblocking will be deactivated upon reboot!"
 	echo "To enable persistence, run the *install script again without the '-n' option."

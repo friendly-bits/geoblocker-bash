@@ -17,10 +17,12 @@
 me=$(basename "$0")
 suite_name="geoblocker-bash"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-[ -n "$script_dir" ] && cd "$script_dir" || { echo "Error: Couldn't cd into '$script_dir'." >&2; exit 1; }
+[[ -n "$script_dir" ]] && cd "$script_dir" || { echo "Error: Couldn't cd into '$script_dir'." >&2; exit 1; }
 
 source "$script_dir/${suite_name}-common" || { echo "Error: Can't find ${suite_name}-common." >&2; exit 1; }
+
 # **NOTE** that some functions and variables are sourced from the *common script
+
 
 # sanitize arguments
 sanitize_args "$@"
@@ -64,7 +66,7 @@ while getopts ":x:hd" opt; do
 done
 shift $((OPTIND -1))
 
-[[ "$*" != "" ]] && {
+[[ -n "$*" ]] && {
 	usage
 	echo "Error in arguments. First unrecognized argument: '$1'." >&2
 	echo "When specifying cron schedule, use double quotes around it." >&2
@@ -84,13 +86,13 @@ debugentermsg
 validateNum() {
 # returns 0 if valid, 1 if not. Specify number, minvalue and maxvalue as args
 	num="$1"; min="$2"; max="$3"
-	if [ -z "$num" ]; then
+	if [[ -z "$num" ]]; then
 		return 1
-	elif [ "$num" = '*' ] ; then
+	elif [[ "$num" = '*' ]] ; then
 		return 0
-	elif [ -n "$(echo $num | sed 's/[[:digit:]]//g')" ] ; then
+	elif [[ -n "$(echo $num | sed 's/[[:digit:]]//g')" ]] ; then
 		return 1
-	elif [ "$num" -lt "$min" ] || [ "$num" -gt "$max" ] ; then
+	elif [[ "$num" -lt "$min" || "$num" -gt "$max" ]] ; then
 		return 1
 	else
 		return 0
@@ -145,17 +147,17 @@ validateField() {
 	asterisknum_field=0
 
 	# field strings should not start or end with a dash
-	if [ "${fieldString:0:1}" = "-" ] || [ "${fieldString: -1}" = "-" ]; then
+	if [[ "${fieldString:0:1}" = "-" || "${fieldString: -1}" = "-" ]]; then
 		err="Invalid input '$fieldString' for field $fieldName: it starts or ends with '-' ."
-		[ -z "$errors_str" ] && errors_str="$err" || errors_str="$errors_str \n$err"
+		[[ -z "$errors_str" ]] && errors_str="$err" || errors_str="$errors_str \n$err"
 		let errors++
 		return 1
 	fi
 
 	# field strings should not start or end with a comma
-	if [ "${fieldString:0:1}" = "," ] || [ "${fieldString: -1}" = "," ]; then
+	if [[ "${fieldString:0:1}" = "," || "${fieldString: -1}" = "," ]]; then
 		err="Invalid input '$fieldString' for field $fieldName : it starts or ends with ',' ."
-		[ -z "$errors_str" ] && errors_str="$err" || errors_str="$errors_str \n$err"
+		[[ -z "$errors_str" ]] && errors_str="$err" || errors_str="$errors_str \n$err"
 		let errors++
 		return 1
 	fi
@@ -174,7 +176,7 @@ validateField() {
 				if ! validateName "$fieldName" "$segment"; then
 					# if that fails, the segment is invalid - return 1 and exit the function
 					err="Invalid value '$segment' in field: $fieldName."
-					[ -z "$errors_str" ] && errors_str="$err" || errors_str="$errors_str \n$err"
+					[[ -z "$errors_str" ]] && errors_str="$err" || errors_str="$errors_str \n$err"
 					let errors++
 					return 1
 				fi
@@ -186,25 +188,25 @@ validateField() {
 			let segmentsnum++
 			# segmentsnum_field is used to count all segments in a field
 			let segmentsnum_field++
-			if [ "$segment" = "*" ]; then
+			if [[ "$segment" = "*" ]]; then
 				# count asterisks for later verification that the field containing it doesn't contain any additional segments
 				let asterisknum_field++
 			fi
 		done
 
 		# it doesn't make sense to have more than two dash-separated segments in a slice
-		if [ "$segmentsnum" -gt 2 ]; then
+		if [[ "$segmentsnum" -gt 2 ]]; then
 			err="Invalid value '$slice' in $fieldName '$fieldString'."
-			[ -z "$errors_str" ] && errors_str="$err" || errors_str="$errors_str \n$err"
+			[[ -z "$errors_str" ]] && errors_str="$err" || errors_str="$errors_str \n$err"
 			let errors++
 			return 1
 		fi
 	done
 
 	# if a field contains an asterisk then there should be only one segment, otherwise the field is invalid
-	if [ "$asterisknum_field" -gt 0 ] && [ "$segmentsnum_field" -gt 1 ]; then
+	if [[ "$asterisknum_field" -gt 0 && "$segmentsnum_field" -gt 1 ]]; then
 		err="Invalid $fieldName '$fieldString'."
-		[ -z "$errors_str" ] && errors_str="$err" || errors_str="$errors_str \n$err"
+		[[ -z "$errors_str" ]] && errors_str="$err" || errors_str="$errors_str \n$err"
 		let errors++
 		return 1
 	fi
@@ -226,7 +228,7 @@ sourceline="${sourceline//\'}"
 read -r min hour dom mon dow extra <<< "$sourceline"
 
 # if $extra is not empty then too many arguments have been passed
-if [ -n "$extra" ]; then
+if [[ -n "$extra" ]]; then
 	echo -e "\n\n$me: Error: Too many fields in schedule expression. I don't know what to do with '$extra'." >&2
 	echo "You entered: '$sourceline'." >&2
 	echo "Valid example: '0 4 * * 6'." >&2
@@ -235,7 +237,7 @@ if [ -n "$extra" ]; then
 fi
 
 # if some arguments are missing
-if [ -z "$min" ] || [ -z "$hour" ] || [ -z "$dom" ] || [ -z "$mon" ] || [ -z "$dow" ]; then
+if [[ -z "$min" || -z "$hour" || -z "$dom" || -z "$mon" || -z "$dow" ]]; then
 	echo -e "\n\n$me: Error: Not enough fields in schedule expression." >&2
 	echo "Crontab expression format: 'minute hour day-of-month month day-of-week'." >&2
 	echo "You entered: '$sourceline'." >&2
@@ -264,7 +266,7 @@ validateField "month" "$mon" "1" "12"
 # day of week check
 validateField "day of week" "$dow" "1" "7"
 
-if [ "$errors" -gt 0 ] ; then
+if [[ "$errors" -gt 0 ]] ; then
 	exitstatus=1
 	echo -e "\n\n$me: Errors in cron expression:\n$errors_str\n" >&2
 	echo "Crontab expression format: 'minute hour day-of-month month day-of-week'." >&2

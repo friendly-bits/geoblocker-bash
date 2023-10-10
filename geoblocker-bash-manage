@@ -9,7 +9,7 @@
 me=$(basename "$0")
 
 # check for root
-[ "$EUID" -ne 0 ] && {
+[[ "$EUID" -ne 0 ]] && {
 	err="Error: $me needs to be run as root."
 	echo "$err" >&2
 	exit 1
@@ -17,7 +17,7 @@ me=$(basename "$0")
 
 suite_name="geoblocker-bash"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-[ -n "$script_dir" ] && cd "$script_dir" || { echo "$me: Error: Couldn't cd into '$script_dir'." >&2; exit 1; }
+[[ -n "$script_dir" ]] && cd "$script_dir" || { echo "$me: Error: Couldn't cd into '$script_dir'." >&2; exit 1; }
 
 source "$script_dir/${suite_name}-common" || { echo "$me: Error: Can't source ${suite_name}-common." >&2; exit 1; }
 
@@ -87,7 +87,7 @@ done
 shift $((OPTIND -1))
 
 # check if there are unprocessed arguments
-[[ "$*" != "" ]] && {
+[[ -n "$*" ]] && {
 	usage
 	err1="Error in arguments. First unrecognized argument: '$1'."
 	err2="Note: If specifying multiple country codes, put them in double quotation marks."
@@ -122,26 +122,26 @@ report_status() {
 	input_policy=$(iptables -nL | grep "Chain INPUT" | awk -F'policy |)' '{print $2}')
 	forward_policy=$(iptables -nL | grep "Chain FORWARD" | awk -F'policy |)' '{print $2}')
 
-	if [ -z "$input_policy" ] || [ -z "$forward_policy" ]; then
+	if [[ -z "$input_policy" || -z "$forward_policy" ]]; then
 		die "Error: failed to determine current policies for INPUT and FORWARD chains."
 	fi
 
 	# check ipsets and iptables rules for active tlds
 	active_tlds="$(find_active_tlds)"; rv=$?
-	[ -z "$active_tlds" ] && echo -e "${red}Warning${no_color}: no firewall rules found for any country codes!" || \
+	[[ -z "$active_tlds" ]] && echo -e "${red}Warning${no_color}: no firewall rules found for any country codes!" || \
 		echo -e "$list_type is configured for country codes: '${yellow}$active_tlds${no_color}'.\n"
 
 	check_tlds_coherency; rv=$?
-	if [ "$rv" -ne 0 ]; then
+	if [[ "$rv" -ne 0 ]]; then
 		echo -e "${red}Error${no_color}: discrepancy detected between the config file and iptables rules!\n" >&2
-		[ "$ipsets_incoherent" = "true" ] && \
+		[[ "$ipsets_incoherent" ]] && \
 			echo "${purple}Warning:${no_color} discrepancy detected between existing geoblocking ipsets and geoblocking firewall rules!\n" >&2
 	else
 		echo -e "Country codes in the firewall rules ${green}match${no_color} the config.\n"
 	fi
 
 	# report INPUT and FORWARD chain policies
-	[ "$input_policy" = "$expected_policy" ] && input_policy_colored="${green}${input_policy}${no_color}" || \
+	[[ "$input_policy" = "$expected_policy" ]] && input_policy_colored="${green}${input_policy}${no_color}" || \
 		input_policy_colored="${red}${input_policy}${no_color}"
 	[[ "$forward_policy" = "$expected_policy" || "$forward_policy" = "DROP" ]] && forward_policy_colored="${green}${forward_policy}${no_color}" || \
 		forward_policy_colored="${red}${forward_policy}${no_color}"
@@ -149,47 +149,47 @@ report_status() {
 
 
 	# check INPUT chain default policy compatibility with list_type
-	[ "$input_policy" != "$expected_policy" ] && {
+	[[ "$input_policy" != "$expected_policy" ]] && {
 				echo -e "${purple}WARNING${no_color}: $list_type functionality requires INPUT chain policy to be '$expected_policy' but it is '$input_policy'."
 				echo -e "${red}$list_type is not functioning${no_color}.";
 				} || echo -e "INPUT chain policy ${green}is compatible${no_color} with $list_type."
 
 	# check FORWARD chain default policy compatibility with list_type
-	[ "$forward_policy" != "$expected_policy" ] && [ "$forward_policy" != "DROP" ] && {
+	[[ "$forward_policy" != "$expected_policy" && "$forward_policy" != "DROP" ]] && {
 				echo -e "${purple}WARNING${no_color}: $list_type functionality recommends FORWARD chain policy to be '$expected_policy' but it is '$forward_policy'."
 				} || echo -e "FORWARD chain policy ${green}is compatible${no_color} with $list_type."
 
 
 	# for a whitelist, report global iptables rules (irrelevant for blacklist)
-	if [ "$list_type" = "whitelist" ]; then
+	if [[ "$list_type" = "whitelist" ]]; then
 		echo -e "\n${yellow}Global iptables rules${no_color} for $suite_name:"
 		global_rules="$(iptables-save | grep "${suite_name}_global")"
-		[ "$global_rules" = "" ] && echo "None.\n" || echo -e "${global_rules}\n"
+		[[ -z "$global_rules" ]] && echo "None.\n" || echo -e "${global_rules}\n"
 	fi
 
 	# report specific rules for the active geoblocking mode
 	echo -e "\n${yellow}$list_type iptables rules${no_color} for $suite_name:"
 	geoblocking_rules="$(iptables -L -v | grep "match-set ${suite_name}" | grep "$expected_rule_type")"
-	[ "$geoblocking_rules" = "" ] && echo -e "${red}None.${no_color}\n\n${red}Error${no_color}: expected geoblocking rules are not found in the firewall!\n" || \
+	[[ -z "$geoblocking_rules" ]] && echo -e "${red}None.${no_color}\n\n${red}Error${no_color}: expected geoblocking rules are not found in the firewall!\n" || \
 		echo -e "$geoblocking_rules\n"
 
 	# check if cron service is enabled
 	(systemctl is-enabled cron.service) > /dev/null || crondisabled="true"
-	if [ -n "$crondisabled" ]; then
+	if [[ -n "$crondisabled" ]]; then
 		echo -e "${purple}WARNING${no_color}: cron service appears to be disabled. Both persistence across reboots and autoupdates will likely not work.\n"
 	else
 		echo -e "Cron system service is ${green}enabled${no_color}.\n"
 
 		# check cron jobs
 		persistence_job="$(crontab -u root -l 2>/dev/null | grep "${suite_name}-persistence")"
-		[ "$persistence_job" != "" ] && echo -e "${green}Persistence cron job is active${no_color}.\n" || \
+		[[ -n "$persistence_job" ]] && echo -e "${green}Persistence cron job is active${no_color}.\n" || \
 			echo -e "${purple}WARNING${no_color}: Persistence cron job is ${red}missing${no_color}. Geoblocking will not work after reboot.\n"
 
 		autoupdate_job="$(crontab -u root -l 2>/dev/null | grep "${suite_name}-autoupdate")"
-		if [ "$autoupdate_job" != "" ]; then
+		if [[ -n "$autoupdate_job" ]]; then
 			echo -e "${green}Autoupdate cron job is active.${no_color}\n"
 			update_schedule="$(echo "$autoupdate_job" | cut -f1 -d\")"
-			if [[ "$update_schedule" != "" && "$update_schedule" != " " ]]; then
+			if [[ -n "$update_schedule" && "$update_schedule" != " " ]]; then
 				echo -e "Autoupdate schedule: ${yellow}$update_schedule${no_color}\n"
 			else
 				echo -e "${red}Error:${no_color} Could not determine autoupdate schedule. Complete cron line:"; echo -e "${autoupdate_job}\n"
@@ -205,8 +205,8 @@ restore_from_config() {
 
 	echo
 	echo -e "Warning: Config incoherence detected between the firewall current status and the config file."
-	[ "$unexpected_tlds" != "" ] && echo "Unexpected tlds in the firewall: '$unexpected_tlds'" >&2
-	[ "$missing_tlds" != "" ] && echo "Missing tlds in the firewall: '$missing_tlds'" >&2
+	[[ -n "$unexpected_tlds" ]] && echo "Unexpected tlds in the firewall: '$unexpected_tlds'" >&2
+	[[ -n "$missing_tlds" ]] && echo "Missing tlds in the firewall: '$missing_tlds'" >&2
 	echo "Would you like to re-apply the rules from the config file to fix this?"
 	echo -e "\n'Y' to re-apply the config rules. 'N' to exit the script. 'S' to show country codes in the config file.\n"
 
@@ -224,27 +224,27 @@ restore_from_config() {
 	echo "Restoring $list_type countries set '$config_tlds' from the config file... "
 	tlds_to_remove="$(merge_lists "$config_tlds" "$unexpected_tlds" "$tlds_to_change")"
 	$run_command remove -o -c "$tlds_to_remove"
-	[[ "$config_tlds" != "" ]] && $run_command add -o -c "$config_tlds"
+	[[ -n "$config_tlds" ]] && $run_command add -o -c "$config_tlds"
 
 	check_tlds_coherency; rv=$?
-	if [ $rv -eq 0 ]; then
+	if [[ $rv -eq 0 ]]; then
 		echo "Successfully re-applied previous $list_type countries set."
 	else
 		echo "Failed to re-apply previous $list_type countries set." >&2
-		[ "$unexpected_tlds" != "" ] && echo "Unexpected $list_type tlds in the firewall: '$unexpected_tlds'" >&2
-		[ "$missing_tlds" != "" ] && echo "Missing $list_type tlds in the firewall: '$missing_tlds'" >&2
-		[ "$ipsets_incoherent" = "true" ] && echo "Warning: discrepancy detected between existing geoblocking ipsets and geoblocking firewall rules!" >&2
+		[[ -n "$unexpected_tlds" ]] && echo "Unexpected $list_type tlds in the firewall: '$unexpected_tlds'" >&2
+		[[ -n "$missing_tlds" ]] && echo "Missing $list_type tlds in the firewall: '$missing_tlds'" >&2
+		[[ "$ipsets_incoherent" ]] && echo "Warning: discrepancy detected between existing geoblocking ipsets and geoblocking firewall rules!" >&2
 		# call the *backup script to initiate recovery from fault
 		${suite_name}-backup restore; rv=$?
 
 		check_tlds_coherency; rv1=$?; rv=$(( rv + rv1 ))
-		if [ $rv -eq 0 ]; then
+		if [[ $rv -eq 0 ]]; then
 			echo "Successfully re-applied previous $list_type countries set."
 		else
 			echo "Failed to re-apply previous $list_type countries set." >&2
-			[ "$unexpected_tlds" != "" ] && echo "Unexpected $list_type tlds in the firewall: '$unexpected_tlds'" >&2
-			[ "$missing_tlds" != "" ] && echo "Missing $list_type tlds in the firewall: '$missing_tlds'" >&2
-			[ "$ipsets_incoherent" = "true" ] && echo "Warning: discrepancy detected between existing geoblocking ipsets and geoblocking firewall rules!" >&2
+			[[ -n "$unexpected_tlds" ]] && echo "Unexpected $list_type tlds in the firewall: '$unexpected_tlds'" >&2
+			[[ -n "$missing_tlds" ]] && echo "Missing $list_type tlds in the firewall: '$missing_tlds'" >&2
+			[[ "$ipsets_incoherent" ]] && echo "Warning: discrepancy detected between existing geoblocking ipsets and geoblocking firewall rules!" >&2
 			die "$rv" "Something is not working as it should. Consider fixing your firewall or your system. If it's a bug then please report it."
 		fi
 	fi
@@ -291,13 +291,13 @@ run_command="${install_dir}/${suite_name}-run"
 missing_deps="$(check_deps "curl|wget" jq iptables-save iptables-restore ipset)" || die "Error: missing dependencies: $missing_deps."
 
 # check that the config file exists
-[ ! -f "$conf_file" ] && die "Config file '$conf_file' doesn't exist! Run the installation script again."
+[[ ! -f "$conf_file" ]] && die "Config file '$conf_file' doesn't exist! Run the installation script again."
 
-[ -z "$list_type" ] && die "\$list_type variable should not be empty! Something is wrong!"
+[[ -z "$list_type" ]] && die "\$list_type variable should not be empty! Something is wrong!"
 
 ## Check arguments for sanity
 
-[ -z "$action" ] && { usage; die "Specify action!"; }
+[[ -z "$action" ]] && { usage; die "Specify action!"; }
 
 case "$action" in
 	add) ;;
@@ -307,16 +307,16 @@ case "$action" in
 	*) usage; die "Error: unsupported action '$action'." ;;
 esac
 
-[[ ("$action" == "add" || "$action" == "remove") && -z "$tlds_arg" ]] && \
+[[ ("$action" = "add" || "$action" = "remove") && -z "$tlds_arg" ]] && \
 	die "Error: action '$action' requires to specify countries with '-c <tlds>'!"
 
-[[ "$action" == "schedule" && ( -n "$tlds_arg" || -n "$force_action" ) ]] && \
+[[ "$action" = "schedule" && ( -n "$tlds_arg" || -n "$force_action" ) ]] && \
 	die "Action '$action' only supports changing the cron schedule! Do not use it with any option except '-s' or '-d' !"
 
-[[ "$action" == "status" && ( -n "$tlds_arg" || -n "$force_action" ) ]] && \
+[[ "$action" = "status" && ( -n "$tlds_arg" || -n "$force_action" ) ]] && \
 	die "Command '$action' only supports checking on current status of geoblocking! Do not use it with any option except '-l' or '-d' !"
 
-[ "$action" != "schedule" ] && [ -n "$cron_schedule" ] && {
+[[ "$action" != "schedule" && -n "$cron_schedule" ]] && {
 	msg1="Error: the '-s <\"cron_schedule\">' option only works with the \"schedule\" action."
 	msg2="To set up cron schedule, use '$me schedule -s <\"cron_schedule\">'"
 	usage
@@ -329,7 +329,7 @@ esac
 # check config coherency vs active ipsets and firewall rules before performing any action
 check_tlds_coherency || restore_from_config
 
-if [ "$action" = "status" ]; then
+if [[ "$action" = "status" ]]; then
 	report_status
 	unset list_type
 	unset debugmode
@@ -345,14 +345,14 @@ case "$action" in
 		requested_planned_tlds="$(merge_lists "$config_tlds" "$tlds_arg")"
 #		debugprint "requested resulting tlds: '$requested_planned_tlds'"
 
-		if [ -z "$force_action" ]; then
+		if [[ -z "$force_action" ]]; then
 			# remove any entries already present in config_tlds from tlds_arg and assign to tlds_to_change
 			tlds_to_change="$(find_lists_difference "$config_tlds" "$requested_planned_tlds")"
 
 			# find which tlds were specified for addition but already exist
 			wrong_tlds="$(find_lists_intersection "$tlds_arg" "$config_tlds")"
 
-			[ "$wrong_tlds" != "" ] && echo "NOTE: countries '$wrong_tlds' have already been added to the $list_type." >&2
+			[[ -n "$wrong_tlds" ]] && echo "NOTE: countries '$wrong_tlds' have already been added to the $list_type." >&2
 		else
 			tlds_to_change="$tlds_arg"
 		fi
@@ -362,13 +362,13 @@ case "$action" in
 
 	remove)
 #		debugprint "requested tlds to remove: '$tlds_arg'"
-		if [ -z "$force_action" ]; then
+		if [[ -z "$force_action" ]]; then
 			# find duplicate-free intersection between config_tlds and tlds_arg
 			tlds_to_change="$(find_lists_intersection "$config_tlds" "$tlds_arg")"
 			# find which tlds were specified for removal but don't exist
 			good_tlds="$(find_lists_intersection "$tlds_to_change" "$tlds_arg")"
 			wrong_tlds="$(find_lists_difference "$tlds_arg" "$good_tlds")"
-			[ "$wrong_tlds" != "" ] && echo "NOTE: countries '$wrong_tlds' have not been added to the $list_type, so can not remove." >&2
+			[[ -n "$wrong_tlds" ]] && echo "NOTE: countries '$wrong_tlds' have not been added to the $list_type, so can not remove." >&2
 
 		else
 			tlds_to_change="$tlds_arg"
@@ -379,11 +379,11 @@ case "$action" in
 esac
 
 
-if [ "$action" != "add" ] && [ "$action" != "remove" ]; then
+if [[ "$action" != "add" && "$action" != "remove" ]]; then
 	debugprint "Skipping the *run script call because specified action was '$action'."
 else
 
-	if [ -z "$tlds_to_change" ] && [ -z "$force_action" ]; then
+	if [[ -z "$tlds_to_change" && -z "$force_action" ]]; then
 		config_tlds="$(getconfig "Countries")" || die "Error: Couldn't read value for Countries from the config file."
 		echo -e "\nCountries in final $list_type: '${yellow}$config_tlds${no_color}'."
 		die 254 "Nothing to do, exiting."
@@ -402,10 +402,10 @@ else
 	$run_command "$action" -c "$tlds_to_change"; rv=$?
 
 	# positive return code means apply failure or another permanent error, except for 254
-	if [ $rv -gt 0 ] && [ $rv -ne 254 ]; then
+	if [[ $rv -gt 0 && $rv -ne 254 ]]; then
 		echo "Error performing action '$action' for countries '$tlds_to_change'." >&2
 
-		if [ "$config_tlds" = "" ]; then
+		if [[ -z "$config_tlds" ]]; then
 			die "Can not restore previous countries set for the $list_type because it is not found in the config file."
 		fi
 		restore_from_config
@@ -414,15 +414,15 @@ else
 	new_verified_tlds="$(find_active_tlds)"
 	failed_tlds="$(find_lists_difference "$new_verified_tlds" "$planned_tlds")"
 
-	if [ "$failed_tlds" != "" ]; then
+	if [[ -n "$failed_tlds" ]]; then
 		debugprint "planned_tlds: '$planned_tlds', new_verified_tlds: '$new_verified_tlds', failed_tlds: '$failed_tlds'."
 		echo "Warning: failed to apply new $list_type rules for countries: $failed_tlds." >&2
 		# if the error encountered during installation, exit with error in order to fail the installation
-		[ "$in_install" ] && die
+		[[ "$in_install" ]] && die
 	fi
 
 	# if all 'add' actions failed
-	if [ -z "$(find_lists_difference "$tlds_to_change" "$failed_tlds")" ]; then
+	if [[ -z "$(find_lists_difference "$tlds_to_change" "$failed_tlds")" ]]; then
 		die "All actions failed."
 	fi
 
@@ -442,28 +442,28 @@ else
 
 	echo -e "\nCountries in final $list_type: '${yellow}$config_tlds${no_color}'."
 	echo
-	[ ! "$in_install" ] && echo -e "View current geoblocking status with '${yellow}sudo ${suite_name} status${no_color}'\n"
+	[[ ! "$in_install" ]] && echo -e "View current geoblocking status with '${yellow}sudo ${suite_name} status${no_color}'\n"
 fi
 
 
 ### Cron jobs management
-if [ "$action" != "schedule" ]; then
+if [[ "$action" != "schedule" ]]; then
 	debugprint "Skipping cron setup because action is not 'schedule'."
 else
-	[[ "$cron_schedule" == "" ]] && cron_schedule="disable"
+	[[ -z "$cron_schedule" ]] && cron_schedule="disable"
 
 	# write to the config file in order to communicate parameters to *cronsetup
 	setconfig "CronSchedule=$cron_schedule" || die "Failed to write the updated CronSchedule value to the config file"
 
 	${suite_name}-cronsetup; rv=$?
-	if [ "$rv" -eq 0 ]; then
+	if [[ "$rv" -eq 0 ]]; then
 		echo -e "\nView current cron jobs with 'sudo crontab -l'"
 	else
 		die "Error: Failed to create or update cron jobs."
 	fi
 fi
 
-[ ! "$in_install" ] && echo
+[[ ! "$in_install" ]] && echo
 
 debugexitmsg
 

@@ -8,40 +8,52 @@
 ### Functions
 
 check_deps(){
-# tests commands specified in arguments
+# tests commands specified in arguments and complains if something's missing (by echo'ing it out in the end and setting return value to 1)
 # if an argument contains '|' then tests for all alternatives and only if all are missing, complains
+
+	# check for bash >= 4.3
+	bash_v="${BASH_VERSINFO[0]}.${BASH_VERSINFO[1]}"
+	requiredver="4.3"
+	if [ "$(printf '%s\n' "$requiredver" "$bash_v" | sort -V | head -n1)" != "$requiredver" ]; then
+		echo "Error: missing dependency: 'bash v${requiredver}' or higher is required but 'bash v$bash_v' is installed." >&2
+		echo
+		exit 1
+	fi
 
 	local missing_deps=""
 	local err=0
 
 	# implicitly loops over arguments
 	for dep; do
+		# process 'or' statements received as 'command_1|command_2...|command_n'
 		if [[ "$dep" = *'|'* ]]; then
-			dep_alt="${dep//'|'/' '}"
 			local test_alt_cnt=0
 			local err_alt_cnt=0
 			local alt_dep_list=""
 
+			# replace '|' delimiter with ' ' delimiter
+			dep_alt="${dep//'|'/' '}"
+			# process all space-delimited alternatives
 			for dep in $dep_alt; do
 				let test_alt_cnt++
 				! command -v "$dep" &> /dev/null && let err_alt_cnt++
-				[ -z "$alt_dep_list" ] && alt_dep_list="'$dep'" || alt_dep_list="$alt_dep_list or '$dep'"
+				[[ -z "$alt_dep_list" ]] && alt_dep_list="'$dep'" || alt_dep_list="$alt_dep_list or '$dep'"
 			done
 
-			if [ "$err_alt_cnt" -ge "$test_alt_cnt" ]; then
-				[ -z "$missing_deps" ] && missing_deps="$alt_dep_list" || missing_deps="${missing_deps}, $alt_dep_list"
+			if [[ "$err_alt_cnt" -ge "$test_alt_cnt" ]]; then
+				[[ -z "$missing_deps" ]] && missing_deps="$alt_dep_list" || missing_deps="${missing_deps}, $alt_dep_list"
 				let err++
 			fi
 
 		else
 			if ! command -v "$dep" &> /dev/null; then
-				[ -z "$missing_deps" ] && missing_deps="'$dep'" || missing_deps="${missing_deps}, '$dep'"
+				[[ -z "$missing_deps" ]] && missing_deps="'$dep'" || missing_deps="${missing_deps}, '$dep'"
 				let err++
 			fi
 		fi
 	done
 
-	[ "$err" -gt 0 ] && { echo "$missing_deps"; return 1; } || return 0
+	[[ "$err" -gt 0 ]] && { echo "$missing_deps"; return 1; } || return 0
 }
 
 echolog() {
@@ -50,30 +62,30 @@ echolog() {
 	msg_args1=()
 	# check for "-err" option in arguments
 	for msg_arg in "$@"; do
-		[ "$msg_arg" = "-err" ] && msg_is_err="true" || msg_args1+=( "$msg_arg" )
+		[[ "$msg_arg" = "-err" ]] && msg_is_err="true" || msg_args1+=( "$msg_arg" )
 	done
 
 	msg_args2=()
 	# check for "-noecho" option in arguments
 	for msg_arg in "${msg_args1[@]}"; do
-		[ "$msg_arg" = "-noecho" ] && noecho="true" || msg_args2+=( "$msg_arg" )
+		[[ "$msg_arg" = "-noecho" ]] && noecho="true" || msg_args2+=( "$msg_arg" )
 	done
 
-	if [ -n "${msg_args2[*]}" ]; then
+	if [[ -n "${msg_args2[*]}" ]]; then
 		# loop through arguments and print them to stderr and to the syslog
 		# "$nolog" is set as environment variable (used in *manage and *install scripts)
 		for arg in "${msg_args2[@]}"; do
-			if [ "$noecho" != "true" ]; then
-				[ "$msg_is_err" ] && echo "$me_short: $arg" 1>&2 || echo "$me_short: $arg"
+			if [[ ! "$noecho" ]]; then
+				[[ "$msg_is_err" ]] && echo "$me_short: $arg" 1>&2 || echo "$me_short: $arg"
 			fi
-			[ "$nolog" != "true" ] && logger -t "$me" "$arg"
+			[[ ! "$nolog" ]] && logger -t "$me" "$arg"
 		done
 	fi
 }
 
 debugprint() {
 # prints a debug message
-	[ "$debugmode" ] && echo -e "	Debug: ${me_short}: $*" >&2
+	[[ "$debugmode" ]] && echo -e "	Debug: ${me_short}: $*" >&2
 }
 
 debugentermsg() {
@@ -82,7 +94,7 @@ debugentermsg() {
 }
 
 debugexitmsg() {
-	[ -n "$parent_short_cap" ] && debugprint "\033[1;33mBack to *$parent_short_cap*...\033[0m"
+	[[ -n "$parent_short_cap" ]] && debugprint "\033[1;33mBack to *$parent_short_cap*...\033[0m"
 }
 
 die() {
@@ -93,19 +105,19 @@ die() {
 
 	# check for "-nolog" option in arguments
 	for die_arg in "$@"; do
-		[ "$die_arg" = "-nolog" ] && nolog="true" || die_args+=( "$die_arg" )
+		[[ "$die_arg" = "-nolog" ]] && nolog="true" || die_args+=( "$die_arg" )
 	done
 
-	if [ -n "${die_args[*]}" ]; then
+	if [[ -n "${die_args[*]}" ]]; then
 		echo >&2
 		# loop through arguments and print them to stderr and to the syslog
 		# "$nolog" is set either when calling die() or as environment variable (used in *manage and *install scripts)
 		for arg in "${die_args[@]}"; do
 			echo "$me_short: $arg" >&2
-			[ "$nolog" != "true" ] && logger -t "$me" "$arg"
+			[[ ! "$nolog" ]] && logger -t "$me" "$arg"
 		done
 	fi
-	[ -n "$parent_short_cap" ] && debugprint "\033[1;33mBack to $parent_short_cap...\033[0m"
+	[[ -n "$parent_short_cap" ]] && debugprint "\033[1;33mBack to $parent_short_cap...\033[0m"
 	echo >&2
 	exit "$rv"
 }
@@ -116,7 +128,7 @@ getconfig() {
 # returns 0 if successful
 	key_conf="$1"
 	target_file="${2:-$conf_file}"
-	[ -z "$key_conf" ] || [ -z "$target_file" ] && return 1
+	[[ -z "$key_conf" || -z "$target_file" ]] && return 1
 
 	entry="$(grep "$key_conf=" "$target_file" 2>/dev/null)" || return 2
 
@@ -132,7 +144,8 @@ getstatus() {
 # rest of the arguments are passed as is to setconfig()
 	target_file="$1"
 	shift 1
-	[ -n "$target_file" ] && { status_value="$(getconfig "$*" "$target_file")"; rv=$?; } || rv=1
+	local rv=0
+	[[ -n "$target_file" ]] && { status_value="$(getconfig "$*" "$target_file")"; rv=$?; } || rv=1
 	printf "%s" "$status_value"
 	return $rv
 }
@@ -142,6 +155,7 @@ setconfig() {
 # if one of the value pairs is "target_file=[file]" then writes to $file instead
 # returns 0 if successful, 1 if not
 
+# uncomment for debug
 #	local arguments=("$@")
 #	local args="$(for arg in "${arguments[@]}"; do printf "%s" "'$arg' "; done)"
 #	debugprint "\033[1;33mStarted *setconfig* with args: ${args}\033[0m"
@@ -151,7 +165,7 @@ setconfig() {
 
 	# loop through arguments
 	for argument_conf in "$@"; do
-		# in case an argument contains multiple lines, we read each line into a separate lines_arr element
+		# read each line into a separate lines_arr element (needed in case an argument contains multiple lines)
 		readarray -t lines_arr <<< "$argument_conf"
 		for line in "${lines_arr[@]}"; do
 			# only process the line if it contains '='
@@ -159,10 +173,10 @@ setconfig() {
 		   		key_conf="$(cut -f1 -d= <<< "$line")"
 		   		key_length=${#key_conf}
 		   		value_conf="${line:$key_length+1}"
-		   		if [ "$key_conf" = "target_file" ]; then
+		   		if [[ "$key_conf" = "target_file" ]]; then
 					arguments_target_file="$value_conf"
 				else
-					[ -n "$key_conf" ] && arguments_arr["$key_conf"]="$(awk '{$1=$1};1' <<< "$value_conf")"
+					[[ -n "$key_conf" ]] && arguments_arr["$key_conf"]="$(awk '{$1=$1};1' <<< "$value_conf")"
 				fi
 			fi
 		done
@@ -171,10 +185,10 @@ setconfig() {
 	target_file="${arguments_target_file:-$conf_file}"
 
 	# Check that $target_file variable is not empty
-	[[ "$target_file" = "" ]] && { die "*common: setconfig: '\$target_file' variable is not set!"; }
+	[[ -z "$target_file" ]] && { die "*common: setconfig: '\$target_file' variable is not set!"; }
 
 	# create the config file if it doesn't exist
-	if [ ! -f "$target_file" ]; then
+	if [[ ! -f "$target_file" ]]; then
 		touch "$target_file" || { die "*common: setconfig: could not create target_file '$target_file'"; }
 	fi
 
@@ -204,7 +218,8 @@ setstatus() {
 # rest of the arguments are passed as is to setconfig()
 	target_file="$1"
 	shift 1
-	[ -n "$target_file" ] && { setconfig "target_file=$target_file" "${@}"; rv=$?; } || rv=1
+	local rv=0
+	[[ -n "$target_file" ]] && { setconfig "target_file=$target_file" "${@}"; rv=$?; } || rv=1
 	return $rv
 }
 
@@ -290,7 +305,7 @@ check_tlds_coherency() {
 	missing_tlds="$(subtract_list_a_from_b "$active_tlds" "$config_tlds")"
 	tlds_difference="$(find_lists_difference "$active_tlds" "$config_tlds")"
 
-	if [ "$tlds_difference" = "" ]; then
+	if [[ -z "$tlds_difference" ]]; then
 		debugprint "Successfully verified config coherency."
 		return 0
 	else
@@ -317,13 +332,13 @@ find_active_tlds() {
 	tlds_difference="$(find_lists_difference "$current_ipset_tlds" "$current_iprules_tlds")"
 	tlds_merged="$(merge_lists "$current_ipset_tlds" "$current_iprules_tlds")"
 
-	if [ "$1" = "all" ]; then
+	if [[ "$1" = "all" ]]; then
 		printf "%s" "$tlds_merged"
 	else
 		printf "%s" "$tlds_intersection"
 	fi
 
-	[ "$tlds_difference" == "" ] && return 0 || { ipsets_incoherent="true"; return 1; }
+	[[ -z "$tlds_difference" ]] && return 0 || { ipsets_incoherent="true"; return 1; }
 }
 
 
@@ -341,35 +356,6 @@ find_active_tlds() {
 #	echo "$DIR"
 #}
 
-getlocalsubnet() {
-# attempts to find local subnet for the main network interface
-
-	# regex patterns used for ipv4 validation
-	# using Perl regex syntax because grep is faster with it than with native grep syntax
-	# regex compiled from 2 suggestions found here:
-	# https://stackoverflow.com/questions/5284147/validating-ipv4-addresses-with-regexp
-	ip_regex='^((25[0-5]|(2[0-4]|1\d|[1-9]|)\d)\.?\b){4}'
-	mask_regex='(/([01]?\d\d?|2[0-4]\d|25[0-5]))$'
-	subnet_regex="${ip_regex}${mask_regex}"
-
-	# returns local ip with subnet mask
-	localip="$(ip addr | grep 'state UP' -A2 | tail -n1 | awk '{print $2}')"
-
-	# Change last ipv4 octet to 0
-	lsubnet="$(printf "%s" "$localip" | sed 's|\([0-9]*\.[0-9]*\.[0-9]*\.\)[0-9]*|\10|')"
-
-	# Verifies that the argument is a valid ipv4 subnet
-	printf "%s" "$lsubnet" | grep -P "$subnet_regex" &>/dev/null; rv=$?
-
-	if [ $rv -ne 0 ]; then
-		# if validation fails, output empty string
-		printf "%s" ""
-	else
-		printf "%s" "$lsubnet"
-	fi
-	return $rv
-}
-
 sanitize_args() {
 # trims extra whitespaces, discards empty arguments
 arguments=()
@@ -377,7 +363,7 @@ for arg in "$@"; do
 	# trim leading and trailing whitespaces
 	arg="$(awk '{$1=$1};1' <<< "$arg")"
 	# add to array while discarding empty arguments
-	[ -n "$arg" ] && arguments+=("$arg")
+	[[ -n "$arg" ]] && arguments+=("$arg")
 done
 }
 
@@ -401,7 +387,7 @@ me_short_cap="${me_short^^}"
 
 parent="$(basename "$(ps -o args= $PPID)" 2>/dev/null | awk -v RS='/| ' '/^.*'$suite_name'/ {a=$0} END{print a}')"
 
-[ "$parent" = "$me" ] && parent=""
+[ "$parent" = "$me" ]] && parent=""
 parent_short="${parent//"${suite_name}-"/}"
 parent_short_cap="${parent_short^^}"
 
