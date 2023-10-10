@@ -80,7 +80,7 @@ while getopts ":c:s:ftdh" opt; do
 		f) force_action="true";;
 		d) debugmode_args="true";;
 		h) usage; exit 0;;
-		t) test=true;;
+		t) testmode=true;;
 		\?) usage; echo "Error: Unknown option: '-$OPTARG'." >&2; exit 1;;
 	esac
 done
@@ -100,6 +100,7 @@ echo
 debugmode="${debugmode_args:-$debugmode}"
 # set env var to match the result
 export debugmode="$debugmode"
+export testmode="$testmode"
 
 # Print script enter message for debug
 debugentermsg
@@ -384,7 +385,7 @@ else
 
 	if [ -z "$tlds_to_change" ] && [ -z "$force_action" ]; then
 		config_tlds="$(getconfig "Countries")" || die "Error: Couldn't read value for Countries from the config file."
-		echo; echo "Countries in final $list_type config: '$config_tlds'."
+		echo -e "\nCountries in final $list_type: '${yellow}$config_tlds${no_color}'."
 		die 254 "Nothing to do, exiting."
 	fi
 
@@ -398,7 +399,7 @@ else
 
 	### Call the *run script
 
-	$run_command "$action" -o -c "$tlds_to_change"; rv=$?
+	$run_command "$action" -c "$tlds_to_change"; rv=$?
 
 	# positive return code means apply failure or another permanent error, except for 254
 	if [ $rv -gt 0 ] && [ $rv -ne 254 ]; then
@@ -432,44 +433,37 @@ else
 #	debugprint "current $list_type countries in config file: '$config_tlds'"
 
 ####### Fault recovery test: inject unrequested tld
-[ "$test" ] &&	$run_command add -o -c "ge"; rv=$?
+#[ "$testmode" ] &&	$run_command add -o -c "ge"; rv=$?
 #######
 
 
 	# double-check coherency after applying new tlds
 	check_tlds_coherency || { tlds_to_change=""; restore_from_config; }
 
-	## call the backup script
-	debugprint "Calling the backup script"
-	${suite_name}-backup create-backup
+	echo -e "\nCountries in final $list_type: '${yellow}$config_tlds${no_color}'."
 	echo
-	echo "Countries in final $list_type: '$config_tlds'."
-	echo
-	[ ! "$in_install" ] && echo -e "View current geoblocking status with 'sudo ${suite_name} status'\n"
+	[ ! "$in_install" ] && echo -e "View current geoblocking status with '${yellow}sudo ${suite_name} status${no_color}'\n"
 fi
 
 
 ### Cron jobs management
-
 if [ "$action" != "schedule" ]; then
 	debugprint "Skipping cron setup because action is not 'schedule'."
 else
-
 	[[ "$cron_schedule" == "" ]] && cron_schedule="disable"
 
 	# write to the config file in order to communicate parameters to *cronsetup
 	setconfig "CronSchedule=$cron_schedule" || die "Failed to write the updated CronSchedule value to the config file"
 
 	${suite_name}-cronsetup; rv=$?
-	echo
 	if [ "$rv" -eq 0 ]; then
-		echo "View current cron jobs with 'sudo crontab -l'"
+		echo -e "\nView current cron jobs with 'sudo crontab -l'"
 	else
-		die "Error: Failed to create cron jobs!"
+		die "Error: Failed to create or update cron jobs."
 	fi
 fi
 
-echo
+[ ! "$in_install" ] && echo
 
 debugexitmsg
 
@@ -477,5 +471,6 @@ unset list_type
 unset debugmode
 unset nolog
 unset manualmode
+unset testmode
 
 exit 0
