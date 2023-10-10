@@ -11,9 +11,9 @@ check_deps(){
 # tests commands specified in arguments and complains if something's missing (by echo'ing it out in the end and setting return value to 1)
 # if an argument contains '|' then tests for all alternatives and only if all are missing, complains
 
-	# check for bash >= 4.3
+	# check for bash >= 4.0
 	bash_v="${BASH_VERSINFO[0]}.${BASH_VERSINFO[1]}"
-	requiredver="4.3"
+	requiredver="4.0"
 	if [ "$(printf '%s\n' "$requiredver" "$bash_v" | sort -V | head -n1)" != "$requiredver" ]; then
 		echo "Error: missing dependency: 'bash v${requiredver}' or higher is required but 'bash v$bash_v' is installed." >&2
 		echo
@@ -23,6 +23,8 @@ check_deps(){
 	local missing_deps=""
 	local err=0
 
+	IFS_OLD="$IFS"
+	IFS="${IFS_OLD}|"
 	# implicitly loops over arguments
 	for dep; do
 		# process 'or' statements received as 'command_1|command_2...|command_n'
@@ -30,10 +32,8 @@ check_deps(){
 			local test_alt_cnt=0
 			local err_alt_cnt=0
 			local alt_dep_list=""
-
-			# replace '|' delimiter with ' ' delimiter
-			dep_alt="${dep//'|'/' '}"
-			# process all space-delimited alternatives
+			local dep_alt="$dep"
+			# process all |-delimited alternatives
 			for dep in $dep_alt; do
 				let test_alt_cnt++
 				! command -v "$dep" &> /dev/null && let err_alt_cnt++
@@ -52,6 +52,7 @@ check_deps(){
 			fi
 		fi
 	done
+	IFS="$IFS_OLD"
 
 	[[ "$err" -gt 0 ]] && { echo "$missing_deps"; return 1; } || return 0
 }
