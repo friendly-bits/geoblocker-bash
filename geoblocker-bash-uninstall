@@ -118,6 +118,7 @@ iptables-save | sed -r "/INPUT.*comment.*$iptables_comment/s/-A/iptables -D/e" &
 
 ### Destroy associated ipsets
 echo "Destroying ipsets for ${suite_name}..."
+sleep 0.8
 for ipset_name in $(ipset list -n | grep "${suite_name}"); do
 	echo "Found ipset \"$ipset_name\", destroying..."
 	ipset destroy "$ipset_name"
