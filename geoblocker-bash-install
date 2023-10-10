@@ -316,7 +316,7 @@ else
 	echo -e "Warning: Installed with no persistence and no autoupdate functionality.\n"
 fi
 
-echo -e "View current geoblocking status with 'sudo ${suite_name} status'.\n"
+echo -e "View current geoblocking status with '${yellow}sudo ${suite_name} status${no_color}'.\n"
 
 echo
 echo "Install done."
