@@ -15,17 +15,26 @@ All necessary configuration changes required for geoblocking to work are automat
 Implements optional (enabled by default) persistence across system reboots and automatic update of the ip lists.
 
 Aims to be very reliable and implements lots of reliability features. Including:
-- Downloaded lists go through a validation process, with safeguards in place to prevent application of corrupted or incomplete lists to the firewall.
-- Error detection and handling at each stage and user notification through console messages or through syslog if an error occurs.
-- Automatic backup of the active ipsets and the firewall state before any changes, and automatic restore from backup in case an error occurs during these changes (which normally should never happen but implemented just in case).
-- Implementation of an easy way for a user to check on current geoblocking status and config (read TL;DR for more info ).
+- Downloaded lists go through validation process, with safeguards in place to prevent application of corrupted or incomplete lists to the firewall.
+- Extensive error detection and handling at each stage and user notification through console messages or through syslog if an error occurs.
+- Automatic backup of the active ipsets and of the firewall state before any changes, and automatic restore from backup in case an error occurs during these changes (which normally should never happen but implemented just in case).
 
-Aims to be very efficient both in the way the scripts operate and in the way the firewall is set up to operate:
-- When creating iptables rules, a list for each country is compiled into an ipset and that ipset is then used with a matching iptables rule, which is the most efficient way to implement whitelist or blacklist with iptables.
-- Creating new ipsets is implemented in the most efficient way allowed by the API, so normally it only takes a second or so for a very large list (depending on the CPU of course).
+Aims to be efficient both in the way the scripts operate and in the way the firewall is set up to operate:
+- When creating iptables rules, a list for each country is compiled into an ipset and that ipset is then used with a matching iptables rule. This way minimizes the load on the CPU when the firewall is processing incoming connection requests.
+- Calculation of optimized ipset parameters when creating new ipsets, to try and hit the sweet spot for both performance and memory consumption. Typically consumes very little memory (just a couple megabytes for a very large list) with minimal performance impact.
+- Creating new ipsets is implemented in the most efficient way allowed by the API, so normally it only takes less than a second for a very large list (depending on the CPU of course).
 - Only performs necessary actions. For example, if a list is up-to-date and already active in the firewall, it won't be re-validated and re-applied to the firewall until the data timestamp changes.
 - Scripts are only active for a short time when invoked either directly by the user or by a cron job (once after a reboot and then periodically for an auto-update).
 - List parsing and validation are implemented through efficient regex processing, so this is very quick (a fraction of a second for parsing and a few milliseconds for validation, for a very large list, depending on the CPU).
+
+Aims to be user friendly, easy to install, manage and uninstall:
+- Installation normally only takes around 10 seconds (that depends on the size and number of the ip lists and on your internet speed because lists download takes most of that time).
+- Uninstallation takes a fraction of a second. It completely removes the suite leaving no traces in the system, and restores pre-install firewall policies. No restart is required.
+- Works great with the default settings but also allows for customization which is well documented in this readme.
+- Pre-installation, provides a utility to check whether specdific ip addresses you might want to blacklist or whitelist are indeed included in the list fetched for a specified country.
+- Post-installation, provides a command to check on current geoblocking status so you don't have to run all the separate utilities and then gather and compare their output manually.
+- Post-installation, provides a utility for the user to manage and change geoblocking config (adding or removing country codes, changing the cron schedule etc).
+- All that is well documented, read **TL;DR** more info.
 
 I created this project for running on my own server, and it's being doing its job since the early releases, reducing the bot scans/attacks (which I'd been seeing a lot in the logs) to virtually zero. As I wanted it to be useful to other people as well, I implemented many reliability features which should make it unlikely that the scripts will misbehave on systems other than my own. But of course, use at your own risk. Before publishing a new release, I run the code through shellcheck to test for potential issues, and test the scripts on my server.
 
