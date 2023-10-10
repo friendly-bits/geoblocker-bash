@@ -67,7 +67,7 @@ shift $((OPTIND -1))
 [[ "$*" != "" ]] && {
 	usage
 	echo "Error in arguments. First unrecognized argument: '$1'." >&2
-	echo "When specifying cron schedule, make sure to use double quotation marks around it." >&2
+	echo "When specifying cron schedule, use double quotes around it." >&2
  	exit 1
 }
 
@@ -146,15 +146,17 @@ validateField() {
 
 	# field strings should not start or end with a dash
 	if [ "${fieldString:0:1}" = "-" ] || [ "${fieldString: -1}" = "-" ]; then
-		echo "Invalid input \"$fieldString\" for field $fieldName : it starts or ends with \"-\"." >&2
-		errors="$((errors + 1))"
+		err="Invalid input '$fieldString' for field $fieldName: it starts or ends with '-' ."
+		[ -z "$errors_str" ] && errors_str="$err" || errors_str="$errors_str \n$err"
+		let errors++
 		return 1
 	fi
 
 	# field strings should not start or end with a comma
 	if [ "${fieldString:0:1}" = "," ] || [ "${fieldString: -1}" = "," ]; then
-		echo "Invalid input \"$fieldString\" for field $fieldName : it starts or ends with \",\"." >&2
-		errors="$((errors + 1))"
+		err="Invalid input '$fieldString' for field $fieldName : it starts or ends with ',' ."
+		[ -z "$errors_str" ] && errors_str="$err" || errors_str="$errors_str \n$err"
+		let errors++
 		return 1
 	fi
 
@@ -171,8 +173,9 @@ validateField() {
 				# if that fails, try validating the segment as a name (or as an asterisk)
 				if ! validateName "$fieldName" "$segment"; then
 					# if that fails, the segment is invalid - return 1 and exit the function
-					echo "Invalid value \"$segment\" in field: $fieldName." >&2
-					errors="$((errors + 1))"
+					err="Invalid value '$segment' in field: $fieldName."
+					[ -z "$errors_str" ] && errors_str="$err" || errors_str="$errors_str \n$err"
+					let errors++
 					return 1
 				fi
 			fi
@@ -180,27 +183,29 @@ validateField() {
 			# segment validation was successful
 
 			# segmentsnum is used to count dash-separated segments in a slice
-			segmentsnum="$((segmentsnum + 1))"
+			let segmentsnum++
 			# segmentsnum_field is used to count all segments in a field
-			segmentsnum_field="$((segmentsnum_field + 1))"
+			let segmentsnum_field++
 			if [ "$segment" = "*" ]; then
 				# count asterisks for later verification that the field containing it doesn't contain any additional segments
-				asterisknum_field="$((asterisknum_field + 1))"
+				let asterisknum_field++
 			fi
 		done
 
 		# it doesn't make sense to have more than two dash-separated segments in a slice
 		if [ "$segmentsnum" -gt 2 ]; then
-			echo "Invalid value \"$slice\" in $fieldName \"$fieldString\"." >&2
-			errors="$((errors + 1))"
+			err="Invalid value '$slice' in $fieldName '$fieldString'."
+			[ -z "$errors_str" ] && errors_str="$err" || errors_str="$errors_str \n$err"
+			let errors++
 			return 1
 		fi
 	done
 
 	# if a field contains an asterisk then there should be only one segment, otherwise the field is invalid
 	if [ "$asterisknum_field" -gt 0 ] && [ "$segmentsnum_field" -gt 1 ]; then
-		echo "Invalid $fieldName \"$fieldString\"" >&2
-		errors="$((errors + 1))"
+		err="Invalid $fieldName '$fieldString'."
+		[ -z "$errors_str" ] && errors_str="$err" || errors_str="$errors_str \n$err"
+		let errors++
 		return 1
 	fi
 }
@@ -210,7 +215,7 @@ validateField() {
 
 errors=0
 exitstatus=0
-
+errors_str=""
 
 #### Basic sanity check for input arguments
 
@@ -222,25 +227,20 @@ read -r min hour dom mon dow extra <<< "$sourceline"
 
 # if $extra is not empty then too many arguments have been passed
 if [ -n "$extra" ]; then
-	echo "" >&2
-	echo "Error: Too many fields in schedule expression! I don't know what to do with \"$extra\"!" >&2
-	echo "Use double quotation marks around your expression!" >&2
-	echo "You entered: \"$sourceline\"" >&2
-	echo "Valid example: \"0 4 * * 6\"" >&2
-	echo "" >&2
+	echo -e "\n\n$me: Error: Too many fields in schedule expression. I don't know what to do with '$extra'." >&2
+	echo "You entered: '$sourceline'." >&2
+	echo "Valid example: '0 4 * * 6'." >&2
+	echo "Use double quotes around your expression." >&2
 	die
 fi
 
 # if some arguments are missing
 if [ -z "$min" ] || [ -z "$hour" ] || [ -z "$dom" ] || [ -z "$mon" ] || [ -z "$dow" ]; then
-	echo "" >&2
-	echo "Not enough fields in schedule expression!" >&2
-	echo "This script requires crontab schedule line as an argument!" >&2
-	echo "Cron notation fields should be in this format: \"minute hour day-of-month month day-of-week\"" >&2
-	echo "Use double quotation marks around your cron schedule expression!" >&2
-	echo "You entered: \"$sourceline\"" >&2
-	echo "Valid example: \"0 4 * * 6\"" >&2
-	echo "" >&2
+	echo -e "\n\n$me: Error: Not enough fields in schedule expression." >&2
+	echo "Crontab expression format: 'minute hour day-of-month month day-of-week'." >&2
+	echo "You entered: '$sourceline'." >&2
+	echo "Valid example: '0 4 * * 6'." >&2
+	echo "Use double quotes around your cron schedule expression." >&2
 	die
 fi
 
@@ -266,11 +266,11 @@ validateField "day of week" "$dow" "1" "7"
 
 if [ "$errors" -gt 0 ] ; then
 	exitstatus=1
-	echo "" >&2
-	echo "Cron notation fields should be in this format: \"minute hour day-of-month month day-of-week\"" >&2
-	echo "Use double quotation marks around your cron schedule expression!" >&2
-	echo "You entered: \"$sourceline\"" >&2
-	echo "Valid example: \"0 4 * * 6\"" >&2
+	echo -e "\n\n$me: Errors in cron expression:\n$errors_str\n" >&2
+	echo "Crontab expression format: 'minute hour day-of-month month day-of-week'." >&2
+	echo "You entered: '$sourceline'" >&2
+	echo "Valid example: '0 4 * * 6'" >&2
+	echo "Use double quotes around your cron schedule expression." >&2
 else
 	exitstatus=0
 fi
