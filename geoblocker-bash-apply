@@ -326,6 +326,7 @@ if [[ "$action" = "remove" ]]; then
 			exitvalue="254"
 		else
 			echo -n "Destroying ipset for country '$tld'... "
+			sleep 0.8
 			ipset destroy "$perm_ipset"; rv=$?
 			if [[ $rv -ne 0 ]]; then
 				echo "Failed."
@@ -410,6 +411,7 @@ if [[ "$action" = "add" ]]; then
 			debugprint "Ipset '$perm_ipset' doesn't exist yet."
 			# to avoid being dependent on ipset output staying constant down the road,
 			# still trying to destroy the ipset, just in case, but not checking the return value
+			sleep 0.5
 			ipset destroy "$perm_ipset" &>/dev/null
 		fi
 
@@ -420,6 +422,8 @@ if [[ "$action" = "add" ]]; then
 			ipset create "$perm_ipset" hash:net family "$family" hashsize "$ipset_hash" maxelem "$ipset_maxelem"; rv=$?
 			if [[ $rv -ne 0 ]]; then
 				echo "Failed."
+				iptables-save | sed -r "/INPUT.*comment.*${iptables_comment}/s/-A/iptables -D/e" &>/dev/null
+				sleep 0.8
 				ipset destroy "$perm_ipset"
 				destroy_temp_ipsets
 				die "Error when creating ipset '$perm_ipset'."
@@ -436,7 +440,9 @@ if [[ "$action" = "add" ]]; then
 		iptables -A INPUT -m set --match-set "$perm_ipset" src -j "$iptables_action" -m comment --comment "$iptables_comment"; rv=$?
 
 		if [[ $rv -ne 0 ]]; then
-			ipset destroy "$perm_ipset"
+			iptables-save | sed -r "/INPUT.*comment.*${iptables_comment}/s/-A/iptables -D/e" &>/dev/null
+			sleep 0.8
+			ipset destroy "$perm_ipset" &>/dev/null
 			destroy_temp_ipsets
 			die "Failed to append ipset rules with command: iptables -I INPUT -m set --match-set \"$perm_ipset\" src -j \"$iptables_action\"."
 		fi
@@ -446,6 +452,9 @@ if [[ "$action" = "add" ]]; then
 		echo -n "Making the new $list_type ipset for country '$tld' permanent... "
 		ipset swap "$temp_ipset" "$perm_ipset"; rv=$?
 		if [[ $rv -ne 0 ]]; then
+			iptables-save | sed -r "/INPUT.*comment.*${iptables_comment}/s/-A/iptables -D/e" &>/dev/null
+			sleep 0.8
+			ipset destroy "$perm_ipset" &>/dev/null
 			destroy_temp_ipsets
 			die "Failed to swap temporary and permanent ipsets."
 		fi
