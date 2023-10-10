@@ -60,7 +60,7 @@ Options:
     -c <"country_codes">          : tld's (country codes). if passing multiple country codes, use double quotes
 
     -s                            : Skip fetching (only run the apply script). For update action only.
-    -o                            : No backup: don't create backup after successful action
+    -o                            : No backup: don't create backup of current iptables state before the action
 
     -d                            : Debug
     -h                            : This help
@@ -157,38 +157,38 @@ missing_deps="$(check_deps "curl|wget" jq iptables-save iptables-restore ipset)"
 # check that the config file exists
 [ ! -f "$conf_file" ] && die "Config file '$conf_file' doesn't exist! Run the installation script again."
 
-[ -z "$knowngood_file" ] && die 1 "Error: Known-good file path can not be empty! Exiting."
+[ -z "$knowngood_file" ] && die "Error: Known-good file path can not be empty! Exiting."
 
-[ -z "$iplist_dir" ] && die 1 "Error: iplist file path can not be empty! Exiting."
+[ -z "$iplist_dir" ] && die "Error: iplist file path can not be empty! Exiting."
 
 # check for *fetch
 [ ! "$skipfetch" ] && if ! command -v ${suite_name}-fetch &> /dev/null; then
-	die 1 "Error: Can not find '${suite_name}-fetch'. Did you run setup? Exiting."
+	die "Error: Can not find '${suite_name}-fetch'. Did you run setup? Exiting."
 fi
 
 # check for *apply
 if ! command -v ${suite_name}-apply &> /dev/null; then
-	die 1 "Error: Can not find '${suite_name}-apply'. Did you run setup? Exiting."
+	die "Error: Can not find '${suite_name}-apply'. Did you run setup? Exiting."
 fi
 
 # check for *backup
 if ! command -v ${suite_name}-backup &> /dev/null; then
-	die 1 "Error: Can not find '${suite_name}-backup'. Did you run setup? Exiting."
+	die "Error: Can not find '${suite_name}-backup'. Did you run setup? Exiting."
 fi
 
 # check for country tlds
-[ -z "$tlds" ] && { err="tlds variable can not be empty! Exiting."; usage; die 1 "$err"; }
+[ -z "$tlds" ] && { err="tlds variable can not be empty! Exiting."; usage; die "$err"; }
 
 # check for valid action
 
-[ -z "$action_run" ] && { usage; die 1 "Specify action!"; }
+[ -z "$action_run" ] && { usage; die "Specify action!"; }
 
 # translate *run action to *apply action
 case "$action_run" in
 	add) action_apply="add" ;;
 	remove) action_apply="remove" ;;
 	update) action_apply="add" ;;
-	*) usage; die 1 "Error: unsupported action '$action_run'" ;;
+	*) usage; die "Error: unsupported action '$action_run'" ;;
 esac
 
 [ -z "$list_type" ] && die "\$list_type variable should not be empty! Something is wrong!"
@@ -230,28 +230,8 @@ echo
 if [ "$tlds_to_update" = "" ]; then
 	echolog "Ip lists don't require firewall reconfiguration."
 else
-	${suite_name}-apply "$action_apply" -c "$tlds_to_update"; rv=$?
-	if [ $rv -eq 254 ]; then
-		debugprint "NOTE: *apply exited with error code 254."
-		echo ""
-		# if non-fatal errors occur in *apply, set the nobackup variable
-		echolog -err "Error: *apply exited with code '254'. Failed to apply action '$action_apply'."
-		nobackup="true"
-	elif [ $rv -gt 0 ] && [ $rv -ne 254 ]; then
-		debugprint "NOTE: *apply exited with error code '$rv'."
-		echo ""
-		#if fatal errors occur in *apply, attempt to restore last known-good ipsets and iptables state
-		${suite_name}-backup restore; rv="$?"
-
-		# exit with the same exit code as backup-restore operation
-		die "$rv" ""
-	else
-		echolog "Successfully applied action '$action_run' for countries '$tlds_to_update'."
-	fi
-
 	if [ -z "$nobackup" ]; then
 		# check config coherency vs active ipsets and firewall rules before creating backup
-
 		check_tlds_coherency; rv=$?
 		if [ $rv -eq 0 ]; then
 			# call the backup script to create a known-good backup of ipsets and iptables state
@@ -268,6 +248,26 @@ else
 		debugprint "Skipping backup of current firewall state."
 	fi
 
+	${suite_name}-apply "$action_apply" -c "$tlds_to_update"; rv=$?
+
+#	[ "$testmode" ] && rv=1
+
+	if [ $rv -eq 254 ]; then
+		debugprint "NOTE: *apply exited with error code 254."
+		echo ""
+		echolog -err "Error: *apply exited with code '254'. Failed to apply action '$action_apply'."
+	elif [ $rv -gt 0 ] && [ $rv -ne 254 ]; then
+		debugprint "NOTE: *apply exited with error code '$rv'."
+		echo ""
+		# if fatal errors occur in *apply, attempt to restore last known-good ipsets and iptables state
+		# if we're in install, skip this step because there is no backup of ipsets anyway
+		[ ! "$in_install" ] && ${suite_name}-backup restore; rv="$?"
+
+		# exit with the same exit code as backup-restore operation
+		die "$rv" ""
+	else
+		echolog "Successfully applied action '$action_run' for countries '$tlds_to_update'."
+	fi
 fi
 
 if [ "$failed_tlds_cnt" -ne 0 ]; then
