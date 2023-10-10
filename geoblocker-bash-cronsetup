@@ -59,7 +59,6 @@ shift $((OPTIND -1))
 	exit 1
 }
 
-echo
 
 # get debugmode value from either the args or environment variable
 debugmode="${debugmode_args:-$debugmode}"
