@@ -166,7 +166,7 @@ get_local_country(){
 	cca2_list="$(<cca2_codes.list)" &>/dev/null
 
 	echo -e "\nPlease enter your country code." >&2
-	echo "It will be used to check if your blacklist or whitelist settings may cause you" >&2
+	echo "It will be used to check if your geoblocking settings may cause you" >&2
 	echo "        to get locked out of your remote machine and warn you if so." >&2
 	echo -e "If you want to skip this check, press Enter.\n" >&2
 	while true; do
