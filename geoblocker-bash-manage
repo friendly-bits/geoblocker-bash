@@ -278,7 +278,7 @@ check_for_lockout() {
 		case "$list_type" in
 			whitelist)
 				if [[ -z "$filtered_tld" ]]; then
-					msg1="Your machine's apparent country code '$user_tld' is not included in the planned final whitelist '$planned_tlds'.\n"
+					msg1="Your country code '$user_tld' is not included in the planned final whitelist '$planned_tlds'.\n"
 					msg2="Make sure you do not lock yourself out."
 					echo -e "$msg1$msg2"
 				fi
@@ -287,7 +287,7 @@ check_for_lockout() {
 
 			blacklist)
 				if [[ -n "$filtered_tld" ]]; then
-					msg1="Your machine's apparent country code '$user_tld' is included in the planned blacklist '$planned_tlds'.\n"
+					msg1="Your country code '$user_tld' is included in the planned blacklist '$planned_tlds'.\n"
 					msg2="Make sure you do not lock yourself out."
 					echo -e "$msg1$msg2"
 				fi
@@ -305,7 +305,7 @@ check_for_lockout() {
 		case "$action" in
 			add)
 				if [[ "$list_type" = "blacklist" ]]; then
-					msg1="You are trying to add your machine's apparent country code '$user_tld' to the blacklist.\n"
+					msg1="You are trying to add your country code '$user_tld' to the blacklist.\n"
 					msg2="Make sure you do not lock yourself out."
 					echo -e "$msg1$msg2"
 				fi
@@ -313,7 +313,7 @@ check_for_lockout() {
 			;;
 			remove)
 				if [[ "$list_type" = "whitelist" ]]; then
-					msg1="You are trying to remove your machine's apparent country code '$user_tld' from the whitelist.\n"
+					msg1="You are trying to remove your country code '$user_tld' from the whitelist.\n"
 					msg2="Make sure you do not lock yourself out."
 					echo -e "$msg1$msg2"
 				fi
