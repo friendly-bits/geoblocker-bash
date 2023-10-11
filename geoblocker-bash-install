@@ -159,53 +159,29 @@ get_local_country(){
 # if query fails, asks the user to input the code manually, then fetches cca2 codes from REST and validates against it
 # if can't fetch from REST, trusts the user
 
-	local ipinfo_url="ipinfo.io/"
-	local user_ip_info=""
 	local user_tld=""
-
-	local curl_command="curl -s --retry 3 --fail-early --connect-timeout 5"
-	local wget_command="wget -q --tries=3 --timeout=5 -O - "
-
-	if [[ "$wget_exists" ]]; then
-		local fetch_command="$wget_command"
-	elif [[ "$curl_exists" ]]; then
-		local fetch_command="$curl_command"
-	else
-		echolog -err "Error: Neither curl nor wget found."; return 1
-	fi
-
 	local rv=0
-	echo -n "Trying to determine your country... " >&2
-	user_ip_info="$($fetch_command $ipinfo_url 2>/dev/null)" || (( rv++ ))
-	user_tld="$(jq -r ".country" <<< "$user_ip_info")" || (( rv++ ))
 
-	if [[ "$rv" -ne 0 || -z "$user_tld" ]]; then
-		echo "Failed" >&2
+#	cca2_list="$($fetch_command https://restcountries.com/v3.1/all?fields=cca2 2>/dev/null | jq -r '.[].cca2' 2>/dev/null)"
+	cca2_list="$(<cca2_codes.list)" &>/dev/null
 
-		cca2_list="$($fetch_command https://restcountries.com/v3.1/all?fields=cca2 2>/dev/null | jq -r '.[].cca2' 2>/dev/null)"
+	echo -e "\nPlease enter your country code." >&2
+	echo "It will be used to check if your blacklist or whitelist settings may cause you" >&2
+	echo "        to get locked out of your remote machine and warn you if so." >&2
+	echo -e "If you want to skip this check, press Enter.\n" >&2
+	while true; do
+		read -p "Country code: " -r
+		REPLY="${REPLY^^}"
+		if [[ -z "$REPLY" ]]; then echo -e "Skipping...\n" >&2; return 0
+		else
+			# validate user input vs cca2 list
+			[[ -z "$cca2_list" ]] && { user_tld="$REPLY"; break; } # if the list is empty, trust the user
+			grep -x "$REPLY" <<< "$cca2_list" &>/dev/null; rv="$?"
+			[[ "$rv" -eq 0 ]] && { user_tld="$REPLY"; break; } || \
+				echo -e "\n'$REPLY' does not appear to be a valid country code. Try again or press Enter to skip this check." >&2
+		fi
+	done
 
-		echo -e "\nPlease enter your country code." >&2
-		echo "This will be used to check if your blacklist or whitelist settings may cause you to get locked out of your remote machine and warn you if so." >&2
-		echo "If you want to skip this check, press Enter." >&2
-		while true; do
-			read -p "Country code: " -r
-			if [[ -z "$REPLY" ]]; then echo -e "Skipping...\n" >&2; return 0
-			else
-				tld_to_check="${REPLY^^}"
-				if [[ -n "$cca2_list" ]]; then
-					grep -x "$tld_to_check" <<< "$cca2_list" ; rv="$?"
-				else break # trust the user if we can't get the list that is required to validate the tld
-				fi
-
-				[[ "$rv" -eq 0 ]] && break || echo "'$REPLY' does not appear to be a valid country code. Try again or press Enter to skip this check." >&2
-			fi
-		done
-		user_tld="$tld_to_check"
-	else
-		echo "$user_tld" >&2
-	fi
-
-#	setconfig "UserTld=$user_tld" || { echo "Error: Failed to write 'UserTld=$user_tld' to the config file" >&2; return 1; }
 	echo "$user_tld"
 	return 0
 }
