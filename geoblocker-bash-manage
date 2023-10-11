@@ -278,18 +278,18 @@ check_for_lockout() {
 		case "$list_type" in
 			whitelist)
 				if [[ -z "$filtered_tld" ]]; then
-					msg1="Your machine's apparent country '$user_tld' is not included in the planned final whitelist '$planned_tlds'.\n"
+					msg1="Your machine's apparent country code '$user_tld' is not included in the planned final whitelist '$planned_tlds'.\n"
 					msg2="Make sure you do not lock yourself out."
-					echo -e "$msg1 $msg2"
+					echo -e "$msg1$msg2"
 				fi
 				return 0
 			;;
 
 			blacklist)
 				if [[ -n "$filtered_tld" ]]; then
-					msg1="Your machine's apparent country '$user_tld' is included in the planned blacklist '$planned_tlds'.\n"
+					msg1="Your machine's apparent country code '$user_tld' is included in the planned blacklist '$planned_tlds'.\n"
 					msg2="Make sure you do not lock yourself out."
-					echo -e "$msg1 $msg2"
+					echo -e "$msg1$msg2"
 				fi
 				return 0
 			;;
@@ -305,17 +305,17 @@ check_for_lockout() {
 		case "$action" in
 			add)
 				if [[ "$list_type" = "blacklist" ]]; then
-					msg1="You are trying to add your machine's apparent country code '$user_tld' to the blacklist."
+					msg1="You are trying to add your machine's apparent country code '$user_tld' to the blacklist.\n"
 					msg2="Make sure you do not lock yourself out."
-					echo -e "$msg1 $msg2"
+					echo -e "$msg1$msg2"
 				fi
 				return 0
 			;;
 			remove)
 				if [[ "$list_type" = "whitelist" ]]; then
-					msg1="You are trying to remove your machine's apparent country code '$user_tld' from the whitelist."
+					msg1="You are trying to remove your machine's apparent country code '$user_tld' from the whitelist.\n"
 					msg2="Make sure you do not lock yourself out."
-					echo -e "$msg1 $msg2"
+					echo -e "$msg1$msg2"
 				fi
 				return 0
 			;;
@@ -475,7 +475,7 @@ else
 
 	if [[ -n "$lockout_expected_msg" ]]; then
 			echo -e "\n${red}Warning${no_color}: $lockout_expected_msg"
-			echo -e "\n'Y' to proceed. 'N' to abort.\n"
+			echo -e "\nProceed?"
 			while true; do
 				read -p "(Y/N) " -n 1 -r
 				if [[ "$REPLY" =~ ^[Yy]$ ]]; then echo -e "\nProceeding..."; break
