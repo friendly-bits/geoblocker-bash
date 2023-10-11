@@ -3,14 +3,14 @@ Geoip blocker for Linux aiming for efficiency, reliability and ease of use. Fron
 
 Intended use case is a server that needs to be publicly accessible only in a certain country or countries (whitelist), or should not be accessible from certain countries (blacklist).
 
-## Features and operation
+## Features
 _(if you are just looking for installation instructions, skip to the **TL;DR** section)_
 
 Basic functionality is automatic download of complete ipv4 subnet lists for user-specified countries, then using these lists to create either a whitelist or a blacklist (selected during installation) in the firewall, to either block all connections from these countries (blacklist), or only allow connections from them (whitelist).
 
 Subnet lists are fetched from the official regional registries (selected automatically based on the country). Currently supports ARIN (American Registry for Internet Numbers) and RIPE (Regional Internet registry for Europe, the Middle East and parts of Central Asia). RIPE stores subnet lists for countries in other regions as well, so currently this can be used for any country in the world.
 
-All necessary configuration changes required for geoblocking to work are automatically applied to the firewall during installation or post-installation when changing config (read further sections for more info).
+All configuration changes required for geoblocking to work are automatically applied to the firewall during installation or post-installation when changing config (read further sections for more info).
 
 Implements optional (enabled by default) persistence across system reboots and automatic update of the ip lists.
 
@@ -28,15 +28,15 @@ Aims to be efficient both in the way the scripts operate and in the way the fire
 - List parsing and validation are implemented through efficient regex processing, so this is very quick (a fraction of a second for parsing and a few milliseconds for validation, for a very large list, depending on the CPU).
 
 Aims to be user friendly, easy to install, manage and uninstall:
-- Installation normally only takes around 10 seconds (that depends on the size and number of the ip lists and on your internet speed because lists download takes most of that time).
+- Installation normally only takes a few seconds (that depends on the size and number of the ip lists and on your internet speed because lists download takes most of that time).
 - Uninstallation takes a fraction of a second. It completely removes the suite leaving no traces in the system, and restores pre-install firewall policies. No restart is required.
 - Works great with the default settings but also allows for customization which is well documented in this readme.
-- Pre-installation, provides a utility to check whether specdific ip addresses you might want to blacklist or whitelist are indeed included in the list fetched for a specified country.
-- Post-installation, provides a command to check on current geoblocking status so you don't have to run all the separate utilities and then gather and compare their output manually.
+- Pre-installation, provides a utility to check whether specific ip addresses you might want to blacklist or whitelist are indeed included in the list fetched for specified country.
+- Post-installation, provides a command to check on current geoblocking status so you don't have to run a few separate utilities and compare their output manually.
 - Post-installation, provides a utility for the user to manage and change geoblocking config (adding or removing country codes, changing the cron schedule etc).
 - All that is well documented, read **TL;DR** more info.
 
-I created this project for running on my own server, and it's being doing its job since the early releases, reducing the bot scans/attacks (which I'd been seeing a lot in the logs) to virtually zero. As I wanted it to be useful to other people as well, I implemented many reliability features which should make it unlikely that the scripts will misbehave on systems other than my own. But of course, use at your own risk. Before publishing a new release, I run the code through shellcheck to test for potential issues, and test the scripts on my server.
+I created this project for running on my own server, and it's been doing its job since the early releases, reducing the bot scans/attacks (which I'd been seeing a lot in the logs) to virtually zero. As I wanted it to be useful to other people as well, I implemented many reliability features which should make it unlikely that the scripts will misbehave on systems other than my own. But of course, use at your own risk. Before publishing a new release, I run the code through shellcheck to test for potential issues, and test the scripts on my server.
 
 ## **TL;DR**
 
@@ -195,7 +195,7 @@ After installation, the user interface is provided by simply running "geoblocker
 ```geoblocker-bash-apply remove -c <"country_codes">``` :
 - removes ipsets and associated iptables rules for specified countries.
 
-**The -cronsetup script** manages all the cron-related logic in one place. Called by the -manage script. Applies settings stored in the config file.
+**The -cronsetup script** manages all the cron-related logic in one place. Called by the -manage script. Cron jobs are created based on the settings stored in the config file.
 
 **The -backup script**: Creates a backup of the current iptables state and geoblocker-associated ipsets, or restores them from backup.
 
@@ -215,7 +215,11 @@ After installation, the user interface is provided by simply running "geoblocker
 
 ## **Extra notes**
 
-- All scripts (except -common) display "usage" when called with the "-h" option. You can find out about some additional options specific for each script by running it with that option.
-- Most scripts accept the "-d" option for debug (and pass it on to any other scripts they call)
+- Most scripts display "usage" when called with the "-h" option. You can find out about some additional options specific for each script by running it with that option.
+- Most scripts accept the "-d" option for debug (and pass it on to any other scripts they call).
 - The fetch script can be easily modified to get the lists from another source, for example from ipdeny.com
-- If you install the suite in whitelist mode and then remove your country's whitelist using the -manage script, you will probably get locked out of your remote server. If you only have one country in your whitelist, the -manage script will not allow you to remove it in order to prevent exactly this situation. But you can fool it by adding another country and then removing your own country. You may not get locked out while you're still connected to the server but once you disconnect, you may no longer be able to reconnect.
+ 
+There are 3 ways to get yourself locked out of your remote server:
+- install the suite in whitelist mode but do not include your own country in the whitelist
+- install in whitelist mode and later remove your country from the whitelist (if you only have one country in your whitelist, the -manage script will not allow you to remove it in order to prevent exactly this situation. But you can fool it by adding another country and then removing your own country)
+- Blacklist your own country. The scripts do not fool-proof against that.
