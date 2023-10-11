@@ -101,25 +101,55 @@ debugentermsg
 
 parse_arin() {
 
-	# what this next quasi-one-liner does (through pipes):
-	# 1) grep fetched_file to extract this (in each matching line):
-	# 	'subnet|ip_addresses_count'
-	#	(because this is the data in the ARIN file, don't ask me why they don't just use CIDR instead of ip_addresses_cnt)
-	# 2) tr replaces '|' delimiter with ' ' delimiter. now we have 'subnet ip_address_count'
-	# 3) awk uses the $cidr_lookup_table to replace ip_address_count with matching CIDR pattern
-	# 	(e.g. '256' gets replaced by '/24')
-	#	(awk wants files for its inputs but we want to avoid creating intermediate files, so we use the <() construct instead)
-	# 4) now we have 'subnet /CIDR'
-	# 5) tr deletes the ' '
-	# 6) finally, we have 'subnet/CIDR' (e.g. 217.10.224.0/24)
-	# 7) we write that into $parsed_file which we can later validate and feed to the firewall
-	#
-	# so the pipe chain is: fetched_file->grep->tr->awk(sideloading $cidr_lookup_table)->tr->parsed_file
-	# tr commands can be replaced with gsub's in awk but this is not any faster while being more cpu-intensive
+# lookup table needed to translate ARIN's quirky data to CIDR patterns
+# ip addresses number on the left, matching CIDR pattern on the right
+# delimited by pipe because this is the delimiter in ARIN's data and using the same delimiter makes it easier to process with awk
+cidr_lookup_table=$(cat <<EOF
+1|/32
+2|/31
+4|/30
+8|/29
+16|/28
+32|/27
+64|/26
+128|/25
+256|/24
+512|/23
+1024|/22
+2048|/21
+4096|/20
+8192|/19
+16384|/18
+32768|/17
+65536|/16
+131072|/15
+262144|/14
+524288|/13
+1048576|/12
+2097152|/11
+4194304|/10
+8388608|/9
+16777216|/8
+33554432|/7
+67108864|/6
+EOF
+)
 
-	awk 'NR==FNR {a[$1] = $2; next} {$2 = a[$2]} 1' <(printf "%s" "$cidr_lookup_table") \
-		<(grep -oP "(?<=arin\|$tld\|ipv4\|).*?(?=\|[0-9]*?\|allocated)" < "$fetched_file" | tr "|" " ") | \
-		tr -d " " > "$parsed_file"
+	# older solution, much more complex, slightly slower and less flexible (e.g. more work to adapt it to ipv6 in the future)
+	#	awk 'NR==FNR {a[$1] = $2; next} {$2 = a[$2]} 1' <(printf "%s" "$cidr_lookup_table") \
+	#		<(grep -oP "(?<=arin\|$tld\|$family\|).*?(?=\|[0-9]*?\|allocated)" < "$fetched_file" | tr "|" " ") | \
+	#	tr -d " " > "$parsed_file"
+
+
+	# uses 2 "files" for awk input: 1st is the cidr lookup table (fed into awk using the <() construct) 2nd is the fetched file.
+	# BEGIN {FS="\\|"} instructs awk to use | as field separator.
+	# "a[$1] = $2" compiles the lookup table into an associative array named "a" in awk,
+	# using the 1st field (ip count) of the table as key and 2nd field (cidr pattern) as value.
+	# next portion filters the lines in the fetched file for "$tld|$family" and "allocated".
+	# "print $4 a[$5]" takes the 4th field (ip subnet) in every resulting line,
+	# then uses the 5th field (ip count) as a key to get matching CIDR pattern from the array, and that gets appended to the output line.
+	awk -v family="$family" -v tld="$tld" 'BEGIN {FS="\\|"} NR==FNR {a[$1] = $2; next} $0 ~ tld"\\|"family".*\\|allocated" {print $4 a[$5]}' \
+	<(printf "%s\n" "$cidr_lookup_table") "$fetched_file" > "$parsed_file"
 
 	# check that $parsed_file is non-empty
 	[[ -s "$parsed_file" ]] && rv=0 || rv=1
@@ -170,39 +200,6 @@ failed_subnets_cnt_str=""
 declare -A failed_subnets_cnt_arr
 
 fetch_retries=2
-
-# needed to translate ARIN's quirky data to CIDR
-# ip scope on the left, matching CIDR pattern on the right
-cidr_lookup_table=$(cat <<EOF
-1 /32
-2 /31
-4 /30
-8 /29
-16 /28
-32 /27
-64 /26
-128 /25
-256 /24
-512 /23
-1024 /22
-2048 /21
-4096 /20
-8192 /19
-16384 /18
-32768 /17
-65536 /16
-131072 /15
-262144 /14
-524288 /13
-1048576 /12
-2097152 /11
-4194304 /10
-8388608 /9
-16777216 /8
-33554432 /7
-67108864 /6
-EOF
-)
 
 
 #### Checks
