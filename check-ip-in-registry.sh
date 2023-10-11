@@ -188,18 +188,18 @@ for validated_arg_ipv4 in $validated_arg_ipv4s; do
 	case "$true_grep_rv" in
 		0) echo -e "Result: '$validated_arg_ipv4' ${green}*BELONGS*${no_color} to a subnet in registry's list for country '$tld'." ;;
 		1) echo -e "${red}Error${no_color}: grepcidr reported an error but returned a non-empty '\$filtered_ipv4'. Something is wrong."
-			fatal_error="true" ;;
+			grepcidr_error="true" ;;
 		2) echo -e "${red}Error${no_color}: grepcidr didn't report any error but returned an empty '\$filtered_ipv4'. Something is wrong."
-			fatal_error="true" ;;
+			grepcidr_error="true" ;;
 		3) echo -e "Result: '$validated_arg_ipv4' ${red}*DOES NOT BELONG*${no_color} to a subnet in registry's list for country '$tld'." ;;
-		*) echo -e "${red}Error${no_color}: unexpected \$truth_table_result: '$truth_table_result'. Something is wrong."
-			fatal_error="true" ;;
+		*) echo -e "${red}Error${no_color}: unexpected \$true_grep_rv: '$true_grep_rv'. Something is wrong."
+			grepcidr_error="true" ;;
 	esac
 
-	[[ "$grepcidr_error" = true ]] && { rm "$list_file" &>/dev/null; die "Failed to process grepcidr results."; }
+	[[ "$grepcidr_error" ]] && { rm "$list_file" &>/dev/null; die "Failed to process grepcidr results."; }
 
 	# increment the return value if matching didn't succeed for any reason
-	[[ "$truth_table_result" -ne 0 ]] && let ip_check_rv++
+	[[ "$true_grep_rv" -ne 0 ]] && let ip_check_rv++
 done
 
 
