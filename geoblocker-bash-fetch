@@ -206,14 +206,6 @@ fetch_retries=2
 
 missing_deps="$(check_deps jq)" || die "Error: missing dependencies: $missing_deps."
 
-# check for curl
-command -v "curl" &> /dev/null && curl_exists="true"
-
-# check for wget
-command -v "wget" &> /dev/null && wget_exists="true"
-
-[[ ! "$curl_exists" && ! "$wget_exists" ]] && die "Error: Neither curl nor wget found."
-
 tlds_cnt="$(wc -l <<< "$tlds")"
 
 [[ "$tlds_cnt" -eq 0 ]] && { usage; die "Specify country code/s!"; }
