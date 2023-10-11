@@ -219,7 +219,8 @@ After installation, the user interface is provided by simply running "geoblocker
 - Most scripts accept the "-d" option for debug (and pass it on to any other scripts they call).
 - The fetch script can be easily modified to get the lists from another source, for example from ipdeny.com
  
-There are 3 ways to get yourself locked out of your remote server:
-- install the suite in whitelist mode but do not include your own country in the whitelist
-- install in whitelist mode and later remove your country from the whitelist (if you only have one country in your whitelist, the -manage script will not allow you to remove it in order to prevent exactly this situation. But you can fool it by adding another country and then removing your own country)
-- Blacklist your own country. The scripts do not fool-proof against that.
+There are 3 ways to get yourself locked out of your remote server with this suite:
+- install the suite in whitelist mode without including your country in the whitelist
+- install in whitelist mode and later remove your country from the whitelist
+- Blacklist your own country.
+The scripts will warn you in each of these situations and wait for your input (you can press Y and do it anyway), but that depends on you correctly specifying your country code during installation.
