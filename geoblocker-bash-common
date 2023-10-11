@@ -368,11 +368,21 @@ for arg in "$@"; do
 done
 }
 
-### Variables
+### Checks
 
 # check for common deps
 missing_deps="$(check_deps tr cut sort wc awk sed grep comm logger bc)" || die "Error: missing dependencies: $missing_deps."
 
+# check for curl
+command -v "curl" &> /dev/null && curl_exists="true"
+
+# check for wget
+command -v "wget" &> /dev/null && wget_exists="true"
+
+[[ "$curl_exists" || "$wget_exists" ]] || die "Missing dependencies: Neither curl nor wget found."
+
+
+### Variables
 
 # colors
 red='\033[0;31m'
