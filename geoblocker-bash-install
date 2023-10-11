@@ -154,6 +154,62 @@ install_failed() {
 	exit 1
 }
 
+get_local_country(){
+# checks local country cca2 code by querying ipinfo.io
+# if query fails, asks the user to input the code manually, then fetches cca2 codes from REST and validates against it
+# if can't fetch from REST, trusts the user
+
+	local ipinfo_url="ipinfo.io/"
+	local user_ip_info=""
+	local user_tld=""
+
+	local curl_command="curl -s --retry 3 --fail-early --connect-timeout 5"
+	local wget_command="wget -q --tries=3 --timeout=5 -O - "
+
+	if [[ "$wget_exists" ]]; then
+		local fetch_command="$wget_command"
+	elif [[ "$curl_exists" ]]; then
+		local fetch_command="$curl_command"
+	else
+		echolog -err "Error: Neither curl nor wget found."; return 1
+	fi
+
+	local rv=0
+	echo -n "Trying to determine your country... " >&2
+	user_ip_info="$($fetch_command $ipinfo_url 2>/dev/null)" || (( rv++ ))
+	user_tld="$(jq -r ".country" <<< "$user_ip_info")" || (( rv++ ))
+
+	if [[ "$rv" -ne 0 || -z "$user_tld" ]]; then
+		echo "Failed" >&2
+
+		cca2_list="$($fetch_command https://restcountries.com/v3.1/all?fields=cca2 2>/dev/null | jq -r '.[].cca2' 2>/dev/null)"
+
+		echo -e "\nPlease enter your country code." >&2
+		echo "This will be used to check if your blacklist or whitelist settings may cause you to get locked out of your remote machine and warn you if so." >&2
+		echo "If you want to skip this check, press Enter." >&2
+		while true; do
+			read -p "Country code: " -r
+			if [[ -z "$REPLY" ]]; then echo -e "Skipping...\n" >&2; return 0
+			else
+				tld_to_check="${REPLY^^}"
+				if [[ -n "$cca2_list" ]]; then
+					grep -x "$tld_to_check" <<< "$cca2_list" ; rv="$?"
+				else break # trust the user if we can't get the list that is required to validate the tld
+				fi
+
+				[[ "$rv" -eq 0 ]] && break || echo "'$REPLY' does not appear to be a valid country code. Try again or press Enter to skip this check." >&2
+			fi
+		done
+		user_tld="$tld_to_check"
+	else
+		echo "$user_tld" >&2
+	fi
+
+#	setconfig "UserTld=$user_tld" || { echo "Error: Failed to write 'UserTld=$user_tld' to the config file" >&2; return 1; }
+	echo "$user_tld"
+	return 0
+}
+
 
 #### VARIABLES
 
@@ -214,15 +270,17 @@ missing_files=$"(check_files_exist "${suite_name}-fetch" "${suite_name}-common" 
 
 #### MAIN
 
+user_tld="$(get_local_country)"
+
 # Create the directory for config and, if required, parent directories
 mkdir -p "$conf_dir"
 
 # write initial config to the config file
 echo -n "Setting initial config... "
 
-setconfig "Countries=" "ListType=$list_type" "Installdir=$install_dir" "Datadir=$datadir" "CronSchedule=$cron_schedule" "DefaultSchedule=$defualt_schedule" \
+setconfig "UserTld=$user_tld" "Countries=" "ListType=$list_type" "Installdir=$install_dir" "Datadir=$datadir" "CronSchedule=$cron_schedule" "DefaultSchedule=$defualt_schedule" \
 	"RebootSleep=$sleeptime" "Backup_script=$backup_script" "EmergencyDeactivation=$emergency_deactivation" \
-	"NoPersistence=$no_persistence" "NoDrop=$nodrop"; rv=$?
+	"NoPersistence=$no_persistence" "NoDrop=$nodrop"; rv="$?"
 
 if [[ "$rv" -ne 0 ]]; then
 	echo "Failed." >&2
@@ -242,7 +300,7 @@ echo -n "Creating file for backup of iptables state..."
 if [[ -f "$knowngood_file" ]]; then
 	echo "Backup file already exists, skipping."
 else
-	touch "$knowngood_file"; rv=$?
+	touch "$knowngood_file"; rv="$?"
 	if [[ $rv -ne 0 ]]; then
 		echo "Error." >&2
 		install_failed
@@ -298,7 +356,7 @@ fi
 
 
 ### Add iplist(s) for $tlds to managed iplists, then fetch and apply the iplist(s)
-${suite_name}-manage add -f -c "$tlds"; rv=$?
+${suite_name}-manage add -f -c "$tlds"; rv="$?"
 
 # the *manage script exits with return value 254 if requested country is already included in the config
 if [[ $rv -ne 0 && $rv -ne 254 ]]; then
@@ -307,7 +365,7 @@ fi
 
 if [[ ! "$no_persistence" && "$cron_schedule" != "disable" ]]; then
 	### Set up cron jobs
-	${suite_name}-manage schedule -s "$cron_schedule"; rv=$?
+	${suite_name}-manage schedule -s "$cron_schedule"; rv="$?"
 
 	if [[ $rv -ne 0 ]]; then
 		install_failed "Error: failed to set up cron jobs."
