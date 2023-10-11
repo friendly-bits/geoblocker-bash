@@ -31,7 +31,7 @@ Aims to be user friendly, easy to install, manage and uninstall:
 - Installation normally only takes a few seconds (that depends on the size and number of the ip lists and on your internet speed because lists download takes most of that time).
 - Uninstallation takes a fraction of a second. It completely removes the suite leaving no traces in the system, and restores pre-install firewall policies. No restart is required.
 - Works great with the default settings but also allows for customization which is well documented in this readme.
-- Pre-installation, provides a utility to check whether specdific ip addresses you might want to blacklist or whitelist are indeed included in the list fetched for a specified country.
+- Pre-installation, provides a utility to check whether specific ip addresses you might want to blacklist or whitelist are indeed included in the list fetched for a specified country.
 - Post-installation, provides a command to check on current geoblocking status so you don't have to run a few separate utilities and compare their output manually.
 - Post-installation, provides a utility for the user to manage and change geoblocking config (adding or removing country codes, changing the cron schedule etc).
 - All that is well documented, read **TL;DR** more info.
