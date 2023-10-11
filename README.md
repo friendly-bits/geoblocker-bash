@@ -195,7 +195,7 @@ After installation, the user interface is provided by simply running "geoblocker
 ```geoblocker-bash-apply remove -c <"country_codes">``` :
 - removes ipsets and associated iptables rules for specified countries.
 
-**The -cronsetup script** manages all the cron-related logic in one place. Called by the -manage script. Applies settings stored in the config file.
+**The -cronsetup script** manages all the cron-related logic in one place. Called by the -manage script. Cron jobs are created based on the settings stored in the config file.
 
 **The -backup script**: Creates a backup of the current iptables state and geoblocker-associated ipsets, or restores them from backup.
 
@@ -215,7 +215,7 @@ After installation, the user interface is provided by simply running "geoblocker
 
 ## **Extra notes**
 
-- All scripts (except -common) display "usage" when called with the "-h" option. You can find out about some additional options specific for each script by running it with that option.
-- Most scripts accept the "-d" option for debug (and pass it on to any other scripts they call)
+- Most scripts display "usage" when called with the "-h" option. You can find out about some additional options specific for each script by running it with that option.
+- Most scripts accept the "-d" option for debug (and pass it on to any other scripts they call).
 - The fetch script can be easily modified to get the lists from another source, for example from ipdeny.com
-- If you install the suite in whitelist mode and then remove your country's whitelist using the -manage script, you will probably get locked out of your remote server. If you only have one country in your whitelist, the -manage script will not allow you to remove it in order to prevent exactly this situation. But you can fool it by adding another country and then removing your own country. You may not get locked out while you're still connected to the server but once you disconnect, you may no longer be able to reconnect.
+- If you install the suite in whitelist mode and then remove your country's whitelist using the -manage script, you will probably get locked out of your remote server. If you only have one country in your whitelist, the -manage script will not allow you to remove it in order to prevent exactly this situation. But you can fool it by adding another country and then removing your own country. Alternatively, you can lock yourself out of your remote server by blacklisting your own country. The scripts do not fool-proof against that. You may not get locked out while you're still connected to the server but once you disconnect, you may no longer be able to reconnect.
