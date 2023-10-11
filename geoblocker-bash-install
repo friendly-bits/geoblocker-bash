@@ -127,7 +127,6 @@ check_files_exist() {
 
 	# implicitly loops over arguments
 	for dep_file; do
-
 		if [[ ! -s "$dep_file" ]]; then
 			[[ -z "$missing_files" ]] && missing_files="'$dep_file'" || missing_deps="${missing_files}, '$dep_file'"
 			(( err++ ))
@@ -240,7 +239,7 @@ fi
 
 missing_files="$(check_files_exist "${suite_name}-fetch" "${suite_name}-common" "${suite_name}-apply" \
 	"${suite_name}-run" "${suite_name}-manage" "${suite_name}-cronsetup" "${suite_name}-backup" \
-	"${suite_name}-uninstall" "${suite_name}-reset" "validate-cron-schedule.sh" "bruuuh" "check-ip-in-registry.sh")" || \
+	"${suite_name}-uninstall" "${suite_name}-reset" "validate-cron-schedule.sh" "check-ip-in-registry.sh" "cca2_codes.list")" || \
 	install_failed "Error: missing files: $missing_files."
 
 
