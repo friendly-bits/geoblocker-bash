@@ -135,7 +135,7 @@ report_status() {
 	if [[ "$rv" -ne 0 ]]; then
 		echo -e "${red}Error${no_color}: discrepancy detected between the config file and iptables rules!\n" >&2
 		[[ "$ipsets_incoherent" ]] && \
-			echo "${purple}Warning:${no_color} discrepancy detected between existing geoblocking ipsets and geoblocking firewall rules!\n" >&2
+			echo -e "${purple}Warning:${no_color} discrepancy detected between existing geoblocking ipsets and geoblocking firewall rules!\n" >&2
 	else
 		echo -e "Country codes in the firewall rules ${green}match${no_color} the config.\n"
 	fi
@@ -164,14 +164,13 @@ report_status() {
 	if [[ "$list_type" = "whitelist" ]]; then
 		echo -e "\n${yellow}Global iptables rules${no_color} for $suite_name:"
 		global_rules="$(iptables-save | grep "${suite_name}_global")"
-		[[ -z "$global_rules" ]] && echo "None.\n" || echo -e "${global_rules}\n"
+		[[ -z "$global_rules" ]] && echo -e "None.\n" || echo -e "${global_rules}\n"
 	fi
 
 	# report specific rules for the active geoblocking mode
 	echo -e "\n${yellow}$list_type iptables rules${no_color} for $suite_name:"
 	geoblocking_rules="$(iptables -L -v | grep "match-set ${suite_name}" | grep "$expected_rule_type")"
-	[[ -z "$geoblocking_rules" ]] && echo -e "${red}None.${no_color}\n\n${red}Error${no_color}: expected geoblocking rules are not found in the firewall!\n" || \
-		echo -e "$geoblocking_rules\n"
+	[[ -z "$geoblocking_rules" ]] && echo -e "${red}None.${no_color}\n" || echo -e "$geoblocking_rules\n"
 
 	# check if cron service is enabled
 	(systemctl is-enabled cron.service) > /dev/null || crondisabled="true"
@@ -250,6 +249,80 @@ restore_from_config() {
 	fi
 }
 
+check_for_lockout() {
+# tries to prevent the user from locking themselves out
+
+# if we are currently installing, checks local country code vs $planned_tlds list
+# if not, checks it vs $tlds_to_change list
+
+# the reason for this distinction is in case the user decides to ignore the warning and proceed,
+# if we continue to check vs $planned_tlds then they will have to see the warning every time and reply to it every time,
+# even for actions unrelated to their tld
+# on the other hand, if we check vs $tlds_to_change during installation, we may miss the fact that their $tld is not included in the whitelist
+
+# if lockout condition is detected, prints a warning and returns 0
+# if all is good, or if local country wasn't determined during installation, prints nothing and returns 0
+# returns 1 if encounters errors
+
+	local user_tld=""
+	local filtered_tld=""
+	user_tld="$(getconfig "UserTld")" || { echo "Error: Couldn't read value for UserTld from the config file." >&2; return 1; }
+
+	# if we couldn't get user's country code durint installation, give up on checking for possible lockout
+	# otherwise it would be very annoying for the user
+	[[ -z "$user_tld" ]] && return 0
+
+	if [[ "$in_install" ]]; then
+		filtered_tld="$(find_lists_intersection "$user_tld" "$planned_tlds")"
+
+		case "$list_type" in
+			whitelist)
+				if [[ -z "$filtered_tld" ]]; then
+					msg1="Your machine's apparent country '$user_tld' is not included in the planned final whitelist '$planned_tlds'.\n"
+					msg2="Make sure you do not lock yourself out."
+					echo -e "$msg1 $msg2"
+				fi
+				return 0
+			;;
+
+			blacklist)
+				if [[ -n "$filtered_tld" ]]; then
+					msg1="Your machine's apparent country '$user_tld' is included in the planned blacklist '$planned_tlds'.\n"
+					msg2="Make sure you do not lock yourself out."
+					echo -e "$msg1 $msg2"
+				fi
+				return 0
+			;;
+			*) return 1 ;;
+		esac
+
+	else
+		filtered_tld="$(find_lists_intersection "$user_tld" "$tlds_to_change")"
+
+		# if user is not doing anything related to their own country code, skip further checks
+		[[ -z "$filtered_tld" ]] && return 0
+
+		case "$action" in
+			add)
+				if [[ "$list_type" = "blacklist" ]]; then
+					msg1="You are trying to add your machine's apparent country code '$user_tld' to the blacklist."
+					msg2="Make sure you do not lock yourself out."
+					echo -e "$msg1 $msg2"
+				fi
+				return 0
+			;;
+			remove)
+				if [[ "$list_type" = "whitelist" ]]; then
+					msg1="You are trying to remove your machine's apparent country code '$user_tld' from the whitelist."
+					msg2="Make sure you do not lock yourself out."
+					echo -e "$msg1 $msg2"
+				fi
+				return 0
+			;;
+		esac
+	fi
+}
+
 
 #### VARIABLES
 
@@ -288,7 +361,8 @@ run_command="${install_dir}/${suite_name}-run"
 
 #### CHECKS
 
-missing_deps="$(check_deps "curl|wget" jq iptables-save iptables-restore ipset)" || die "Error: missing dependencies: $missing_deps."
+missing_deps="$(check_deps jq iptables-save iptables-restore ipset)" || die "Error: missing dependencies: $missing_deps."
+
 
 # check that the config file exists
 [[ ! -f "$conf_file" ]] && die "Config file '$conf_file' doesn't exist! Run the installation script again."
@@ -394,6 +468,21 @@ else
 	# if planned_tlds list is empty
 	if [[ -z "$planned_tlds" && -z "$force_action" && "$list_type" = "whitelist" ]]; then
 		die "Planned final countries whitelist is empty! Disallowing this to prevent accidental lockout of a remote server."
+	fi
+
+	# try to prevent possible user lock-out
+	lockout_expected_msg="$(check_for_lockout)" ||  die "Error in 'check_for_lockout()' function."
+
+	if [[ -n "$lockout_expected_msg" ]]; then
+			echo -e "\n${red}Warning${no_color}: $lockout_expected_msg"
+			echo -e "\n'Y' to proceed. 'N' to abort.\n"
+			while true; do
+				read -p "(Y/N) " -n 1 -r
+				if [[ "$REPLY" =~ ^[Yy]$ ]]; then echo -e "\nProceeding..."; break
+				elif [[ "$REPLY" =~ ^[Nn]$ ]]; then die "Aborted action '$action' for countries '$tlds_to_change'."
+				else echo -e "\nPlease press 'y/n'.\n"
+				fi
+			done
 	fi
 
 
