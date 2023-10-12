@@ -340,13 +340,12 @@ if [[ "$action" = "remove" ]]; then
 	echo
 fi
 
-
-# global rules are only used for whitelists. when working with blacklists, don't touch these
+# these are only useful for whitelists
 if [[ "$list_type" = "whitelist" ]]; then
 
 	### Set global iptables rules
 
-	# Add rule to allow connections from the local subnet
+	# Add rule to allow connections from the local network
 	localsubnet="$(getlocalsubnet)"
 	if [[ -z "$localsubnet" ]]; then
 		destroy_temp_ipsets
@@ -354,7 +353,7 @@ if [[ "$list_type" = "whitelist" ]]; then
 	else
 		echo "Found local subnet: '$localsubnet'."
 		echo -n "Appending rule to allow all traffic from the local subnet... "
-		iptables -A INPUT -s "$localsubnet" -j ACCEPT -m comment --comment "${iptables_comment_global}"; rv=$?
+		iptables -A INPUT -s "$localsubnet" -j ACCEPT -m comment --comment "${iptables_comment_global}-localsubnet"; rv=$?
 
 		if [[ $rv -ne 0 ]]; then
 			destroy_temp_ipsets
@@ -365,7 +364,7 @@ if [[ "$list_type" = "whitelist" ]]; then
 
 	# Add rule to allow connections from the loopback interface
 	echo -n "Inserting rule to allow all traffic from the loopback interface... "
-	iptables -I INPUT -i lo -j ACCEPT -m comment --comment "${iptables_comment_global}"; rv=$?
+	iptables -I INPUT -i lo -j ACCEPT -m comment --comment "${iptables_comment_global}-loopback-interface"; rv=$?
 
 	if [[ $rv -ne 0 ]]; then
 		destroy_temp_ipsets
@@ -373,19 +372,18 @@ if [[ "$list_type" = "whitelist" ]]; then
 	fi
 	echo "Ok."
 
-	# Add rule to allow established/related connections
-	echo -n "Inserting rule to allow established/related connections... "
-	iptables -I INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT -m comment --comment "${iptables_comment_global}"; rv=$?
-
-	if [[ $rv -ne 0 ]]; then
-		destroy_temp_ipsets
-		die "Failed to insert rules with command 'iptables -I INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT'."
-	fi
-	echo "Ok."
-
 	echo
 fi
 
+# Add rule to allow established/related connections, regardless of the firewall mode (whitelist or blacklist)
+echo -n "Inserting rule to allow established/related connections... "
+iptables -I INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT -m comment --comment "${iptables_comment_global}-established-related"; rv=$?
+
+if [[ $rv -ne 0 ]]; then
+	destroy_temp_ipsets
+	die "Failed to insert rules with command 'iptables -I INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT'."
+fi
+echo "Ok."
 
 ### Create permanent ipsets if they don't exist, add iptables rules for them, then swap them with temp ipsets
 if [[ "$action" = "add" ]]; then
