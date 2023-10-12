@@ -115,12 +115,20 @@ report_status() {
 		*) die "Error: unrecognized list type '$list_type'!"
 	esac
 
+	# read iptables state and ipsets list into env variables to avoid querying iptables and ipset every time
+	# check existing variable first and only query if value not set yet
+	iptables_output="${iptables_output:-$(iptables -vL)}"
+	[[ -z iptables_output ]] && die "Error: failed to get iptables state."
+	export iptables_output="$iptables_output"
+	export ipset_list="${ipset_list:-$(ipset list -n)}"
+
 	echo -e "\n${yellow}Geoblocking status report:${no_color}"
 
 	echo -e "\nGeoblocking mode: ${yellow}${list_type}${no_color}.\n"
 
-	input_policy=$(iptables -nL | grep "Chain INPUT" | awk -F'policy |)' '{print $2}')
-	forward_policy=$(iptables -nL | grep "Chain FORWARD" | awk -F'policy |)' '{print $2}')
+	# report default chain policies
+	input_policy="$(awk '$0 ~ "INPUT" {-F"policy| "; print $4}' <<< $iptables_output)"
+	forward_policy="$(awk '$0 ~ "FORWARD" {-F"policy| "; print $4}' <<< $iptables_output)"
 
 	if [[ -z "$input_policy" || -z "$forward_policy" ]]; then
 		die "Error: failed to determine current policies for INPUT and FORWARD chains."
@@ -128,8 +136,11 @@ report_status() {
 
 	# check ipsets and iptables rules for active tlds
 	active_tlds="$(find_active_tlds)"; rv=$?
-	[[ -z "$active_tlds" ]] && echo -e "${red}Warning${no_color}: no firewall rules found for any country codes!" || \
+	if [[ -z "$active_tlds" ]]; then
+		echo -e "${red}Warning${no_color}: no firewall rules found for any country codes!"
+	else
 		echo -e "$list_type is configured for country codes: '${yellow}$active_tlds${no_color}'.\n"
+	fi
 
 	check_tlds_coherency; rv=$?
 	if [[ "$rv" -ne 0 ]]; then
@@ -147,7 +158,6 @@ report_status() {
 		forward_policy_colored="${red}${forward_policy}${no_color}"
 	echo -e "Active ${yellow}iptables policies${no_color}: \nINPUT chain: $input_policy_colored, FORWARD chain: $forward_policy_colored\n"
 
-
 	# check INPUT chain default policy compatibility with list_type
 	[[ "$input_policy" != "$expected_policy" ]] && {
 				echo -e "${purple}WARNING${no_color}: $list_type functionality requires INPUT chain policy to be '$expected_policy' but it is '$input_policy'."
@@ -160,17 +170,29 @@ report_status() {
 				} || echo -e "FORWARD chain policy ${green}is compatible${no_color} with $list_type."
 
 
-	# for a whitelist, report global iptables rules (irrelevant for blacklist)
-	if [[ "$list_type" = "whitelist" ]]; then
-		echo -e "\n${yellow}Global iptables rules${no_color} for $suite_name:"
-		global_rules="$(iptables-save | grep "${suite_name}_global")"
-		[[ -z "$global_rules" ]] && echo -e "None.\n" || echo -e "${global_rules}\n"
+	# report global iptables rules
+	iptables_rules_header="$(grep -m1 "prot opt" <<< "$iptables_output" | cut -b12-150)"
+
+	echo -e "\n${yellow}Global iptables rules${no_color} rules for $suite_name:"
+	echo "-----------------------------------------------------------------------------------------------------------------------------------------------------------"
+	echo -e "$iptables_rules_header"
+	echo "-----------------------------------------------------------------------------------------------------------------------------------------------------------"
+	global_rules="$(grep "${suite_name}_global" <<< "$iptables_output" |cut -b12-170)"
+	if [[ -z "$global_rules" ]]; then echo -e "${red}None.${no_color}\n"
+	else
+		 echo -e "$global_rules\n"
 	fi
 
 	# report specific rules for the active geoblocking mode
 	echo -e "\n${yellow}$list_type iptables rules${no_color} for $suite_name:"
-	geoblocking_rules="$(iptables -L -v | grep "match-set ${suite_name}" | grep "$expected_rule_type")"
-	[[ -z "$geoblocking_rules" ]] && echo -e "${red}None.${no_color}\n" || echo -e "$geoblocking_rules\n"
+	echo "-----------------------------------------------------------------------------------------------------------------------------------------------------------"
+	echo -e "$iptables_rules_header"
+	echo "-----------------------------------------------------------------------------------------------------------------------------------------------------------"
+	geoblocking_rules="$(grep "match-set ${suite_name}" <<< "$iptables_output" | grep "$expected_rule_type" | cut -b12-170)"
+	if [[ -z "$geoblocking_rules" ]]; then echo -e "${red}None.${no_color}\n"
+	else
+		 echo -e "$geoblocking_rules\n"
+	fi
 
 	# check if cron service is enabled
 	(systemctl is-enabled cron.service) > /dev/null || crondisabled="true"
@@ -179,12 +201,13 @@ report_status() {
 	else
 		echo -e "Cron system service is ${green}enabled${no_color}.\n"
 
+		export cron_jobs="${cron_jobs:-"$(crontab -u root -l 2>/dev/null)"}"
 		# check cron jobs
-		persistence_job="$(crontab -u root -l 2>/dev/null | grep "${suite_name}-persistence")"
+		persistence_job="$(grep "${suite_name}-persistence" <<< "$cron_jobs")"
 		[[ -n "$persistence_job" ]] && echo -e "${green}Persistence cron job is active${no_color}.\n" || \
 			echo -e "${purple}WARNING${no_color}: Persistence cron job is ${red}missing${no_color}. Geoblocking will not work after reboot.\n"
 
-		autoupdate_job="$(crontab -u root -l 2>/dev/null | grep "${suite_name}-autoupdate")"
+		autoupdate_job="$(grep "${suite_name}-autoupdate" <<< "$cron_jobs")"
 		if [[ -n "$autoupdate_job" ]]; then
 			echo -e "${green}Autoupdate cron job is active.${no_color}\n"
 			update_schedule="$(echo "$autoupdate_job" | cut -f1 -d\")"
@@ -197,6 +220,15 @@ report_status() {
 			echo -e "${yellow}NOTE${no_color}: Autoupdate cron job is ${red}missing${no_color}. Automatic ip list updates are ${red}disabled${no_color}.\n"
 		fi
 	fi
+
+	reset_state_vars
+}
+
+reset_state_vars(){
+# unsets iptables_output, ipset_lists and cron_jobs variables to avoid using irrelevant data
+	unset iptables_output
+	unset ipset_lists
+	unset cron_jobs
 }
 
 restore_from_config() {
@@ -225,6 +257,7 @@ restore_from_config() {
 	$run_command remove -o -c "$tlds_to_remove"
 	[[ -n "$config_tlds" ]] && $run_command add -o -c "$config_tlds"
 
+	reset_state_vars
 	check_tlds_coherency; rv=$?
 	if [[ $rv -eq 0 ]]; then
 		echo "Successfully re-applied previous $list_type countries set."
@@ -236,6 +269,7 @@ restore_from_config() {
 		# call the *backup script to initiate recovery from fault
 		${suite_name}-backup restore; rv=$?
 
+		reset_state_vars
 		check_tlds_coherency; rv1=$?; rv=$(( rv + rv1 ))
 		if [[ $rv -eq 0 ]]; then
 			echo "Successfully re-applied previous $list_type countries set."
@@ -401,6 +435,7 @@ esac
 #### MAIN
 
 # check config coherency vs active ipsets and firewall rules before performing any action
+reset_state_vars
 check_tlds_coherency || restore_from_config
 
 if [[ "$action" = "status" ]]; then
@@ -500,6 +535,7 @@ else
 		restore_from_config
 	fi
 
+	reset_state_vars
 	new_verified_tlds="$(find_active_tlds)"
 	failed_tlds="$(find_lists_difference "$new_verified_tlds" "$planned_tlds")"
 
@@ -527,6 +563,7 @@ else
 
 
 	# double-check coherency after applying new tlds
+	reset_state_vars
 	check_tlds_coherency || { tlds_to_change=""; restore_from_config; }
 
 	echo -e "\nCountries in final $list_type: '${yellow}$config_tlds${no_color}'."
