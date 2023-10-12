@@ -326,8 +326,15 @@ find_active_tlds() {
 		*) die "Error: unexpected list type '$list_type'!"
 	esac
 
-	current_ipset_tlds="$(ipset list -n | grep "${suite_name}" | grep -o '..$' | tr '\n' ' ' | awk '{$1=$1};1')"
-	current_iprules_tlds="$(iptables -L | grep "$rule_type" | grep -oP "(?<=src /\* ${suite_name}\_).*?(?= \*/)" | tr '\n' ' ' | awk '{$1=$1};1')"
+	# read iptables state and ipsets list into env variables to avoid querying iptables and ipset every time
+	# check existing variable first and only query if value not set yet
+	iptables_output="${iptables_output:-$(iptables -vL)}"
+	[[ -z iptables_output ]] && die "Error: failed to get iptables state."
+	iptables_output="$iptables_output"
+	ipset_list="${ipset_list_n:-$(ipset list -n)}"
+
+	current_ipset_tlds="$(grep "$suite_name" <<< "$ipset_list" | grep -o '..$' | tr '\n' ' ' | awk '{$1=$1};1')"
+	current_iprules_tlds="$(grep "$rule_type" <<< "$iptables_output" | grep -oP "(?<=src /\* ${suite_name}\_).*?(?= \*/)" | tr '\n' ' ' | awk '{$1=$1};1')"
 
 	tlds_intersection="$(find_lists_intersection "$current_ipset_tlds" "$current_iprules_tlds")"
 	tlds_difference="$(find_lists_difference "$current_ipset_tlds" "$current_iprules_tlds")"
