@@ -90,12 +90,8 @@ where 'action' is either 'add', 'remove' or 'schedule'.
 - for persistence and autoupdate functionality, requires the cron service to be enabled
 
 additional mandatory pre-requisites: to install, run ```sudo apt install ipset wget jq```
-- wget (or alternatively curl) is used by the "fetch" and "check-ip-in-registry" scripts to download lists from the internet registry
-- ipset utility is a companion tool to iptables (used by the "apply" script to create efficient iptables rules)
-- jq - Json processor (used to parse ip lists downloaded from RIPE)
 
 optional: the check-ip-in-registry.sh script requires grepcidr. install it with ```sudo apt install grepcidr```
-- grepcidr - efficiently filters ip addresses matching CIDR patterns (used to check if an ip address belongs to a subnet from a list of subnets)
 
 ## **Notes**
 
