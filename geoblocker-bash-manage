@@ -124,7 +124,7 @@ report_status() {
 
 	echo -e "\n${yellow}Geoblocking status report:${no_color}"
 
-	echo -e "\nGeoblocking mode: ${yellow}${list_type}${no_color}.\n"
+	echo -e "\nGeoblocking mode: ${yellow}${list_type}${no_color}."
 
 	# report default chain policies
 	input_policy="$(awk '$0 ~ "INPUT" {-F"policy| "; print $4}' <<< $iptables_output)"
@@ -137,16 +137,16 @@ report_status() {
 	# check ipsets and iptables rules for active ccodes
 	active_ccodes="$(find_active_ccodes)"; rv=$?
 	if [[ -z "$active_ccodes" ]]; then
-		echo -e "${red}Warning${no_color}: no firewall rules found for any country codes!"
+		echo -e "\n${red}Warning${no_color}: no firewall rules found for any country codes!\n"
 	else
-		echo -e "$list_type is configured for country codes: '${yellow}$active_ccodes${no_color}'.\n"
+		echo -e "$list_type is configured for country codes: '${yellow}$active_ccodes${no_color}'."
 	fi
 
 	check_ccodes_coherency; rv=$?
 	if [[ "$rv" -ne 0 ]]; then
-		echo -e "${red}Error${no_color}: discrepancy detected between the config file and iptables rules!\n" >&2
+		echo -e "\n${red}Error${no_color}: discrepancy detected between the config file and iptables rules!\n" >&2
 		[[ "$ipsets_incoherent" ]] && \
-			echo -e "${purple}Warning:${no_color} discrepancy detected between existing geoblocking ipsets and geoblocking firewall rules!\n" >&2
+			echo -e "\n${purple}Warning:${no_color} discrepancy detected between existing geoblocking ipsets and geoblocking firewall rules!\n" >&2
 	else
 		echo -e "Country codes in the firewall rules ${green}match${no_color} the config.\n"
 	fi
@@ -156,7 +156,7 @@ report_status() {
 		input_policy_colored="${red}${input_policy}${no_color}"
 	[[ "$forward_policy" = "$expected_policy" || "$forward_policy" = "DROP" ]] && forward_policy_colored="${green}${forward_policy}${no_color}" || \
 		forward_policy_colored="${red}${forward_policy}${no_color}"
-	echo -e "Active ${yellow}iptables policies${no_color}: \nINPUT chain: $input_policy_colored, FORWARD chain: $forward_policy_colored\n"
+	echo -e "${yellow}Active iptables policies${no_color}: \nINPUT chain: $input_policy_colored, FORWARD chain: $forward_policy_colored\n"
 
 	# check INPUT chain default policy compatibility with list_type
 	[[ "$input_policy" != "$expected_policy" ]] && {
@@ -197,24 +197,24 @@ report_status() {
 	# check if cron service is enabled
 	(systemctl is-enabled cron.service) > /dev/null || crondisabled="true"
 	if [[ -n "$crondisabled" ]]; then
-		echo -e "${purple}WARNING${no_color}: cron service appears to be disabled. Both persistence across reboots and autoupdates will likely not work.\n"
+		echo -e "\n${purple}WARNING${no_color}: cron service appears to be disabled. Both persistence across reboots and autoupdates will likely not work.\n"
 	else
-		echo -e "Cron system service is ${green}enabled${no_color}.\n"
+		echo -e "Cron system service is ${green}enabled${no_color}."
 
 		export cron_jobs="${cron_jobs:-"$(crontab -u root -l 2>/dev/null)"}"
 		# check cron jobs
 		persistence_job="$(grep "${suite_name}-persistence" <<< "$cron_jobs")"
-		[[ -n "$persistence_job" ]] && echo -e "${green}Persistence cron job is active${no_color}.\n" || \
-			echo -e "${purple}WARNING${no_color}: Persistence cron job is ${red}missing${no_color}. Geoblocking will not work after reboot.\n"
+		[[ -n "$persistence_job" ]] && echo -e "${green}Persistence cron job is active${no_color}." || \
+			echo -e "${purple}WARNING${no_color}: Persistence cron job is ${red}missing${no_color}. Geoblocking will not work after reboot."
 
 		autoupdate_job="$(grep "${suite_name}-autoupdate" <<< "$cron_jobs")"
 		if [[ -n "$autoupdate_job" ]]; then
-			echo -e "${green}Autoupdate cron job is active.${no_color}\n"
+			echo -e "${green}Autoupdate cron job is active.${no_color}"
 			update_schedule="$(echo "$autoupdate_job" | cut -f1 -d\")"
 			if [[ -n "$update_schedule" && "$update_schedule" != " " ]]; then
 				echo -e "Autoupdate schedule: ${yellow}$update_schedule${no_color}\n"
 			else
-				echo -e "${red}Error:${no_color} Could not determine autoupdate schedule. Complete cron line:"; echo -e "${autoupdate_job}\n"
+				echo -e "\n${red}Error:${no_color} Failed to determine autoupdate schedule. Complete cron line:"; echo -e "${autoupdate_job}\n"
 			fi
 		else
 			echo -e "${yellow}NOTE${no_color}: Autoupdate cron job is ${red}missing${no_color}. Automatic ip list updates are ${red}disabled${no_color}.\n"
