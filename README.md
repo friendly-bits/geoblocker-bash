@@ -42,12 +42,13 @@ Implements optional (enabled by default) persistence across system reboots and a
 <details><summary>Read more:</summary>
   
 - Uninstallation normally takes about a second. It completely removes the suite, removes geoblocking firewall rules and restores pre-install firewall policies. No restart is required.
-- Pre-installation, provides a utility _(check-ip-in-registry.sh)_to check whether specific ip addresses you might want to blacklist or whitelist are indeed included in the list fetched from the registry.
-- Post-installation, provides a command to check on current geoblocking status so you don't have to run a few separate utilities and compare their output manually.
-- Post-installation, provides a utility for the user to manage and change geoblocking config (adding or removing country codes, changing the cron schedule etc).
+- Pre-installation, provides a utility _(check-ip-in-registry.sh)_ to check whether specific ip addresses you might want to blacklist or whitelist are indeed included in the list fetched from the registry.
+- Post-installation, provides a utility _(symlinked to 'geoblocker-bash')_ for the user to manage and change geoblocking config (adding or removing country codes, changing the cron schedule etc).
+- Post-installation, provides a command _('geoblocker-bash status')_ to check current geoblocking status so you don't have to run a few separate utilities and compare their output manually.
 - All that is well documented, read **TL;DR** for more info.
+- Lots of comments in the code, in case you want to change something in it or learn how the scripts are working.
 - If an error or invalid input is encountered, provides useful feedback to help you solve the issue.
-- Lots of comments in the code, in case you want to change something in it or learn how the scripts are working.</details>
+</details>
 
 ## **TL;DR**
 
