@@ -14,32 +14,30 @@ All configuration changes required for geoblocking to work are automatically app
 
 Implements optional (enabled by default) persistence across system reboots and automatic update of the ip lists.
 
-**Reliability**:
+**Reliability**:<details>
 - Downloaded lists go through validation process, which safeguards against application of corrupted or incomplete lists to the firewall.
 - All scripts perform extensive error detection and handling, so if something goes wrong, chances for bad consequences are rather low.
 - Automatic backup of the firewall state before any changes or updates, and automatic restore from backup in case an error occurs during these changes (which normally should never happen but implemented just in case).
 - Scripts which serve as a user interface validate all user input to prevent unintended mistakes.
-- If a user accidentally requests an action that is about to block their own country (which can happen both in blacklist mode and in whitelist mode), the -manage script will warn them and wait for their input before proceeding.
+- If a user accidentally requests an action that is about to block their own country (which can happen both in blacklist mode and in whitelist mode), the -manage script will warn them and wait for their input before proceeding.</details>
 
-**Efficiency**:
+**Efficiency**:<details>
 - When creating iptables rules, a list for each country is compiled into an ipset and that ipset is then used with a matching iptables rule. This way the load on the CPU is minimal when the firewall is processing incoming connection requests.
 - Calculates optimized ipset parameters when creating new ipsets, to try and hit the sweet spot for both performance and memory consumption. Typically consumes very little memory (just a couple MB for a very large list) with minimal performance impact.
 - Creating new ipsets is done efficiently, so normally it takes less than a second for a very large list (depending on the CPU of course).
 - Only performs necessary actions. For example, if a list is up-to-date and already active in the firewall, it won't be re-validated and re-applied to the firewall until the data timestamp changes.
 - Scripts are only active for a short time when invoked either directly by the user or by a cron job (once after a reboot and then periodically for an auto-update).
-- List parsing and validation are implemented through efficient regex processing, so this is very quick (a fraction of a second for parsing and a few milliseconds for validation, for a very large list, depending on the CPU).
+- List parsing and validation are implemented through efficient regex processing, so this is very quick (a fraction of a second for parsing and a few milliseconds for validation, for a very large list, depending on the CPU).</details>
 
-**Ease of use**:
-- Installation normally only takes a few seconds and requires only 2 parameters: country code(s) to block and geolbocking mode (whitelist/blacklist).
-- Uninstallation takes about a second. It completely removes the suite, removes geoblocking firewall rules and restores pre-install firewall policies. No restart is required.
+**Ease of use**:<details>
+- Installation normally takes a few seconds and requires only 2 parameters: country code(s) and geolbocking mode (whitelist/blacklist).
+- Uninstallation normally takes about a second. It completely removes the suite, removes geoblocking firewall rules and restores pre-install firewall policies. No restart is required.
 - Pre-installation, provides a utility to check whether specific ip addresses you might want to blacklist or whitelist are indeed included in the list fetched from the registry.
 - Post-installation, provides a command to check on current geoblocking status so you don't have to run a few separate utilities and compare their output manually.
 - Post-installation, provides a utility for the user to manage and change geoblocking config (adding or removing country codes, changing the cron schedule etc).
 - All that is well documented, read **TL;DR** for more info.
 - If an error or invalid input is encountered, provides useful feedback to help you solve the issue.
-- Lots of comments in the code, in case you want to change something in it or learn how the scripts are working.
-
-_I created this project for running on my own server, and it's been doing its job since the early releases, reducing the bot scans/attacks (which I'd been seeing a lot in the logs) to virtually zero. As I wanted it to be useful to other people as well, I implemented many reliability features which should make it unlikely that the scripts will misbehave on systems other than my own. But of course, use at your own risk. Before publishing a new release, I run the code through shellcheck to test for potential issues, and test the scripts on my server._
+- Lots of comments in the code, in case you want to change something in it or learn how the scripts are working.</details>
 
 ## **TL;DR**
 
@@ -49,16 +47,20 @@ _Recommended to read the NOTES section below._
 1) Install pre-requisites. On Debian, Ubuntu and derivatives run: ```sudo apt install ipset jq wget``` (on other distributions, use their built-in package manager. Note that I only test on Debian, Ubuntu and Mint).
 2) Download the latest realease: https://github.com/blunderful-scripts/geoblocker-bash/releases
 3) Extract all scripts included in the release into the same folder somewhere in your home directory and cd into that directory in your terminal
-4) _Optional: read (4a, 4b) below._ 
+4) _Optional:_
+<details>
+4a) If intended use is whitelist and you want to install geoblocker-bash on a remote machine, run the check-ip-in-registry.sh script before installation to make sure that your local public ip addresses are included in the whitelist fetched from the internet registry, so you do not get locked out of your remote server. check-ip-in-registry.sh has an additional pre-requisite: grepcidr. Install it with ```sudo apt install grepcidr```.
+- example (for US): ```bash check-ip-in-registry.sh -c US -i <"ip_address ... ip_address">``` (if checking multiple ip addresses, use double quotation marks)
+
+4b) If intended use is a blacklist and you know in advance some of the ip addresses you want to block, use check-ip-in-registry.sh script before installation to verify that those ip addresses are included in the list fetched from the registry. The syntax is the same as above.
+</details>
+
 5) run ```sudo bash geoblocker-bash-install -m <whitelist|blacklist> -c <"country_codes">``` _(examples below)_
 6) That's it! By default, subnet lists will be updated daily at 4am - you can verify that automatic updates work by running ```sudo cat /var/log/syslog | grep geoblocker-bash``` on the next day (change syslog path if necessary, according to the location assigned by your distro).
 
 _Optional 4th step:_
 
-4a) If intended use is whitelist and you want to install geoblocker-bash on a remote machine, run the check-ip-in-registry.sh script before installation to make sure that your local public ip addresses are included in the whitelist fetched from the internet registry, so you do not get locked out of your remote server. check-ip-in-registry.sh has an additional pre-requisite: grepcidr. Install it with ```sudo apt install grepcidr```.
-- example (for US): ```bash check-ip-in-registry.sh -c US -i <"ip_address ... ip_address">``` (if checking multiple ip addresses, use double quotation marks)
 
-4b) If intended use is a blacklist and you know in advance some of the ip addresses you want to block, use check-ip-in-registry.sh script before installation to verify that those ip addresses are included in the list fetched from the registry. The syntax is the same as above.
 
 _Examples for running the -install script:_
 - example (whitelist Germany and block all other countries): ```sudo bash geoblocker-bash-install -m whitelist -c DE```
