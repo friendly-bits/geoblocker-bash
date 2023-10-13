@@ -394,7 +394,7 @@ validate_ccode(){
 	local rv=0
 	local checked_ccode=""
 	local ccode_list="$(<"$cca2_path")" &>/dev/null
-	[[ -z "$ccode_list" ]] && { echo "Error: $ccode_list variable is empty. Perhaps cca2.list is missing?" >&2; return 1; } # if the list variable is empty, revert the installation
+	[[ -z "$ccode_list" ]] && { echo "Error: \$ccode_list variable is empty. Perhaps cca2.list is missing?" >&2; return 1; } # if the list variable is empty, revert the installation
 
 	checked_ccode="$(grep -x "$1" <<< "$ccode_list" 2>/dev/null)"; rv=$?
 	[[ "$rv" -eq 0 && -n "$checked_ccode" ]] && return 0 || return 2
