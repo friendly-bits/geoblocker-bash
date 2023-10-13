@@ -5,10 +5,10 @@
 # Installer for geoip blocking suite of bash scripts
 # Must be run as root
 
-# Requires the following additional scripts (included in the distribution):
+# Requires the following additional files (included in the distribution):
 # geoblocker-bash-apply, geoblockder_bash-backup, geoblocker-bash-common, geoblocker-bash-cronsetup,
 # geoblocker-bash-fetch, geoblocker-bash-manage, geoblocker-bash-run, geoblocker-bash-uninstall,
-# geoblocker-bash-reset, validate-cron-schedule.sh, check-ip-in-registry.sh
+# geoblocker-bash-reset, validate-cron-schedule.sh, check-ip-in-registry.sh, cca2.list
 
 
 #### Initial setup
@@ -48,7 +48,7 @@ Installer for geoip blocking suite of bash scripts.
 Must be run as root.
 
 This script:
-1) Requires to specify countries (TLD's) to include in the whitelist/blacklist
+1) Requires to specify countries codes (ISO 3166-1 alpha-2) to include in the whitelist/blacklist
 2) Requires to specify whitelist or blacklist mode for installation with the '-m' option
 3) Accepts a custom cron schedule expression as an argument. Default cron schedule is "0 4 * * *" - at 4:00 [am] every day.
 4) Creates system folder structure for scripts, config and data.
@@ -57,10 +57,10 @@ This script:
 7) Calls the *manage script to set up geoblocker and then call the -fetch and -apply scripts.
 8) If an error occurs during installation, calls the uninstall script to revert any changes made to the system.
 
-Usage: $me -c <"tld [tld] ... [tld]"> -m <whitelist|blacklist> [-s <"sch_expression"|disable>] [-e] [-n] [-p] [-d] [-h]
+Usage: $me -c <"country_code [country_code] ... [country_code]"> -m <whitelist|blacklist> [-s <"sch_expression"|disable>] [-e] [-n] [-p] [-d] [-h]
 
 Core Options:
-    -c <"tld(s)">                  : tld / country codes to fetch and apply the iplists for.
+    -c <"country_codes">           : 2-letter country codes (ISO 3166-1 alpha-2) to fetch and apply the iplists for.
                                            (if passing multiple country codes, use double quotes)
     -m <whitelist|blacklist>       : firewall mode to install: whitelist or blacklist
                                            (to change mode after installation, run the *install script again)
@@ -76,7 +76,7 @@ Extra Options:
     -n                             : No persistence. Will *skip* creating the cron job which is required for geoblocking to work upon reboot.
     -p                             : No Drop: installs the script and configures the firewall but in the whitelist mode,
                                            skips setting INPUT chain default policy to DROP
-                                           (everything will be installed and configured but geoblocking won't be enabled)
+                                           (everything will be installed and configured but geoblocking will not be enabled)
                                            (does not affect blacklist functionality)
     -d                             : Debug
     -h                             : This help
@@ -88,7 +88,7 @@ EOF
 
 while getopts ":c:m:s:enpdh" opt; do
 	case $opt in
-		c) tlds=$OPTARG;;
+		c) ccodes=$OPTARG;;
 		m) list_type=$OPTARG;;
 		s) cron_schedule=$OPTARG;;
 		e) emergency_deactivation="true";;
@@ -154,42 +154,40 @@ install_failed() {
 }
 
 get_local_country(){
-# checks local country cca2 code by querying ipinfo.io
-# if query fails, asks the user to input the code manually, then fetches cca2 codes from REST and validates against it
-# if can't fetch from REST, trusts the user
+# checks local country code by asking the user, then validates against known-good country codes list
 
-	local user_tld=""
+	local user_ccode=""
 	local rv=0
 
-#	cca2_list="$($fetch_command https://restcountries.com/v3.1/all?fields=cca2 2>/dev/null | jq -r '.[].cca2' 2>/dev/null)"
-	cca2_list="$(<cca2_codes.list)" &>/dev/null
-
 	echo -e "\nPlease enter your country code." >&2
-	echo "It will be used to check if your geoblocking settings may cause you" >&2
-	echo "        to get locked out of your remote machine and warn you if so." >&2
+	echo "It will be used to check if your geoblocking settings may lock you out of your remote machine and warn you if so." >&2
 	echo -e "If you want to skip this check, press Enter.\n" >&2
 	while true; do
-		read -p "Country code: " -r
+		read -p "Country code (2 letters)/Enter to skip: " -r
 		REPLY="${REPLY^^}"
 		if [[ -z "$REPLY" ]]; then echo -e "Skipping...\n" >&2; return 0
 		else
 			# validate user input vs cca2 list
-			[[ -z "$cca2_list" ]] && { user_tld="$REPLY"; break; } # if the list is empty, trust the user
-			grep -x "$REPLY" <<< "$cca2_list" &>/dev/null; rv="$?"
-			[[ "$rv" -eq 0 ]] && { user_tld="$REPLY"; break; } || \
-				echo -e "\n'$REPLY' does not appear to be a valid country code. Try again or press Enter to skip this check." >&2
+			validate_ccode "$REPLY" "$script_dir/cca2.list"; rv="$?"
+			case "$rv" in
+				0)  user_ccode="$REPLY"; break ;;
+				1)  install_failed "Internal error while trying to validate country codes." ;;
+				2)  echo -e "\n'$REPLY' is not a valid (ISO 3166-1 alpha-2) country code." >&2
+					echo -e "Look up your country code online and try again, or press Enter to skip this check.\n" >&2
+				;;
+			esac
 		fi
 	done
 
-	echo "$user_tld"
+	echo "$user_ccode"
 	return 0
 }
 
 
 #### VARIABLES
 
-# convert input country codes (tlds) to upper case
-tlds_arg="${tlds_arg^^}"
+# convert input country codes to upper case
+ccodes="${ccodes^^}"
 
 # set environment variable "nolog" to avoid daughter scripts writing errors
 #	to syslog when encountering incorrect arguments from the user
@@ -225,9 +223,24 @@ fi
 
 missing_deps="$(check_deps "curl|wget" jq iptables-save iptables-restore ipset)" || die "Error: missing dependencies: $missing_deps."
 
-if [[ -z "$tlds" ]]; then
+# Check for valid country codes
+if [[ -z "$ccodes" ]]; then
 	usage
-	die "Specify countries with '-c <tlds>'!"
+	die "Specify country codes with '-c <\"country_codes\">'!"
+else
+	rv1=0
+	for ccode in $ccodes; do
+		validate_ccode "$ccode" "$script_dir/cca2.list" || {
+			[[ -z "$bad_ccodes" ]] && bad_ccodes="$ccode" || bad_ccodes="$bad_ccodes $ccode"
+			(( rv1++ ))
+		}
+	done
+
+	[[ "$rv1" -ne 0 ]] && {
+		errmsg1="Error: Invalid country codes: '$bad_ccodes'."
+		errmsg2="Look up country codes (ISO 3166-1 alpha-2) online and try again."
+		die "$errmsg1" "$errmsg2"
+	}
 fi
 
 if [[ -z "$list_type" ]]; then
@@ -239,13 +252,13 @@ fi
 
 missing_files="$(check_files_exist "${suite_name}-fetch" "${suite_name}-common" "${suite_name}-apply" \
 	"${suite_name}-run" "${suite_name}-manage" "${suite_name}-cronsetup" "${suite_name}-backup" \
-	"${suite_name}-uninstall" "${suite_name}-reset" "validate-cron-schedule.sh" "check-ip-in-registry.sh" "cca2_codes.list")" || \
+	"${suite_name}-uninstall" "${suite_name}-reset" "validate-cron-schedule.sh" "check-ip-in-registry.sh" "cca2.list")" || \
 	install_failed "Error: missing files: $missing_files."
 
 
 #### MAIN
 
-user_tld="$(get_local_country)"
+user_ccode="$(get_local_country)"
 
 # Create the directory for config and, if required, parent directories
 mkdir -p "$conf_dir"
@@ -253,7 +266,7 @@ mkdir -p "$conf_dir"
 # write initial config to the config file
 echo -n "Setting initial config... "
 
-setconfig "UserTld=$user_tld" "Countries=" "ListType=$list_type" "Installdir=$install_dir" "Datadir=$datadir" "CronSchedule=$cron_schedule" "DefaultSchedule=$defualt_schedule" \
+setconfig "UserCcode=$user_ccode" "Countries=" "ListType=$list_type" "Installdir=$install_dir" "Datadir=$datadir" "CronSchedule=$cron_schedule" "DefaultSchedule=$defualt_schedule" \
 	"RebootSleep=$sleeptime" "Backup_script=$backup_script" "EmergencyDeactivation=$emergency_deactivation" \
 	"NoPersistence=$no_persistence" "NoDrop=$nodrop"; rv="$?"
 
@@ -290,18 +303,18 @@ bash ${suite_name}-reset
 
 ## Copy scripts to $install_dir
 
-# if we are running from $install_dir, assume that all other necessary scripts have already been installed, skip copying
-if [[ "$script_dir" != "$install_dir" ]]; then
-	echo -n "Copying scripts to $install_dir... "
-	copyscripts "${suite_name}-common" "${suite_name}-fetch" "${suite_name}-apply" "${suite_name}-run" "${suite_name}-manage" \
-		"${suite_name}-cronsetup" "${suite_name}-backup" "${suite_name}-uninstall" "${suite_name}-reset" "validate-cron-schedule.sh" "check-ip-in-registry.sh"
-	echo "Ok."
-fi
+echo -n "Copying scripts to $install_dir... "
+copyscripts "${suite_name}-common" "${suite_name}-fetch" "${suite_name}-apply" "${suite_name}-run" "${suite_name}-manage" \
+	"${suite_name}-cronsetup" "${suite_name}-backup" "${suite_name}-uninstall" "${suite_name}-reset" "validate-cron-schedule.sh" "check-ip-in-registry.sh"
+echo "Ok."
 
 ## Create a symlink from ${suite_name}-manage to ${suite_name}
 unlink "${install_dir}/${suite_name}" &> /dev/null
 ln -s "${install_dir}/${suite_name}-manage" "${install_dir}/${suite_name}" ||
 	install_failed "Failed to create symlink from ${suite_name}-manage to ${suite_name}"
+
+# copy cca2.list
+cp "cca2.list" "$conf_dir" || install_failed "Error copying file 'cca2.list' to '$conf_dir'."
 
 
 ### Back up pre-install policies for INPUT and FORWARD chains
@@ -330,8 +343,8 @@ fi
 [[ -n "$install_dir" ]] && cd "$install_dir" || install_failed "Error: Couldn't cd into '$install_dir'."
 
 
-### Add iplist(s) for $tlds to managed iplists, then fetch and apply the iplist(s)
-${suite_name}-manage add -f -c "$tlds"; rv="$?"
+### Add iplist(s) for $ccodes to managed iplists, then fetch and apply the iplist(s)
+${suite_name}-manage add -f -c "$ccodes"; rv="$?"
 
 # the *manage script exits with return value 254 if requested country is already included in the config
 if [[ $rv -ne 0 && $rv -ne 254 ]]; then
