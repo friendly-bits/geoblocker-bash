@@ -171,7 +171,7 @@ get_local_country(){
 			validate_ccode "$REPLY" "$script_dir/cca2.list"; rv="$?"
 			case "$rv" in
 				0)  user_ccode="$REPLY"; break ;;
-				1)  install_failed "Internal error while trying to validate country codes." ;;
+				1)  die "Internal error while trying to validate country codes." ;;
 				2)  echo -e "\n'$REPLY' is not a valid (ISO 3166-1 alpha-2) country code." >&2
 					echo -e "Look up your country code online and try again, or press Enter to skip this check.\n" >&2
 				;;
