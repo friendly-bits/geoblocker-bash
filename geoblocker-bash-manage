@@ -421,10 +421,13 @@ if [[ ("$action" = "add" || "$action" = "remove") ]]; then
 	[[ -z "$ccodes_arg" ]] &&die "Error: action '$action' requires to specify countries with '-c <country_codes>'!"
 		rv=0
 	for ccode in $ccodes_arg; do
-		validate_ccode "$ccode" || {
-			[[ -z "$bad_ccodes" ]] && bad_ccodes="$ccode" || bad_ccodes="$bad_ccodes $ccode"
-			(( rv++ ))
-		}
+		validate_ccode "$ccode"; rv1=$?
+		case "$rv1" in
+			1)  die "Internal error while trying to validate country codes." ;;
+			2)  [[ -z "$bad_ccodes" ]] && bad_ccodes="$ccode" || bad_ccodes="$bad_ccodes $ccode"
+				(( rv++ ))
+			;;
+		esac
 	done
 
 	[[ "$rv" -ne 0 ]] && {
