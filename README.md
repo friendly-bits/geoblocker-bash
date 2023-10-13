@@ -46,23 +46,29 @@ _I created this project for running on my own server, and it's been doing its jo
 _Recommended to read the NOTES section below._
 
 **To install:**
-1) Install pre-requisites. On Debian, Ubuntu and derivatives run: ```sudo apt install ipset jq wget``` (on other distributions, use their built-in package manager. Note that I only test on Debian, Ubuntu and Mint)
-2) Download the latest realease:
-https://github.com/blunderful-scripts/geoblocker-bash/releases
+1) Install pre-requisites. On Debian, Ubuntu and derivatives run: ```sudo apt install ipset jq wget``` (on other distributions, use their built-in package manager. Note that I only test on Debian, Ubuntu and Mint).
+2) Download the latest realease: https://github.com/blunderful-scripts/geoblocker-bash/releases
 3) Extract all scripts included in the release into the same folder somewhere in your home directory and cd into that directory in your terminal
-4) _***Optional_: If intended use is whitelist and you want to install geoblocker-bash on a remote machine, run the check-ip-in-registry.sh script before installation to make sure that your local public ip addresses are included in the whitelist fetched from the internet registry, so you do not get locked out of your remote server. check-ip-in-registry.sh has an additional pre-requisite: grepcidr. Install it with ```sudo apt install grepcidr```.
+4) _Optional: read (4a, 4b) below._ 
+5) run ```sudo bash geoblocker-bash-install -m <whitelist|blacklist> -c <"country_codes">``` _(examples below)_
+6) That's it! By default, subnet lists will be updated daily at 4am - you can verify that automatic updates work by running ```sudo cat /var/log/syslog | grep geoblocker-bash``` on the next day (change syslog path if necessary, according to the location assigned by your distro).
+
+_Optional 4th step:_
+
+4a) If intended use is whitelist and you want to install geoblocker-bash on a remote machine, run the check-ip-in-registry.sh script before installation to make sure that your local public ip addresses are included in the whitelist fetched from the internet registry, so you do not get locked out of your remote server. check-ip-in-registry.sh has an additional pre-requisite: grepcidr. Install it with ```sudo apt install grepcidr```.
 - example (for US): ```bash check-ip-in-registry.sh -c US -i <"ip_address ... ip_address">``` (if checking multiple ip addresses, use double quotation marks)
-5) _***Optional_: if intended use is a blacklist and you know in advance some of the ip addresses you want to block, use check-ip-in-registry.sh script before installation to verify that those ip addresses are included in the list fetched from the registry. The syntax is the same as above.
-6) run ```sudo bash geoblocker-bash-install -m <whitelist|blacklist> -c <"country_codes">```
+
+4b) If intended use is a blacklist and you know in advance some of the ip addresses you want to block, use check-ip-in-registry.sh script before installation to verify that those ip addresses are included in the list fetched from the registry. The syntax is the same as above.
+
+_Examples for running the -install script:_
 - example (whitelist Germany and block all other countries): ```sudo bash geoblocker-bash-install -m whitelist -c DE```
 - example (blacklist Germany and Netherlands and allow all other countries): ```sudo bash geoblocker-bash-install -m blacklist -c "DE NL"```
 
 (when specifying multiple countries, put the list in double quotes)
 
-7) If any significant errors are encountered during installation, the installation will revert itself. Once installation completes successfully, most likely everything is good.
-8) That's it! By default, subnet lists will be updated daily at 4am - you can verify that automatic updates work by running ```sudo cat /var/log/syslog | grep geoblocker-bash``` on the next day (change syslog path if necessary, according to the location assigned by your distro).
- 
-**To check on current geoblocking status:**
+
+  
+**To check current geoblocking status:**
 - run ```sudo geoblocker-bash status```
 
 **To change configuration:**
