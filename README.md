@@ -30,7 +30,7 @@ Efficiency features:
 - List parsing and validation are implemented through efficient regex processing, so this is very quick (a fraction of a second for parsing and a few milliseconds for validation, for a very large list, depending on the CPU).
 
 Ease of use features:
-- Installation normally only takes a few seconds.
+- Installation normally only takes a few seconds and requires only 2 parameters: country code(s) to block and geolbocking mode (whitelist/blacklist).
 - Uninstallation takes about a second. It completely removes the suite, removes geoblocking firewall rules and restores pre-install firewall policies. No restart is required.
 - Pre-installation, provides a utility to check whether specific ip addresses you might want to blacklist or whitelist are indeed included in the list fetched from the registry.
 - Post-installation, provides a command to check on current geoblocking status so you don't have to run a few separate utilities and compare their output manually.
