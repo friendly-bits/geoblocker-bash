@@ -32,7 +32,7 @@ Requires GNU 'grep' and 'awk' utilities (most Linux distributions include these 
 Usage: $me -c <country_code> -i <"ip [ip ... ip]"> [-d] [-h]
 
 Options:
-    -c <country_code>    : tld/country code
+    -c <country_code>    : country code (ISO 3166-1 alpha-2)
     -i <"ip_addresses">  : ipv4 addresses to check
                            - if specifying multiple addresses, use double quotes
 
@@ -73,7 +73,7 @@ process_grep_results() {
 
 while getopts ":c:i:dh" opt; do
 	case $opt in
-	c) tld=$OPTARG;;
+	c) ccode=$OPTARG;;
 	i) arg_ipv4s=$OPTARG;;
 	d) debug=true;;
 	h) usage; exit 0;;
@@ -100,7 +100,7 @@ purple='\033[0;35m'
 no_color='\033[0m'
 
 # convert to upper case
-tld="${tld^^}"
+ccode="${ccode^^}"
 
 ## only parsing the ipv4 section at this time
 family="ipv4"
@@ -119,7 +119,7 @@ ip_check_rv=0
 
 missing_deps="$(check_deps "curl|wget" jq)" || die "Error: missing dependencies: $missing_deps."
 
-[[ -z "$tld" ]] && { usage; die "Specify country code with '-c <country_code>'."; }
+[[ -z "$ccode" ]] && { usage; die "Specify country code with '-c <country_code>'."; }
 
 # make sure that we have ip addresses to check
 [[ -z "$arg_ipv4s" ]] &&	{ usage; die "Specify the ip addresses to check with '-i <\"ip_addresses\">'."; }
@@ -164,15 +164,15 @@ fi
 
 status_file=$(mktemp "/tmp/status-XXXX")
 
-list_file=$(mktemp "/tmp/iplist-$tld-XXXX")
+list_file=$(mktemp "/tmp/iplist-$ccode-XXXX")
 
-bash "${script_dir}/${suite_name}-fetch" -c "$tld" -o "$list_file" -s "$status_file"
+bash "${script_dir}/${suite_name}-fetch" -c "$ccode" -o "$list_file" -s "$status_file"
 
 # read *fetch results from the status file
-failed_tlds="$(getstatus "$status_file" "failed_tlds")" || { die "Error: Couldn't read value for 'tlds_to_update' from status file '$status_file'."; }
+failed_ccodes="$(getstatus "$status_file" "failed_ccodes")" || { die "Error: Couldn't read value for 'ccodes_to_update' from status file '$status_file'."; }
 rm "$status_file"
 
-[[ -n "$failed_tlds" ]] && { rm "$list_file"; die "Error: ip list fetch failed. Can not check ip's."; }
+[[ -n "$failed_ccodes" ]] && { rm "$list_file"; die "Error: ip list fetch failed. Can not check ip's."; }
 
 
 ### Test the fetched list for specified ip's
@@ -186,12 +186,12 @@ for validated_arg_ipv4 in $validated_arg_ipv4s; do
 	process_grep_results "$rv" "$filtered_ipv4"; true_grep_rv=$?
 
 	case "$true_grep_rv" in
-		0) echo -e "Result: '$validated_arg_ipv4' ${green}*BELONGS*${no_color} to a subnet in registry's list for country '$tld'." ;;
+		0) echo -e "Result: '$validated_arg_ipv4' ${green}*BELONGS*${no_color} to a subnet in registry's list for country '$ccode'." ;;
 		1) echo -e "${red}Error${no_color}: grepcidr reported an error but returned a non-empty '\$filtered_ipv4'. Something is wrong."
 			grepcidr_error="true" ;;
 		2) echo -e "${red}Error${no_color}: grepcidr didn't report any error but returned an empty '\$filtered_ipv4'. Something is wrong."
 			grepcidr_error="true" ;;
-		3) echo -e "Result: '$validated_arg_ipv4' ${red}*DOES NOT BELONG*${no_color} to a subnet in registry's list for country '$tld'." ;;
+		3) echo -e "Result: '$validated_arg_ipv4' ${red}*DOES NOT BELONG*${no_color} to a subnet in registry's list for country '$ccode'." ;;
 		*) echo -e "${red}Error${no_color}: unexpected \$true_grep_rv: '$true_grep_rv'. Something is wrong."
 			grepcidr_error="true" ;;
 	esac
