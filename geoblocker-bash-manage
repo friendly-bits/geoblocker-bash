@@ -37,22 +37,22 @@ usage() {
 $me
     Provides an interface to configure geoblocking.
 
-Usage: $me <action> [-c "[tld] [tld] ... [tld]"] [-s <"sch_expression"|disable>] [-f] [-t] [-d] [-h]
+Usage: $me <action> [-c "country_code [country_code] ... [country_code]"] [-s <"sch_expression"|disable>] [-f] [-t] [-d] [-h]
 
 Actions:
-    add|remove                   : add or remove TLDs (country codes) to/from geoblocking rules
-    schedule                     : change the cron schedule (has no effect on iptables rules)
-    status                       : check on the current status of geoblocking
+    add|remove                    : add or remove country codes (ISO 3166-1 alpha-2) to/from geoblocking rules
+    schedule                      : change the cron schedule (has no effect on iptables rules)
+    status                        : check on the current status of geoblocking
 
 Options:
-    -c "tld(s)"                   : tld / country codes. if passing multiple country codes, use double quotes.
+    -c <"country_codes">          : country codes (ISO 3166-1 alpha-2). if passing multiple country codes, use double quotes.
     -s <"sch_expression"|disable> : schedule expression for the periodic cron job implementing auto-updates of the ip lists,
                                             must be inside double quotes.
                                             default schedule is "0 4 * * *" (at 4:00 [am] every day)
                                         disable: *skip* creating the cron job which is required for automatic updates of the ip list
 
     -f                            : Force the action even if it doesn't make sense or may cause remote server lockout.
-    -t                            : Test mode: inject unexpected tld and verify fault recovery
+    -t                            : Test mode: inject unexpected ccode and verify fault recovery
     -d                            : Debug
     -h                            : This help
 
@@ -75,7 +75,7 @@ esac
 # process the rest of the arguments
 while getopts ":c:s:ftdh" opt; do
 	case $opt in
-		c) tlds_arg=$OPTARG;;
+		c) ccodes_arg=$OPTARG;;
 		s) cron_schedule=$OPTARG;;
 		f) force_action="true";;
 		d) debugmode_args="true";;
@@ -134,15 +134,15 @@ report_status() {
 		die "Error: failed to determine current policies for INPUT and FORWARD chains."
 	fi
 
-	# check ipsets and iptables rules for active tlds
-	active_tlds="$(find_active_tlds)"; rv=$?
-	if [[ -z "$active_tlds" ]]; then
+	# check ipsets and iptables rules for active ccodes
+	active_ccodes="$(find_active_ccodes)"; rv=$?
+	if [[ -z "$active_ccodes" ]]; then
 		echo -e "${red}Warning${no_color}: no firewall rules found for any country codes!"
 	else
-		echo -e "$list_type is configured for country codes: '${yellow}$active_tlds${no_color}'.\n"
+		echo -e "$list_type is configured for country codes: '${yellow}$active_ccodes${no_color}'.\n"
 	fi
 
-	check_tlds_coherency; rv=$?
+	check_ccodes_coherency; rv=$?
 	if [[ "$rv" -ne 0 ]]; then
 		echo -e "${red}Error${no_color}: discrepancy detected between the config file and iptables rules!\n" >&2
 		[[ "$ipsets_incoherent" ]] && \
@@ -174,9 +174,9 @@ report_status() {
 	iptables_rules_header="$(grep -m1 "prot opt" <<< "$iptables_output" | cut -b12-150)"
 
 	echo -e "\n${yellow}Global iptables rules${no_color} rules for $suite_name:"
-	echo "-----------------------------------------------------------------------------------------------------------------------------------------------------------"
+	echo "------------------------------------------------------------------------------------------------------------------------"
 	echo -e "$iptables_rules_header"
-	echo "-----------------------------------------------------------------------------------------------------------------------------------------------------------"
+	echo "------------------------------------------------------------------------------------------------------------------------"
 	global_rules="$(grep "${suite_name}_global" <<< "$iptables_output" |cut -b12-170)"
 	if [[ -z "$global_rules" ]]; then echo -e "${red}None.${no_color}\n"
 	else
@@ -185,9 +185,9 @@ report_status() {
 
 	# report specific rules for the active geoblocking mode
 	echo -e "\n${yellow}$list_type iptables rules${no_color} for $suite_name:"
-	echo "-----------------------------------------------------------------------------------------------------------------------------------------------------------"
+	echo "------------------------------------------------------------------------------------------------------------------------"
 	echo -e "$iptables_rules_header"
-	echo "-----------------------------------------------------------------------------------------------------------------------------------------------------------"
+	echo "------------------------------------------------------------------------------------------------------------------------"
 	geoblocking_rules="$(grep "match-set ${suite_name}" <<< "$iptables_output" | grep "$expected_rule_type" | cut -b12-170)"
 	if [[ -z "$geoblocking_rules" ]]; then echo -e "${red}None.${no_color}\n"
 	else
@@ -232,12 +232,12 @@ reset_state_vars(){
 }
 
 restore_from_config() {
-# restore tlds from the config file
+# restore ccodes from the config file
 
 	echo
 	echo -e "Warning: Config incoherence detected between the firewall current status and the config file."
-	[[ -n "$unexpected_tlds" ]] && echo "Unexpected tlds in the firewall: '$unexpected_tlds'" >&2
-	[[ -n "$missing_tlds" ]] && echo "Missing tlds in the firewall: '$missing_tlds'" >&2
+	[[ -n "$unexpected_ccodes" ]] && echo "Unexpected ccodes in the firewall: '$unexpected_ccodes'" >&2
+	[[ -n "$missing_ccodes" ]] && echo "Missing ccodes in the firewall: '$missing_ccodes'" >&2
 	echo "Would you like to re-apply the rules from the config file to fix this?"
 	echo -e "\n'Y' to re-apply the config rules. 'N' to exit the script. 'S' to show country codes in the config file.\n"
 
@@ -247,36 +247,36 @@ restore_from_config() {
 		if [[ "$REPLY" =~ ^[Yy]$ ]]; then echo; break
 		elif [[ "$REPLY" =~ ^[Nn]$ ]]; then echo -e "\nExiting."; exit 1
 		elif [[ "$REPLY" =~ ^[Ss]$ ]]; then
-			echo -e "\n\n\n\n$list_type country codes in the config file: '$config_tlds'\n"
+			echo -e "\n\n\n\n$list_type country codes in the config file: '$config_ccodes'\n"
 		else echo -e "\nPlease press 'y/n/s'.\n"
 		fi
 	done
 
-	echo "Restoring $list_type countries set '$config_tlds' from the config file... "
-	tlds_to_remove="$(merge_lists "$config_tlds" "$unexpected_tlds" "$tlds_to_change")"
-	$run_command remove -o -c "$tlds_to_remove"
-	[[ -n "$config_tlds" ]] && $run_command add -o -c "$config_tlds"
+	echo "Restoring $list_type countries set '$config_ccodes' from the config file... "
+	ccodes_to_remove="$(merge_lists "$config_ccodes" "$unexpected_ccodes" "$ccodes_to_change")"
+	$run_command remove -o -c "$ccodes_to_remove"
+	[[ -n "$config_ccodes" ]] && $run_command add -o -c "$config_ccodes"
 
 	reset_state_vars
-	check_tlds_coherency; rv=$?
+	check_ccodes_coherency; rv=$?
 	if [[ $rv -eq 0 ]]; then
 		echo "Successfully re-applied previous $list_type countries set."
 	else
 		echo "Failed to re-apply previous $list_type countries set." >&2
-		[[ -n "$unexpected_tlds" ]] && echo "Unexpected $list_type tlds in the firewall: '$unexpected_tlds'" >&2
-		[[ -n "$missing_tlds" ]] && echo "Missing $list_type tlds in the firewall: '$missing_tlds'" >&2
+		[[ -n "$unexpected_ccodes" ]] && echo "Unexpected $list_type ccodes in the firewall: '$unexpected_ccodes'" >&2
+		[[ -n "$missing_ccodes" ]] && echo "Missing $list_type ccodes in the firewall: '$missing_ccodes'" >&2
 		[[ "$ipsets_incoherent" ]] && echo "Warning: discrepancy detected between existing geoblocking ipsets and geoblocking firewall rules!" >&2
 		# call the *backup script to initiate recovery from fault
 		${suite_name}-backup restore; rv=$?
 
 		reset_state_vars
-		check_tlds_coherency; rv1=$?; rv=$(( rv + rv1 ))
+		check_ccodes_coherency; rv1=$?; rv=$(( rv + rv1 ))
 		if [[ $rv -eq 0 ]]; then
 			echo "Successfully re-applied previous $list_type countries set."
 		else
 			echo "Failed to re-apply previous $list_type countries set." >&2
-			[[ -n "$unexpected_tlds" ]] && echo "Unexpected $list_type tlds in the firewall: '$unexpected_tlds'" >&2
-			[[ -n "$missing_tlds" ]] && echo "Missing $list_type tlds in the firewall: '$missing_tlds'" >&2
+			[[ -n "$unexpected_ccodes" ]] && echo "Unexpected $list_type ccodes in the firewall: '$unexpected_ccodes'" >&2
+			[[ -n "$missing_ccodes" ]] && echo "Missing $list_type ccodes in the firewall: '$missing_ccodes'" >&2
 			[[ "$ipsets_incoherent" ]] && echo "Warning: discrepancy detected between existing geoblocking ipsets and geoblocking firewall rules!" >&2
 			die "$rv" "Something is not working as it should. Consider fixing your firewall or your system. If it's a bug then please report it."
 		fi
@@ -286,33 +286,33 @@ restore_from_config() {
 check_for_lockout() {
 # tries to prevent the user from locking themselves out
 
-# if we are currently installing, checks local country code vs $planned_tlds list
-# if not, checks it vs $tlds_to_change list
+# if we are currently installing, checks local country code vs $planned_ccodes list
+# if not, checks it vs $ccodes_to_change list
 
 # the reason for this distinction is in case the user decides to ignore the warning and proceed,
-# if we continue to check vs $planned_tlds then they will have to see the warning every time and reply to it every time,
-# even for actions unrelated to their tld
-# on the other hand, if we check vs $tlds_to_change during installation, we may miss the fact that their $tld is not included in the whitelist
+# if we continue to check vs $planned_ccodes then they will have to see the warning every time and reply to it every time,
+# even for actions unrelated to their ccode
+# on the other hand, if we check vs $ccodes_to_change during installation, we may miss the fact that their $ccode is not included in the whitelist
 
 # if lockout condition is detected, prints a warning and returns 0
 # if all is good, or if local country wasn't determined during installation, prints nothing and returns 0
 # returns 1 if encounters errors
 
-	local user_tld=""
-	local filtered_tld=""
-	user_tld="$(getconfig "UserTld")" || { echo "Error: Couldn't read value for UserTld from the config file." >&2; return 1; }
+	local user_ccode=""
+	local filtered_ccode=""
+	user_ccode="$(getconfig "UserCcode")" || { echo "Error: Couldn't read value for UserCcode from the config file." >&2; return 1; }
 
 	# if we couldn't get user's country code durint installation, give up on checking for possible lockout
 	# otherwise it would be very annoying for the user
-	[[ -z "$user_tld" ]] && return 0
+	[[ -z "$user_ccode" ]] && return 0
 
 	if [[ "$in_install" ]]; then
-		filtered_tld="$(find_lists_intersection "$user_tld" "$planned_tlds")"
+		filtered_ccode="$(find_lists_intersection "$user_ccode" "$planned_ccodes")"
 
 		case "$list_type" in
 			whitelist)
-				if [[ -z "$filtered_tld" ]]; then
-					msg1="Your country code '$user_tld' is not included in the planned final whitelist '$planned_tlds'.\n"
+				if [[ -z "$filtered_ccode" ]]; then
+					msg1="Your country code '$user_ccode' is not included in the planned final whitelist '$planned_ccodes'.\n"
 					msg2="Make sure you do not lock yourself out."
 					echo -e "$msg1$msg2"
 				fi
@@ -320,26 +320,26 @@ check_for_lockout() {
 			;;
 
 			blacklist)
-				if [[ -n "$filtered_tld" ]]; then
-					msg1="Your country code '$user_tld' is included in the planned blacklist '$planned_tlds'.\n"
+				if [[ -n "$filtered_ccode" ]]; then
+					msg1="Your country code '$user_ccode' is included in the planned blacklist '$planned_ccodes'.\n"
 					msg2="Make sure you do not lock yourself out."
 					echo -e "$msg1$msg2"
 				fi
 				return 0
 			;;
-			*) return 1 ;;
+			*) echo -e "\nError: check_for_lockout(): Unexpected list type '$list_type'.\n" >&2; return 1 ;;
 		esac
 
 	else
-		filtered_tld="$(find_lists_intersection "$user_tld" "$tlds_to_change")"
+		filtered_ccode="$(find_lists_intersection "$user_ccode" "$ccodes_to_change")"
 
 		# if user is not doing anything related to their own country code, skip further checks
-		[[ -z "$filtered_tld" ]] && return 0
+		[[ -z "$filtered_ccode" ]] && return 0
 
 		case "$action" in
 			add)
 				if [[ "$list_type" = "blacklist" ]]; then
-					msg1="You are trying to add your country code '$user_tld' to the blacklist.\n"
+					msg1="You are trying to add your country code '$user_ccode' to the blacklist.\n"
 					msg2="Make sure you do not lock yourself out."
 					echo -e "$msg1$msg2"
 				fi
@@ -347,12 +347,13 @@ check_for_lockout() {
 			;;
 			remove)
 				if [[ "$list_type" = "whitelist" ]]; then
-					msg1="You are trying to remove your country code '$user_tld' from the whitelist.\n"
+					msg1="You are trying to remove your country code '$user_ccode' from the whitelist.\n"
 					msg2="Make sure you do not lock yourself out."
 					echo -e "$msg1$msg2"
 				fi
 				return 0
 			;;
+			*) echo -e "\nError: check_for_lockout(): Unexpected action '$action'.\n" >&2; return 1 ;;
 		esac
 	fi
 }
@@ -378,14 +379,14 @@ list_type="$(getconfig "ListType")" || die "Error: Couldn't read value for ListT
 
 [[ "$list_type" != "whitelist" && "$list_type" != "blacklist" ]] &&  die "Error: Unrecognized list type '$list_type'!"
 
-# convert input country codes (tlds) to upper case
-tlds_arg="${tlds_arg^^}"
+# convert input country codes (ccodes) to upper case
+ccodes_arg="${ccodes_arg^^}"
 
 # remove duplicates etc
-tlds_arg="$(sanitize_string "$tlds_arg")"
+ccodes_arg="$(sanitize_string "$ccodes_arg")"
 
-### Read current set of countries from the the config file into config_tlds
-config_tlds="$(getconfig "Countries")" || die "Error: Couldn't read value for Countries from the config file."
+### Read current set of countries from the the config file into config_ccodes
+config_ccodes="$(getconfig "Countries")" || die "Error: Couldn't read value for Countries from the config file."
 
 # convert the string to lower case
 action="${action,,}"
@@ -415,13 +416,28 @@ case "$action" in
 	*) usage; die "Error: unsupported action '$action'." ;;
 esac
 
-[[ ("$action" = "add" || "$action" = "remove") && -z "$tlds_arg" ]] && \
-	die "Error: action '$action' requires to specify countries with '-c <tlds>'!"
+# check for valid country codes
+if [[ ("$action" = "add" || "$action" = "remove") ]]; then
+	[[ -z "$ccodes_arg" ]] &&die "Error: action '$action' requires to specify countries with '-c <country_codes>'!"
+		rv=0
+	for ccode in $ccodes_arg; do
+		validate_ccode "$ccode" || {
+			[[ -z "$bad_ccodes" ]] && bad_ccodes="$ccode" || bad_ccodes="$bad_ccodes $ccode"
+			(( rv++ ))
+		}
+	done
 
-[[ "$action" = "schedule" && ( -n "$tlds_arg" || -n "$force_action" ) ]] && \
+	[[ "$rv" -ne 0 ]] && {
+		errmsg1="Error: Invalid country codes: '$bad_ccodes'."
+		errmsg2="Look up country codes (ISO 3166-1 alpha-2) online and try again."
+		die "$errmsg1" "$errmsg2"
+	}
+fi
+
+[[ "$action" = "schedule" && ( -n "$ccodes_arg" || -n "$force_action" ) ]] && \
 	die "Action '$action' only supports changing the cron schedule! Do not use it with any option except '-s' or '-d' !"
 
-[[ "$action" = "status" && ( -n "$tlds_arg" || -n "$force_action" ) ]] && \
+[[ "$action" = "status" && ( -n "$ccodes_arg" || -n "$force_action" ) ]] && \
 	die "Command '$action' only supports checking on current status of geoblocking! Do not use it with any option except '-l' or '-d' !"
 
 [[ "$action" != "schedule" && -n "$cron_schedule" ]] && {
@@ -436,7 +452,7 @@ esac
 
 # check config coherency vs active ipsets and firewall rules before performing any action
 reset_state_vars
-check_tlds_coherency || restore_from_config
+check_ccodes_coherency || restore_from_config
 
 if [[ "$action" = "status" ]]; then
 	report_status
@@ -451,39 +467,39 @@ fi
 case "$action" in
 
 	add)
-		requested_planned_tlds="$(merge_lists "$config_tlds" "$tlds_arg")"
-#		debugprint "requested resulting tlds: '$requested_planned_tlds'"
+		requested_planned_ccodes="$(merge_lists "$config_ccodes" "$ccodes_arg")"
+#		debugprint "requested resulting ccodes: '$requested_planned_ccodes'"
 
 		if [[ -z "$force_action" ]]; then
-			# remove any entries already present in config_tlds from tlds_arg and assign to tlds_to_change
-			tlds_to_change="$(find_lists_difference "$config_tlds" "$requested_planned_tlds")"
+			# remove any entries already present in config_ccodes from ccodes_arg and assign to ccodes_to_change
+			ccodes_to_change="$(find_lists_difference "$config_ccodes" "$requested_planned_ccodes")"
 
-			# find which tlds were specified for addition but already exist
-			wrong_tlds="$(find_lists_intersection "$tlds_arg" "$config_tlds")"
+			# find which ccodes were specified for addition but already exist
+			wrong_ccodes="$(find_lists_intersection "$ccodes_arg" "$config_ccodes")"
 
-			[[ -n "$wrong_tlds" ]] && echo "NOTE: countries '$wrong_tlds' have already been added to the $list_type." >&2
+			[[ -n "$wrong_ccodes" ]] && echo "NOTE: countries '$wrong_ccodes' have already been added to the $list_type." >&2
 		else
-			tlds_to_change="$tlds_arg"
+			ccodes_to_change="$ccodes_arg"
 		fi
-		planned_tlds="$(merge_lists "$config_tlds" "$tlds_to_change")"
-#		debugprint "action: add, tlds_to_change: '$tlds_to_change'"
+		planned_ccodes="$(merge_lists "$config_ccodes" "$ccodes_to_change")"
+#		debugprint "action: add, ccodes_to_change: '$ccodes_to_change'"
 	;;
 
 	remove)
-#		debugprint "requested tlds to remove: '$tlds_arg'"
+#		debugprint "requested ccodes to remove: '$ccodes_arg'"
 		if [[ -z "$force_action" ]]; then
-			# find duplicate-free intersection between config_tlds and tlds_arg
-			tlds_to_change="$(find_lists_intersection "$config_tlds" "$tlds_arg")"
-			# find which tlds were specified for removal but don't exist
-			good_tlds="$(find_lists_intersection "$tlds_to_change" "$tlds_arg")"
-			wrong_tlds="$(find_lists_difference "$tlds_arg" "$good_tlds")"
-			[[ -n "$wrong_tlds" ]] && echo "NOTE: countries '$wrong_tlds' have not been added to the $list_type, so can not remove." >&2
+			# find duplicate-free intersection between config_ccodes and ccodes_arg
+			ccodes_to_change="$(find_lists_intersection "$config_ccodes" "$ccodes_arg")"
+			# find which ccodes were specified for removal but don't exist
+			good_ccodes="$(find_lists_intersection "$ccodes_to_change" "$ccodes_arg")"
+			wrong_ccodes="$(find_lists_difference "$ccodes_arg" "$good_ccodes")"
+			[[ -n "$wrong_ccodes" ]] && echo "NOTE: countries '$wrong_ccodes' have not been added to the $list_type, so can not remove." >&2
 
 		else
-			tlds_to_change="$tlds_arg"
+			ccodes_to_change="$ccodes_arg"
 		fi
-		# remove any entries found in tlds_to_change from config_tlds and assign to planned_tlds
-		planned_tlds="$(subtract_list_a_from_b "$tlds_to_change" "$config_tlds")"
+		# remove any entries found in ccodes_to_change from config_ccodes and assign to planned_ccodes
+		planned_ccodes="$(subtract_list_a_from_b "$ccodes_to_change" "$config_ccodes")"
 	;;
 esac
 
@@ -492,16 +508,16 @@ if [[ "$action" != "add" && "$action" != "remove" ]]; then
 	debugprint "Skipping the *run script call because specified action was '$action'."
 else
 
-	if [[ -z "$tlds_to_change" && -z "$force_action" ]]; then
-		config_tlds="$(getconfig "Countries")" || die "Error: Couldn't read value for Countries from the config file."
-		echo -e "\nCountries in final $list_type: '${yellow}$config_tlds${no_color}'."
+	if [[ -z "$ccodes_to_change" && -z "$force_action" ]]; then
+		config_ccodes="$(getconfig "Countries")" || die "Error: Couldn't read value for Countries from the config file."
+		echo -e "\nCountries in final $list_type: '${yellow}$config_ccodes${no_color}'."
 		die 254 "Nothing to do, exiting."
 	fi
 
-	debugprint "planned tlds after '$action': '$planned_tlds'"
+	debugprint "planned ccodes after '$action': '$planned_ccodes'"
 
-	# if planned_tlds list is empty
-	if [[ -z "$planned_tlds" && -z "$force_action" && "$list_type" = "whitelist" ]]; then
+	# if planned_ccodes list is empty
+	if [[ -z "$planned_ccodes" && -z "$force_action" && "$list_type" = "whitelist" ]]; then
 		die "Planned final countries whitelist is empty! Disallowing this to prevent accidental lockout of a remote server."
 	fi
 
@@ -513,8 +529,11 @@ else
 			echo -e "\nProceed?"
 			while true; do
 				read -p "(Y/N) " -n 1 -r
-				if [[ "$REPLY" =~ ^[Yy]$ ]]; then echo -e "\nProceeding..."; break
-				elif [[ "$REPLY" =~ ^[Nn]$ ]]; then die "Aborted action '$action' for countries '$tlds_to_change'."
+				if [[ "$REPLY" =~ ^[Yy]$ ]]; then echo -e "\n\nProceeding..."; break
+				elif [[ "$REPLY" =~ ^[Nn]$ ]]; then
+						[[ ! "$in_install" ]] && echo -e "\n\nCountries in final $list_type: '${yellow}$config_ccodes${no_color}'."
+						echo
+						die "Aborted action '$action' for countries '$ccodes_to_change'."
 				else echo -e "\nPlease press 'y/n'.\n"
 				fi
 			done
@@ -523,50 +542,50 @@ else
 
 	### Call the *run script
 
-	$run_command "$action" -c "$tlds_to_change"; rv=$?
+	$run_command "$action" -c "$ccodes_to_change"; rv=$?
 
 	# positive return code means apply failure or another permanent error, except for 254
 	if [[ $rv -gt 0 && $rv -ne 254 ]]; then
-		echo "Error performing action '$action' for countries '$tlds_to_change'." >&2
+		echo "Error performing action '$action' for countries '$ccodes_to_change'." >&2
 
-		if [[ -z "$config_tlds" ]]; then
+		if [[ -z "$config_ccodes" ]]; then
 			die "Can not restore previous countries set for the $list_type because it is not found in the config file."
 		fi
 		restore_from_config
 	fi
 
 	reset_state_vars
-	new_verified_tlds="$(find_active_tlds)"
-	failed_tlds="$(find_lists_difference "$new_verified_tlds" "$planned_tlds")"
+	new_verified_ccodes="$(find_active_ccodes)"
+	failed_ccodes="$(find_lists_difference "$new_verified_ccodes" "$planned_ccodes")"
 
-	if [[ -n "$failed_tlds" ]]; then
-		debugprint "planned_tlds: '$planned_tlds', new_verified_tlds: '$new_verified_tlds', failed_tlds: '$failed_tlds'."
-		echo "Warning: failed to apply new $list_type rules for countries: $failed_tlds." >&2
+	if [[ -n "$failed_ccodes" ]]; then
+		debugprint "planned_ccodes: '$planned_ccodes', new_verified_ccodes: '$new_verified_ccodes', failed_ccodes: '$failed_ccodes'."
+		echo "Warning: failed to apply new $list_type rules for countries: $failed_ccodes." >&2
 		# if the error encountered during installation, exit with error in order to fail the installation
 		[[ "$in_install" ]] && die
 	fi
 
 	# if all 'add' actions failed
-	if [[ -z "$(find_lists_difference "$tlds_to_change" "$failed_tlds")" ]]; then
+	if [[ -z "$(find_lists_difference "$ccodes_to_change" "$failed_ccodes")" ]]; then
 		die "All actions failed."
 	fi
 
-	debugprint "Writing new config to file: 'Countries=$new_verified_tlds'"
-	setconfig "Countries=$new_verified_tlds" || die "Failed to write updated tlds '$new_verified_tlds' to the config file"
+	debugprint "Writing new config to file: 'Countries=$new_verified_ccodes'"
+	setconfig "Countries=$new_verified_ccodes" || die "Failed to write updated country codes '$new_verified_ccodes' to the config file"
 
-	config_tlds="$(getconfig "Countries")" || die "Error: Couldn't read value for Countries from the config file."
-#	debugprint "current $list_type countries in config file: '$config_tlds'"
+	config_ccodes="$(getconfig "Countries")" || die "Error: Couldn't read value for Countries from the config file."
+#	debugprint "current $list_type countries in config file: '$config_ccodes'"
 
-####### Fault recovery test: inject unrequested tld
+####### Fault recovery test: inject unrequested ccode
 #[ "$testmode" ] &&	$run_command add -o -c "ge"; rv=$?
 #######
 
 
-	# double-check coherency after applying new tlds
+	# double-check coherency after applying new ccodes
 	reset_state_vars
-	check_tlds_coherency || { tlds_to_change=""; restore_from_config; }
+	check_ccodes_coherency || { ccodes_to_change=""; restore_from_config; }
 
-	echo -e "\nCountries in final $list_type: '${yellow}$config_tlds${no_color}'."
+	echo -e "\nCountries in final $list_type: '${yellow}$config_ccodes${no_color}'."
 	echo
 	[[ ! "$in_install" ]] && echo -e "View current geoblocking status with '${yellow}sudo ${suite_name} status${no_color}'\n"
 fi
