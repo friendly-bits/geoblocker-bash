@@ -135,7 +135,7 @@ For more detailed description of each script, read [DETAILS.md](/DETAILS.md).
 ## **Data safety**
 For notes about data safety (mostly intended for security nerds), read [DATASAFETY.md](/DATASAFETY.md).
 
-## **Extra notes**
+## **Last but not least**
 
-- Most scripts display "usage" when called with the "-h" option. You can find out about some additional options specific to each script by running it with that option.
-- The fetch script can be modified to get the lists from another source, for example from ipdeny.com. I purposefully avoided that and instead implemented fetching from the official regional Internet registries which AFAIK are the 1st party for these lists and as such, a more trustworthy source (although I have nothing against ipdeny.com)
+- I have put much work into this project. If you use it and like it, please consider giving it a star on Github.
+- I would appreciate a report of whether it works or doesn't work on your system (please specify which), or if you find a bug. If you have a suggestion for code improvement, please let me know as well. You can use the "Discussions" and "Issues" tabs for that.
