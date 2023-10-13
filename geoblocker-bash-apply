@@ -52,10 +52,10 @@ $me
 Usage: $me <action> -c <"country_codes"> [-d] [-t] [-h]
 
 Actions:
-    add|remove                 : Add or remove ipsets and iptables rules for TLDs (country codes) specified with the '-c' option
+    add|remove                 : Add or remove ipsets and iptables rules for country codes specified with the '-c' option
 
 Options:
-    -c <"country_codes">       : tlds / country codes (if specifying multiple tlds, put them in double quotes)
+    -c <"country_codes">       :  (ISO 3166-1 alpha-2) country codes (if specifying multiple country codes, put them in double quotes)
 
     -d                         : Debug
     -t                         : Simulate fault and test recovery
@@ -81,7 +81,7 @@ esac
 # process the rest of the arguments
 while getopts ":c:dht" opt; do
 	case $opt in
-		c) tlds=$OPTARG;;
+		c) ccodes=$OPTARG;;
 		d) debugmode_args="true";;
 		h) usage; exit 0;;
 		t) test=true;;
@@ -192,8 +192,8 @@ missing_deps="$(check_deps iptables-save iptables-restore ipset)" || die "Error:
 # check that the config file exists
 [[ ! -f "$conf_file" ]] && die "Config file '$conf_file' doesn't exist! Run the installation script again."
 
-# check for country tlds
-[[ -z "$tlds" ]] && { usage; die 254 "Specify country codes!"; }
+# check for ccodes
+[[ -z "$ccodes" ]] && { usage; die 254 "Specify country codes!"; }
 
 # check for datadir path
 [[ -z "$datadir" ]] && die 254 "Error: failed to read the 'datadir' variable from the config file."
@@ -206,9 +206,9 @@ missing_deps="$(check_deps iptables-save iptables-restore ipset)" || die "Error:
 if [[ "$action" = "add" ]]; then
 ### create temporary ipsets and load ip lists into them
 
-	for tld in $tlds; do
-		iplist_file="${iplist_dir}/ipv4_${tld}"
-		temp_ipset="${suite_name}_${tld}_temp"
+	for ccode in $ccodes; do
+		iplist_file="${iplist_dir}/ipv4_${ccode}"
+		temp_ipset="${suite_name}_${ccode}_temp"
 
 		# check that the iplist file exists
 		[[ ! -f "$iplist_file" ]] && die 254 "Error: Can not find the iplist file in path: '$iplist_file'."
@@ -244,7 +244,7 @@ if [[ "$action" = "add" ]]; then
 		debugprint "Ok."
 
 		# import the iplist into temporary ipset from file
-		echo -n "Importing the iplist for country '$tld' into temporary ipset... "
+		echo -n "Importing the iplist for country '$ccode' into temporary ipset... "
 
 		# reads $iplist_file, transforms each line into 'ipset add' command and redirects the result into "ipset restore"
 		# this is about 50x faster than issuing discrete "ipset add" commands in a loop
@@ -264,8 +264,8 @@ if [[ "$action" = "add" ]]; then
 		[[ "$debugmode" ]] && ipset_lines_cnt="$(ipset save "$temp_ipset" | grep "add $temp_ipset" | wc -l)"
 		debugprint "subnets in the temporary ipset: $ipset_lines_cnt"
 
-		ipset_hashsizes["$tld"]="$ipset_hash"
-		ipset_maxelements["$tld"]="$ipset_maxelem"
+		ipset_hashsizes["$ccode"]="$ipset_hash"
+		ipset_maxelements["$ccode"]="$ipset_maxelem"
 	done
 	echo
 fi
@@ -283,9 +283,9 @@ if [[ "$list_type" = "whitelist" ]]; then
 fi
 
 ## delete existing iptables rules matching comment "$iptables_comment"
-for tld in $tlds; do
-	iptables_comment="${suite_name}_${tld}"
-	echo -n "Removing existing $list_type iptables rules for country '$tld'... "
+for ccode in $ccodes; do
+	iptables_comment="${suite_name}_${ccode}"
+	echo -n "Removing existing $list_type iptables rules for country '$ccode'... "
 
 	# sed looks for rules with the comment which we use to stamp our rules
 	# sed executes iptables -D (delete) command on matching rules. execution is promtped by the switch /e (only available in GNU sed)
@@ -316,8 +316,8 @@ echo
 ### Apply the "remove" action
 
 if [[ "$action" = "remove" ]]; then
-	for tld in $tlds; do
-		perm_ipset="${suite_name}_${tld}"
+	for ccode in $ccodes; do
+		perm_ipset="${suite_name}_${ccode}"
 
 		# Check if given ipset exists
 		matching_ipset="$(ipset list -n | grep "$perm_ipset")"
@@ -325,7 +325,7 @@ if [[ "$action" = "remove" ]]; then
 			echo "Warning: Can't remove ipset '$perm_ipset' because it doesn't appear to exist."
 			exitvalue="254"
 		else
-			echo -n "Destroying ipset for country '$tld'... "
+			echo -n "Destroying ipset for country '$ccode'... "
 			sleep 0.8
 			ipset destroy "$perm_ipset"; rv=$?
 			if [[ $rv -ne 0 ]]; then
@@ -387,12 +387,12 @@ echo "Ok."
 
 ### Create permanent ipsets if they don't exist, add iptables rules for them, then swap them with temp ipsets
 if [[ "$action" = "add" ]]; then
-	for tld in $tlds; do
-		perm_ipset="${suite_name}_${tld}"
-		temp_ipset="${suite_name}_${tld}_temp"
-		iptables_comment="${suite_name}_${tld}"
-		ipset_maxelem="${ipset_maxelements[$tld]}"
-		ipset_hash="${ipset_hashsizes[$tld]}"
+	for ccode in $ccodes; do
+		perm_ipset="${suite_name}_${ccode}"
+		temp_ipset="${suite_name}_${ccode}_temp"
+		iptables_comment="${suite_name}_${ccode}"
+		ipset_maxelem="${ipset_maxelements[$ccode]}"
+		ipset_hash="${ipset_hashsizes[$ccode]}"
 
 		## check if permanent ipset already exists and is non-empty
 
@@ -434,7 +434,7 @@ if [[ "$action" = "add" ]]; then
 
 		if [[ "$list_type" = "whitelist" ]]; then iptables_action="ACCEPT"; else iptables_action="DROP"; fi
 
-		echo -n "Appending $list_type rule for country '$tld' to the INPUT chain... "
+		echo -n "Appending $list_type rule for country '$ccode' to the INPUT chain... "
 		iptables -A INPUT -m set --match-set "$perm_ipset" src -j "$iptables_action" -m comment --comment "$iptables_comment"; rv=$?
 
 		if [[ $rv -ne 0 ]]; then
@@ -447,7 +447,7 @@ if [[ "$action" = "add" ]]; then
 		echo "Ok."
 
 		## swap the new (temporary) ipset with the old (permanent) ipset
-		echo -n "Making the new $list_type ipset for country '$tld' permanent... "
+		echo -n "Making the new $list_type ipset for country '$ccode' permanent... "
 		ipset swap "$temp_ipset" "$perm_ipset"; rv=$?
 		if [[ $rv -ne 0 ]]; then
 			iptables-save | sed -r "/INPUT.*comment.*${iptables_comment}/s/-A/iptables -D/e" &>/dev/null
@@ -460,7 +460,7 @@ if [[ "$action" = "add" ]]; then
 		echo "Ok."
 
 		## destroy the old ipset (now it's called temporary)
-		debugprint "Destroying the temporary ipset for country '$tld'... "
+		debugprint "Destroying the temporary ipset for country '$ccode'... "
 		ipset destroy "$temp_ipset"; rv=$?
 		[[ $rv -ne 0 ]] && die "Failed to destroy ipset '$temp_ipset'. Strange........."
 		debugprint "Ok."
