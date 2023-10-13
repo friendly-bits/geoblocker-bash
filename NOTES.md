@@ -4,7 +4,7 @@
 2) There are 3 ways to get yourself locked out of your remote server with this suite:
 - install in whitelist mode without including your country in the whitelist
 - install in whitelist mode and later remove your country from the whitelist
-- Blacklist your country (either during installation or after that)
+- Blacklist your country (either during installation or later)
 
 The scripts will warn you in each of these situations and wait for your input (you can press Y and do it anyway), but that depends on you correctly specifying your country code during installation. The installer will ask you about it. If you prefer, you can skip by pressing Enter - that will disable this feature. If you do provide the -install script your country code, it will be added to the config file on your machine. That config file (path: /etc/geoblocker-bash/geoblocker-bash.conf) is plain-text, so technically any user on your machine can read it. However neither script in this suite will share the information with any external service. That said, once you connect to any server on the internet, that server knows your ip and can check your location by that ip - so I do not consider this a big secret.
 
