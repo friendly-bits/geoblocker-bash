@@ -18,6 +18,7 @@ Reliability features:
 - Downloaded lists go through validation process, with safeguards in place to prevent application of corrupted or incomplete lists to the firewall.
 - Extensive error detection and handling at each stage and user notification through console messages or through syslog if an error occurs.
 - Automatic backup of the firewall state before any changes or updates, and automatic restore from backup in case an error occurs during these changes (which normally should never happen but implemented just in case).
+- Validates all user input to prevent unintended mistakes.
 - If a user accidentally requests an action that is about to block their own country (which can happen both in blacklist mode and in whitelist mode), the -manage script will warn them and wait for their input before proceeding.
 
 Efficiency:
@@ -28,13 +29,13 @@ Efficiency:
 - Scripts are only active for a short time when invoked either directly by the user or by a cron job (once after a reboot and then periodically for an auto-update).
 - List parsing and validation are implemented through efficient regex processing, so this is very quick (a fraction of a second for parsing and a few milliseconds for validation, for a very large list, depending on the CPU).
 
-Easy to install, manage and uninstall:
-- Installation normally only takes a few seconds (that depends on the size and number of the ip lists and on your internet speed because lists download takes most of that time).
-- Uninstallation takes about a second. It completely removes the suite leaving no traces in the system, and restores pre-install firewall policies. No restart is required.
+Ease of use features:
+- Installation normally only takes a few seconds.
+- Uninstallation takes about a second. It completely removes the suite, removes geoblocking firewall rules and restores pre-install firewall policies. No restart is required.
 - Pre-installation, provides a utility to check whether specific ip addresses you might want to blacklist or whitelist are indeed included in the list fetched from the registry.
 - Post-installation, provides a command to check on current geoblocking status so you don't have to run a few separate utilities and compare their output manually.
 - Post-installation, provides a utility for the user to manage and change geoblocking config (adding or removing country codes, changing the cron schedule etc).
-- All that is well documented, read **TL;DR** more info.
+- All that is well documented, read **TL;DR** for more info.
 
 I created this project for running on my own server, and it's been doing its job since the early releases, reducing the bot scans/attacks (which I'd been seeing a lot in the logs) to virtually zero. As I wanted it to be useful to other people as well, I implemented many reliability features which should make it unlikely that the scripts will misbehave on systems other than my own. But of course, use at your own risk. Before publishing a new release, I run the code through shellcheck to test for potential issues, and test the scripts on my server.
 
