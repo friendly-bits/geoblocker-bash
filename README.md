@@ -103,7 +103,7 @@ additional mandatory pre-requisites: to install, run ```sudo apt install ipset w
 optional: the check-ip-in-registry.sh script requires grepcidr. install it with ```sudo apt install grepcidr```
 
 ## **Notes**
-For more some helpful notes about using this suite, read [NOTES.md](/NOTES.md).
+For some helpful notes about using this suite, read [NOTES.md](/NOTES.md).
 
 ## **In detail**
 For more detailed description of each script, read [DETAILS.md](/DETAILS.md).
