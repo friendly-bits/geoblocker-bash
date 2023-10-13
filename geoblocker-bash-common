@@ -152,7 +152,7 @@ getstatus() {
 }
 
 setconfig() {
-# accepts key=value pairs and writes them to (or replaces in) config file specified in global variable $conf_file
+# Accepts key=value pairs and writes them to (or replaces in) config file specified in global variable $conf_file
 # if one of the value pairs is "target_file=[file]" then writes to $file instead
 # returns 0 if successful, 1 if not
 
@@ -283,7 +283,7 @@ merge_lists() {
 }
 
 
-check_tlds_coherency() {
+check_ccodes_coherency() {
 # checks whether current ipsets and iptables rules match ones in the config file
 
 	debugprint "Verifying config coherency..."
@@ -292,21 +292,18 @@ check_tlds_coherency() {
 	[[ "$list_type" != "whitelist" && "$list_type" != "blacklist" ]] &&  die "Error: Unrecognized list type '$list_type'!"
 
 	# initialize variables
-	unexpected_tlds=""; missing_tlds=""
+	unexpected_ccodes=""; missing_ccodes=""
+	config_ccodes="$(getconfig "Countries")" || die "Error: Couldn't read value for Countries from the config file."
+	active_ccodes="$(find_active_ccodes)" || return 1
+#	debugprint "active_ccodes: '$active_ccodes'"
+#	debugprint "config_ccodes: '$config_ccodes'"
 
-	config_tlds="$(getconfig "Countries")" || die "Error: Couldn't read value for Countries from the config file."
+	# reflect discrepancies in global variables $unexpected_ccodes and $missing_ccodes
+	unexpected_ccodes="$(subtract_list_a_from_b "$config_ccodes" "$active_ccodes")"
+	missing_ccodes="$(subtract_list_a_from_b "$active_ccodes" "$config_ccodes")"
+	ccodes_difference="$(find_lists_difference "$active_ccodes" "$config_ccodes")"
 
-	active_tlds="$(find_active_tlds)" || return 1
-
-#	debugprint "active_tlds: '$active_tlds'"
-#	debugprint "config_tlds: '$config_tlds'"
-
-	# reflect discrepancies in global variables $unexpected_tlds and $missing_tlds
-	unexpected_tlds="$(subtract_list_a_from_b "$config_tlds" "$active_tlds")"
-	missing_tlds="$(subtract_list_a_from_b "$active_tlds" "$config_tlds")"
-	tlds_difference="$(find_lists_difference "$active_tlds" "$config_tlds")"
-
-	if [[ -z "$tlds_difference" ]]; then
+	if [[ -z "$ccodes_difference" ]]; then
 		debugprint "Successfully verified config coherency."
 		return 0
 	else
@@ -315,10 +312,10 @@ check_tlds_coherency() {
 	fi
 }
 
-find_active_tlds() {
+find_active_ccodes() {
 # checks current ipsets and iptables rules for geoblocker
-# returns a list of active tlds (country codes)
-# if $1 is "all" then returns all tlds even when there is a difference between ipset tlds and iptables rules tlds
+# returns a list of active ccodes (country codes)
+# if $1 is "all" then returns all ccodes even when there is a difference between ipset ccodes and iptables rules ccodes
 
 	case "$list_type" in
 		whitelist) rule_type="ACCEPT" ;;
@@ -333,20 +330,20 @@ find_active_tlds() {
 	iptables_output="$iptables_output"
 	ipset_list="${ipset_list:-$(ipset list -n)}"
 
-	current_ipset_tlds="$(grep "$suite_name" <<< "$ipset_list" | grep -o '..$' | tr '\n' ' ' | awk '{$1=$1};1')"
-	current_iprules_tlds="$(grep "$rule_type" <<< "$iptables_output" | grep -oP "(?<=src /\* ${suite_name}\_).*?(?= \*/)" | tr '\n' ' ' | awk '{$1=$1};1')"
+	current_ipset_ccodes="$(grep "$suite_name" <<< "$ipset_list" | grep -o '..$' | tr '\n' ' ' | awk '{$1=$1};1')"
+	current_iprules_ccodes="$(grep "$rule_type" <<< "$iptables_output" | grep -oP "(?<=src /\* ${suite_name}\_).*?(?= \*/)" | tr '\n' ' ' | awk '{$1=$1};1')"
 
-	tlds_intersection="$(find_lists_intersection "$current_ipset_tlds" "$current_iprules_tlds")"
-	tlds_difference="$(find_lists_difference "$current_ipset_tlds" "$current_iprules_tlds")"
-	tlds_merged="$(merge_lists "$current_ipset_tlds" "$current_iprules_tlds")"
+	ccodes_intersection="$(find_lists_intersection "$current_ipset_ccodes" "$current_iprules_ccodes")"
+	ccodes_difference="$(find_lists_difference "$current_ipset_ccodes" "$current_iprules_ccodes")"
+	ccodes_merged="$(merge_lists "$current_ipset_ccodes" "$current_iprules_ccodes")"
 
 	if [[ "$1" = "all" ]]; then
-		printf "%s" "$tlds_merged"
+		printf "%s" "$ccodes_merged"
 	else
-		printf "%s" "$tlds_intersection"
+		printf "%s" "$ccodes_intersection"
 	fi
 
-	[[ -z "$tlds_difference" ]] && return 0 || { ipsets_incoherent="true"; return 1; }
+	[[ -z "$ccodes_difference" ]] && return 0 || { ipsets_incoherent="true"; return 1; }
 }
 
 
@@ -366,14 +363,43 @@ find_active_tlds() {
 
 sanitize_args() {
 # trims extra whitespaces, discards empty arguments
-arguments=()
-for arg in "$@"; do
-	# trim leading and trailing whitespaces
-	arg="$(awk '{$1=$1};1' <<< "$arg")"
-	# add to array while discarding empty arguments
-	[[ -n "$arg" ]] && arguments+=("$arg")
-done
+	arguments=()
+	for arg in "$@"; do
+		# trim leading and trailing whitespaces
+		arg="$(awk '{$1=$1};1' <<< "$arg")"
+		# add to array while discarding empty arguments
+		[[ -n "$arg" ]] && arguments+=("$arg")
+	done
 }
+
+validate_ccode(){
+# validates country code in $1 against cca2.list
+# country code must be in upper case
+# optional $2 may contain path to cca2.list
+
+#	to fetch country codes online:
+#	cca2_list="$($fetch_command https://restcountries.com/v3.1/all?fields=cca2 2>/dev/null | jq -r '.[].cca2' 2>/dev/null)"
+
+#	command to xz-compress, convert to base64 and store in a variable:
+#	test="$(xz < cca2.list | base64 -w0)"
+#	resulting data:
+# /Td6WFoAAATm1rRGAgAhARYAAAB0L+Wj4ALtARZdACCQ/UPERPp2ctP2iu+JpKwGwSps8/P8vQpb++GbAHflYA/3wP85V0OjxJaaNZsVRJRqecZIAsmd4IrGOeRgvY6uEjolGV2zY9K8k5F0wSk6L1dLgzEMHfD4UQci+0cuzbW7E4xay6wAt8stj/jfzyZkleZn+cXkEDlVEVTp7GkvCoIpRwlSZlT7a4U6PxoBXpMp5MjYXVVy0qbxDF3nxapo4SLpqR91levUQCW7c+s+Okj26gs/apehIjcOXpYpEmtwRrd6V4uXSyTeOovlskC0lsLWiF+DB2px9ylIq0Kw9gb6PBZ2d4hdDpoL5W/u3a8o20ehjquxJXUa+z4LzZpcZ7TMa6HiPQxIOx+cLeG7U1vBdw2gAAAAt7gTVpGW1WQAAbIC7gUAACPB/N6xxGf7AgAAAAAEWVo=
+#	this can be embedded in a script and decoded with the command:
+#	test2="$(base64 -d <<< "$test" | xz -d)"
+
+#	but for now, we are using a dedicated uncompressed file
+
+	cca2_path="${2:-"$conf_dir/cca2.list"}"
+	local rv=0
+	local checked_ccode=""
+	local ccode_list="$(<"$cca2_path")" &>/dev/null
+	[[ -z "$ccode_list" ]] && install_failed "\$ccode_list variable is empty." # if the list variable is empty, revert the installation
+
+	checked_ccode="$(grep -x "$1" <<< "$ccode_list" 2>/dev/null)"; rv=$?
+	[[ "$rv" -eq 0 && -n "$checked_ccode" ]] && return 0 || return 1
+}
+
+
 
 ### Checks
 
@@ -412,9 +438,9 @@ parent_short_cap="${parent_short^^}"
 conf_dir="/etc/${suite_name}"
 conf_file="${conf_dir}/${suite_name}.conf"
 
-# global variables to get coherency check results from check_tlds_coherency()
-unexpected_tlds=""
-missing_tlds=""
+# global variables to get coherency check results from check_ccodes_coherency()
+unexpected_ccodes=""
+missing_ccodes=""
 ipsets_incoherent=""
 
 ### Main
