@@ -76,9 +76,9 @@ create_cron_job() {
 	job_type="$1"
 
 	# check that countries list in config is not empty
-	config_tlds="$(getconfig "Countries")" || { die -nolog "Error: Couldn't read value for Countries from the config file."; }
+	config_ccodes="$(getconfig "Countries")" || { die -nolog "Error: Couldn't read value for Countries from the config file."; }
 
-	if [[ -z "$config_tlds" ]]; then
+	if [[ -z "$config_ccodes" ]]; then
 		die -nolog "Error: Countries list in the config file is empty! No point in creating autoupdate job."
 	fi
 
