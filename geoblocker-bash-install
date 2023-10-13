@@ -266,8 +266,8 @@ mkdir -p "$conf_dir"
 # write initial config to the config file
 echo -n "Setting initial config... "
 
-setconfig "UserCcode=$user_ccode" "Countries=" "ListType=$list_type" "Installdir=$install_dir" "Datadir=$datadir" "CronSchedule=$cron_schedule" "DefaultSchedule=$defualt_schedule" \
-	"RebootSleep=$sleeptime" "Backup_script=$backup_script" "EmergencyDeactivation=$emergency_deactivation" \
+setconfig "UserCcode=$user_ccode" "Countries=" "ListType=$list_type" "Installdir=$install_dir" "Datadir=$datadir" "CronSchedule=$cron_schedule" \
+	"DefaultSchedule=$default_schedule" "RebootSleep=$sleeptime" "EmergencyDeactivation=$emergency_deactivation" \
 	"NoPersistence=$no_persistence" "NoDrop=$nodrop"; rv="$?"
 
 if [[ "$rv" -ne 0 ]]; then
