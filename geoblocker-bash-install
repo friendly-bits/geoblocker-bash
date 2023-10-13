@@ -338,6 +338,14 @@ else
 	debugprint "Pre-install policies:   INPUT: $preinstall_input_policy, FORWARD: $preinstall_forward_policy"
 fi
 
+# only allow root to read the $datadir and files inside it
+# '600' means only the owner can read or write to the files
+chmod -R 600 "$datadir"
+
+# since we are installing as root, root should already be the owner
+# but just to be safe
+chown -R root:root "$datadir"
+
 # cd into the install directory
 # exit in case "cd" fails
 [[ -n "$install_dir" ]] && cd "$install_dir" || install_failed "Error: Couldn't cd into '$install_dir'."
