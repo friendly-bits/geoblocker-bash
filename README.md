@@ -21,7 +21,7 @@ Reliability features:
 - Validates all user input to prevent unintended mistakes.
 - If a user accidentally requests an action that is about to block their own country (which can happen both in blacklist mode and in whitelist mode), the -manage script will warn them and wait for their input before proceeding.
 
-Efficiency:
+Efficiency features:
 - When creating iptables rules, a list for each country is compiled into an ipset and that ipset is then used with a matching iptables rule. This way the load on the CPU is minimal when the firewall is processing incoming connection requests.
 - Calculation of optimized ipset parameters when creating new ipsets, to try and hit the sweet spot for both performance and memory consumption. Typically consumes very little memory (just a couple MB for a very large list) with minimal performance impact.
 - Creating new ipsets is implemented in the most efficient way allowed by the API, so normally it takes less than a second for a very large list (depending on the CPU of course).
