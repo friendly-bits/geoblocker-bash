@@ -1,3 +1,6 @@
+## Prelude:
+- Most scripts display "usage" when called with the "-h" option. You can find out about some additional options specific to each script by running it with that option.
+
 ## **In detail**
 The suite currently includes 12 scripts:
 1. geoblocker-bash-install
