@@ -50,17 +50,17 @@ usage() {
 $me
 Serves as a proxy to call the -fetch, -apply and -backup scripts with arguments required for each action.
 
-Usage: $me <action> [-c <"tld [tld] ... [tld]">] [-s] [-d] [-h]
+Usage: $me <action> [-c <"country_code [country_code] ... [country_code]">] [-s] [-d] [-h]
 
 Actions:
-    add|remove                   : Add or remove TLDs (country codes) to/from geoblocking rules
-    update                       : Fetch ip lists and reactivate them via the *apply script
+    add|remove                   : Add or remove country codes to/from geoblocking rules.
+    update                       : Fetch ip lists and reactivate them via the *apply script.
 
 Options:
-    -c <"country_codes">          : tld's (country codes). if passing multiple country codes, use double quotes
+    -c <"country_codes">          : country codes (ISO 3166-1 alpha-2). if passing multiple country codes, use double quotes.
 
     -s                            : Skip fetching (only run the apply script). For update action only.
-    -o                            : No backup: don't create backup of current iptables state before the action
+    -o                            : No backup: don't create backup of current iptables state before the action.
 
     -d                            : Debug
     -h                            : This help
@@ -83,7 +83,7 @@ esac
 # process the rest of the arguments
 while getopts ":c:osdh" opt; do
 	case $opt in
-		c) arg_tlds=$OPTARG;;
+		c) arg_ccodes=$OPTARG;;
 		s) skipfetch="true";;
 		o) nobackup="true";;
 		d) debugmode_args="true";;
@@ -113,22 +113,22 @@ debugentermsg
 
 #### VARIABLES
 
-# Read current set of countries from the the config file into config_tlds
-config_tlds="$(getconfig "Countries")" || die "Error: Couldn't read value for Countries from the config file."
+# Read current set of countries from the the config file into config_ccodes
+config_ccodes="$(getconfig "Countries")" || die "Error: Couldn't read value for Countries from the config file."
 
-if [[ -z "$arg_tlds" || "$action_run" = "update" ]]; then
-	tlds="$config_tlds"
+if [[ -z "$arg_ccodes" || "$action_run" = "update" ]]; then
+	ccodes="$config_ccodes"
 else
-	tlds="$arg_tlds"
+	ccodes="$arg_ccodes"
 fi
 
 # trim single-quotes if any
-tlds="${tlds//\'}"
+ccodes="${ccodes//\'}"
 
 # trim extra whitespaces
-tlds="$(awk '{$1=$1};1' <<< "$tlds")"
+ccodes="$(awk '{$1=$1};1' <<< "$ccodes")"
 
-tlds_cnt=$(echo "$tlds" | wc -w)
+ccodes_cnt=$(echo "$ccodes" | wc -w)
 
 # get list_type from the config file
 list_type="$(getconfig "ListType")" || die "Error: Couldn't read value for ListType from the config file."
@@ -147,7 +147,7 @@ iplist_dir="$datadir/ip_lists"
 
 status_file="$iplist_dir/status"
 
-failed_tlds_cnt=0
+failed_ccodes_cnt=0
 
 
 #### CHECKS
@@ -162,8 +162,8 @@ missing_deps="$(check_deps "curl|wget" jq iptables-save iptables-restore ipset $
 
 [[ -z "$iplist_dir" ]] && die "Error: iplist file path can not be empty! Exiting."
 
-# check for country tlds
-[[ -z "$tlds" ]] && { err="tlds variable can not be empty! Exiting."; usage; die "$err"; }
+# check for country ccodes
+[[ -z "$ccodes" ]] && { err="ccodes variable can not be empty! Exiting."; usage; die "$err"; }
 
 # check for valid action
 
@@ -186,23 +186,23 @@ esac
 
 if [[ ! "$skipfetch" && "$action_run" != "remove" ]]; then
 
-	# mark all tlds as failed in the status file before launching *fetch. if *fetch completes successfully, it will reset this
-	setstatus "$status_file" "failed_tlds=$tlds" || die "Error: Failed to write to status file '$status_file'."
+	# mark all ccodes as failed in the status file before launching *fetch. if *fetch completes successfully, it will reset this
+	setstatus "$status_file" "failed_ccodes=$ccodes" || die "Error: Failed to write to status file '$status_file'."
 
-	${suite_name}-fetch -c "$tlds" -p "$iplist_dir" -s "$status_file"
+	${suite_name}-fetch -c "$ccodes" -p "$iplist_dir" -s "$status_file"
 
 	# read *fetch results from the status file
-	tlds_to_update="$(getstatus "$status_file" "tlds_to_update")" || { die "Error: Couldn't read value for 'tlds_to_update' from status file '$status_file'."; }
-	failed_tlds="$(getstatus "$status_file" "failed_tlds")" || { die "Error: Couldn't read value for 'failed_tlds' from status file '$status_file'."; }
+	ccodes_to_update="$(getstatus "$status_file" "ccodes_to_update")" || { die "Error: Couldn't read value for 'ccodes_to_update' from status file '$status_file'."; }
+	failed_ccodes="$(getstatus "$status_file" "failed_ccodes")" || { die "Error: Couldn't read value for 'failed_ccodes' from status file '$status_file'."; }
 
-	[[ -n "$failed_tlds" ]] && echolog -err "Failed to fetch and validate subnet lists for countries '$failed_tlds'."
+	[[ -n "$failed_ccodes" ]] && echolog -err "Failed to fetch and validate subnet lists for countries '$failed_ccodes'."
 
-	failed_tlds_cnt=$(echo "$failed_tlds" | wc -w)
+	failed_ccodes_cnt=$(echo "$failed_ccodes" | wc -w)
 
-	[[ "$failed_tlds_cnt" -ge "$tlds_cnt" ]] && die 254 "All fetch attempts failed."
+	[[ "$failed_ccodes_cnt" -ge "$ccodes_cnt" ]] && die 254 "All fetch attempts failed."
 
 else
-	tlds_to_update="$tlds"
+	ccodes_to_update="$ccodes"
 	debugprint "Skipped fetch because '-s' switch was used"
 fi
 
@@ -211,12 +211,12 @@ echo
 
 ### Apply ip lists
 
-if [[ -z "$tlds_to_update" ]]; then
+if [[ -z "$ccodes_to_update" ]]; then
 	echolog "Ip lists don't require firewall reconfiguration."
 else
 	if [[ -z "$nobackup" ]]; then
 		# check config coherency vs active ipsets and firewall rules before creating backup
-		check_tlds_coherency; rv=$?
+		check_ccodes_coherency; rv=$?
 		if [[ $rv -eq 0 ]]; then
 			# call the backup script to create a known-good backup of ipsets and iptables state
 			${suite_name}-backup create-backup
@@ -224,15 +224,15 @@ else
 			echolog -err "Warning: actual $list_type firewall config differs from the config file!"
 			echolog -err "Please run the *manage script to restore config coherency!"
 			echolog -err "If it's a recurring issue, please consider filing a bug report!"
-			[[ -n "$unexpected_tlds" ]] && echolog -err "Unexpected country codes in the firewall: '$unexpected_tlds'"
-			[[ -n "$missing_tlds" ]] && echolog -err "Missing country codes in the firewall: '$missing_tlds'"
+			[[ -n "$unexpected_ccodes" ]] && echolog -err "Unexpected country codes in the firewall: '$unexpected_ccodes'"
+			[[ -n "$missing_ccodes" ]] && echolog -err "Missing country codes in the firewall: '$missing_ccodes'"
 			echo
 		fi
 	else
 		debugprint "Skipping backup of current firewall state."
 	fi
 
-	${suite_name}-apply "$action_apply" -c "$tlds_to_update"; rv=$?
+	${suite_name}-apply "$action_apply" -c "$ccodes_to_update"; rv=$?
 
 #	[[ "$testmode" ]] && rv=1
 
@@ -250,12 +250,12 @@ else
 		# exit with the same exit code as backup-restore operation
 		die "$rv"
 	else
-		echolog "Successfully applied action '$action_run' for countries '$tlds_to_update'."
+		echolog "successfully applied action '$action_run' for countries '$ccodes_to_update'."
 	fi
 fi
 
-if [[ "$failed_tlds_cnt" -ne 0 ]]; then
-	debugprint "failed_tlds_cnt: $failed_tlds_cnt"
+if [[ "$failed_ccodes_cnt" -ne 0 ]]; then
+	debugprint "failed_ccodes_cnt: $failed_ccodes_cnt"
 	rv=254
 else
 	rv=0
