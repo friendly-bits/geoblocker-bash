@@ -41,15 +41,15 @@ usage() {
     cat <<EOF
 
 This script:
-1) Fetches ipv4 subnets for given country codes (TLD's) from regional internet registries.
+1) Fetches ipv4 subnets for given country codes from regional internet registries.
      (currently only RIPE and ARIN implemented but RIPE seems to store lists for all countries)
 
 2) Parses, validates the downloaded lists, and saves each one to a separate file.
 
-Usage: $me -c <"tld [tld] ... [tld]"> -p <path> [-o <output_file>] [-s <status_file>] [-f] [-d] [-h]
+Usage: $me -c <"country_code [country_code] ... [country_cod]"> -p <path> [-o <output_file>] [-s <status_file>] [-f] [-d] [-h]
 
 Options:
-    -c <"country_codes">   : tld's (country codes). if passing multiple country codes, use double quotes
+    -c <"country_codes">   : country codes (ISO 3166-1 alpha-2). if passing multiple country codes, use double quotes
     -p <path>              : Path to directory where downloaded and compiled subnet lists will be stored
     -o <output_file>       : Path to output file where fetched list will be stored.
                                 With this option, specify exactly 1 country code.
@@ -68,7 +68,7 @@ EOF
 
 while getopts ":c:p:s:o:fdh" opt; do
 	case $opt in
-		c) tlds=$OPTARG;;
+		c) ccodes=$OPTARG;;
 		p) iplist_dir=$OPTARG;;
 		s) status_file=$OPTARG;;
 		o) output_file=$OPTARG;;
@@ -137,7 +137,7 @@ EOF
 
 	# older solution, much more complex, slightly slower and less flexible (e.g. more work to adapt it to ipv6 in the future)
 	#	awk 'NR==FNR {a[$1] = $2; next} {$2 = a[$2]} 1' <(printf "%s" "$cidr_lookup_table") \
-	#		<(grep -oP "(?<=arin\|$tld\|$family\|).*?(?=\|[0-9]*?\|allocated)" < "$fetched_file" | tr "|" " ") | \
+	#		<(grep -oP "(?<=arin\|$ccode\|$family\|).*?(?=\|[0-9]*?\|allocated)" < "$fetched_file" | tr "|" " ") | \
 	#	tr -d " " > "$parsed_file"
 
 
@@ -145,10 +145,10 @@ EOF
 	# BEGIN {FS="\\|"} instructs awk to use | as field separator.
 	# "a[$1] = $2" compiles the lookup table into an associative array named "a" in awk,
 	# using the 1st field (ip count) of the table as key and 2nd field (cidr pattern) as value.
-	# next portion filters the lines in the fetched file for "$tld|$family" and "allocated".
+	# next portion filters the lines in the fetched file for "$ccode|$family" and "allocated".
 	# "print $4 a[$5]" takes the 4th field (ip subnet) in every resulting line,
 	# then uses the 5th field (ip count) as a key to get matching CIDR pattern from the array, and that gets appended to the output line.
-	awk -v family="$family" -v tld="$tld" 'BEGIN {FS="\\|"} NR==FNR {a[$1] = $2; next} $0 ~ tld"\\|"family".*\\|allocated" {print $4 a[$5]}' \
+	awk -v family="$family" -v ccode="$ccode" 'BEGIN {FS="\\|"} NR==FNR {a[$1] = $2; next} $0 ~ ccode"\\|"family".*\\|allocated" {print $4 a[$5]}' \
 	<(printf "%s\n" "$cidr_lookup_table") "$fetched_file" > "$parsed_file"
 
 	# check that $parsed_file is non-empty
@@ -191,9 +191,9 @@ subnet_regex="${ip_regex}${mask_regex}"
 curl_command="curl --retry 8 --fail-early --connect-timeout 5 --progress-bar"
 wget_command="wget --tries=8 --timeout=5 --show-progress"
 
-tlds_to_update=""
-failed_tlds=""
-up_to_date_tlds=""
+ccodes_to_update=""
+failed_ccodes=""
+up_to_date_ccodes=""
 failed_subnets_cnt_str=""
 
 # associative array
@@ -206,17 +206,17 @@ fetch_retries=2
 
 missing_deps="$(check_deps jq)" || die "Error: missing dependencies: $missing_deps."
 
-tlds_cnt="$(wc -l <<< "$tlds")"
+ccodes_cnt="$(wc -l <<< "$ccodes")"
 
-[[ "$tlds_cnt" -eq 0 ]] && { usage; die "Specify country code/s!"; }
+[[ "$ccodes_cnt" -eq 0 ]] && { usage; die "Specify country code/s!"; }
 
 # check that either $iplist_dir or $output_file is set
 [[ -z "$iplist_dir" && -z "$output_file" ]] && { usage; die "Specify iplist directory with '-p <path-to-dir>' or output file with '-o <output_file>'."; }
 # ... but not both
 [[ -n "$iplist_dir" && -n "$output_file" ]] && { usage; die "Use either '-p <path-to-dir>' or '-o <output_file>' but not both."; }
 
-# if $output_file is set, make sure that no more than 1 tld was specified
-[[ -n "$output_file" && "$tlds_cnt" -gt 1 ]] && { usage; die "To fetch lists for multiple country codes, use '-p <path-to-dir>' instead of '-o <output_file>'."; }
+# if $output_file is set, make sure that no more than 1 ccode was specified
+[[ -n "$output_file" && "$ccodes_cnt" -gt 1 ]] && { usage; die "To fetch lists for multiple country codes, use '-p <path-to-dir>' instead of '-o <output_file>'."; }
 
 # check that iplist directory exists
 [[ -n "$iplist_dir" && ! -d "$iplist_dir" ]] && die "Error: Directory '$iplist_dir' doesn't exist!"
@@ -226,25 +226,25 @@ tlds_cnt="$(wc -l <<< "$tlds")"
 
 #### Main
 
-for tld in $tlds; do
+for ccode in $ccodes; do
 
-	# capitalize $tld
-	tld="${tld^^}"
+	# capitalize $ccode
+	ccode="${ccode^^}"
 
-	case "$tld" in
+	case "$ccode" in
 		AI|AQ|AG|BS|BB|BM|BV|CA|KY|DM|GD|GP|HM|JM|MQ|MS|PR|BL|SH|KN|LC|PM|VC|MF|TC|US|UM|VG|VI )
 			registry="ARIN"
 			url="$arin_url"
 		;;
 		* ) registry="RIPE"
-			url="${ripe_url}${tld}"
+			url="${ripe_url}${ccode}"
 		;;
 	esac
 
-	filename="${family}_${tld}"
+	filename="${family}_${ccode}"
 	# set list_path to $output_file if it is set, or to $iplist_dir/$filename otherwise
 	list_path="${output_file:-$iplist_dir/$filename}"
-	fetched_file=$(mktemp "/tmp/fetched-$tld-XXXX")
+	fetched_file=$(mktemp "/tmp/fetched-$ccode-XXXX")
 
 	if [[ "$wget_exists" ]]; then
 		fetch_command="$wget_command $url -O"
@@ -254,29 +254,29 @@ for tld in $tlds; do
 
 	# reset variables
 	retry_cnt=0
-	tld_status="unknown"
+	ccode_status="unknown"
 	validated_subnets_cnt=0
 	failed_subnets_cnt=0
 	parsed_subnets_cnt=0
 	old_failed_subnets_cnt=""
 
-	# if old list exists and $status_file is set, get LastFailedSubnetsCnt_$tld from the status file
+	# if old list exists and $status_file is set, get LastFailedSubnetsCnt_$ccode from the status file
 	if [[ -s "$list_path" && -n "$status_file" ]]; then
 		old_list_exists="true"
 		date_old=$(stat --printf "%Y" "$list_path")
 		old_subnets_cnt="$(wc -l < "$list_path")"
-		old_failed_subnets_cnt="$(getstatus "$status_file" "LastFailedSubnetsCnt_$tld")" || {
+		old_failed_subnets_cnt="$(getstatus "$status_file" "LastFailedSubnetsCnt_$ccode")" || {
 			rm "$fetched_file" &>/dev/null
-			die "Error: Couldn't read value for LastFailedSubnetsCnt_$tld from the status file.";
+			die "Error: Couldn't read value for LastFailedSubnetsCnt_$ccode from the status file.";
 		}
 	else
 		old_list_exists=""
 		date_old=0
 	fi
 
-	echo -e "Fetching subnets list for country '$tld'...\n"
+	echo -e "Fetching subnets list for country '$ccode'...\n"
 
-	# Make $fetch_retries attempts to fetch the list for each TLD (or until successful fetch and no validation errors)
+	# Make $fetch_retries attempts to fetch the list for each ccode (or until successful fetch and no validation errors)
 	while true; do
 		let retry_cnt++
 
@@ -284,7 +284,7 @@ for tld in $tlds; do
 
 		if [[ $rv -ne 0 || ! -s "$fetched_file" ]]; then
 			rm "$fetched_file" &>/dev/null
-			tld_status="failed"
+			ccode_status="failed"
 			echolog "Error when running '$fetch_command'."
 			[[ "$retry_cnt" -ge "$fetch_retries" ]] && break
 		else
@@ -298,15 +298,15 @@ for tld in $tlds; do
 			# and we are not in manual mode, and force_update wasn't requested
 			if [[ "$old_list_exists" &&  "$date_new" -le "$date_old" && ! "$force_update" && \
 							! "$manualmode" && "$old_failed_subnets_cnt" -eq 0 ]]; then
-				echolog "Subnets list for country '$tld' is already up-to-date. Timestamp: '$(date --date=@$date_new)'."
-				tld_status="up_to_date"
+				echolog "Subnets list for country '$ccode' is already up-to-date. Timestamp: '$(date --date=@$date_new)'."
+				ccode_status="up_to_date"
 				rm "$fetched_file" &>/dev/null
 				break
 			fi
 
 			# Parse the fetched file
 			echo -n "Parsing... "
-			parsed_file=$(mktemp "/tmp/parsed-$tld-XXXX.list")
+			parsed_file=$(mktemp "/tmp/parsed-$ccode-XXXX.list")
 
 			case "$registry" in
 				ARIN ) parse_arin; rv=$? ;;
@@ -317,8 +317,8 @@ for tld in $tlds; do
 
 			if [[ "$rv" -ne 0 ]]; then
 				rm "$parsed_file" &>/dev/null
-				tld_status="failed"
-				echo -e "\nError: failed to parse the fetched file for country '$tld'." >&2
+				ccode_status="failed"
+				echo -e "\nError: failed to parse the fetched file for country '$ccode'." >&2
 				[[ "$retry_cnt" -ge "$fetch_retries" ]] && break
 			else
 				echo "Ok."
@@ -326,7 +326,7 @@ for tld in $tlds; do
 				parsed_subnets_cnt=$(wc -l < "$parsed_file")
 
 				echo -n "Validating... "
-				validated_file=$(mktemp "/tmp/validated-$tld-XXXX.list")
+				validated_file=$(mktemp "/tmp/validated-$ccode-XXXX.list")
 				grep -P "$subnet_regex" "$parsed_file" > "$validated_file"
 				rm "$parsed_file" &>/dev/null
 
@@ -334,70 +334,70 @@ for tld in $tlds; do
 
 				failed_subnets_cnt=$(( parsed_subnets_cnt - validated_subnets_cnt ))
 				if [[ "$failed_subnets_cnt" -gt 0 ]]; then
-					echolog -err "Note: Fetch attempt $retry_cnt for country '$tld': $failed_subnets_cnt subnets failed validation."
-					[[ "$retry_cnt" -ge "$fetch_retries" ]] && { tld_status="partial"; break; }
+					echolog -err "Note: Fetch attempt $retry_cnt for country '$ccode': $failed_subnets_cnt subnets failed validation."
+					[[ "$retry_cnt" -ge "$fetch_retries" ]] && { ccode_status="partial"; break; }
 					rm "$validated_file" &>/dev/null
 				else
 					echo "Ok."
-					tld_status="Ok"
+					ccode_status="Ok"
 					break
 				fi
 			fi
 		fi
-		echo -e "Retrying fetch for country '$tld'...\n"
+		echo -e "Retrying fetch for country '$ccode'...\n"
 	done
 
-	if [[ "$tld_status" = "Ok" || "$tld_status" = "partial" ]] && [[ "$validated_subnets_cnt" -eq 0 ]]; then
+	if [[ "$ccode_status" = "Ok" || "$ccode_status" = "partial" ]] && [[ "$validated_subnets_cnt" -eq 0 ]]; then
 		rm "$validated_file" &>/dev/null
-		echolog "Error: validated 0 subnets for country '$tld'. Perhaps the country code is incorrect?" >&2
-		tld_status="failed"
+		echolog "Error: validated 0 subnets for country '$ccode'. Perhaps the country code is incorrect?" >&2
+		ccode_status="failed"
 	fi
 
 	# Check if subnets count decreased dramatically compared to the old list
 	# This is to prevent a possible future situation where a regional registry server decides to change API or spew out wrong data
 	# and we get something like 0 subnets, all successfully validated and passed as a good list
-	if [[ "$old_list_exists" && "$tld_status" != "up_to_date" ]]; then
+	if [[ "$old_list_exists" && "$ccode_status" != "up_to_date" ]]; then
 		# compare fetched subnets count to old subnets count, get result in %
 		subnets_percents="$(echo "scale=0 ; $validated_subnets_cnt * 100 / $old_subnets_cnt" | bc)"
 		if [[ "$subnets_percents" -lt 90 ]]; then
-			tld_status="failed"
+			ccode_status="failed"
 			rm "$validated_file" &>/dev/null
-			echolog -err "Warning: validated subnets count '$validated_subnets_cnt' in the fetched list for country '$tld'..."
+			echolog -err "Warning: validated subnets count '$validated_subnets_cnt' in the fetched list for country '$ccode'..."
 			echolog -err "is ${subnets_percents}% of '$old_subnets_cnt' subnets in the existing list dated '$(date --date=@$date_old)'."
 			echolog -err "Something is wrong! Not updating the list."
 		else
-			debugprint "Validated subnets count for country '$tld' is ${subnets_percents}% of the count in the existing list"
+			debugprint "Validated subnets count for country '$ccode' is ${subnets_percents}% of the count in the existing list"
 		fi
 	fi
 
 	# If we have a partial list, decide whether to consider it Ok or not
-	if [[ "$tld_status" = "partial" ]]; then
-			echolog -err "Warning: out of $parsed_subnets_cnt, $failed_subnets_cnt subnets for country '$tld' failed validation."
+	if [[ "$ccode_status" = "partial" ]]; then
+			echolog -err "Warning: out of $parsed_subnets_cnt, $failed_subnets_cnt subnets for country '$ccode' failed validation."
 			echolog -err "Invalid subnets removed from the list."
 
 		if [[ "$old_list_exists" ]]; then
 			## don't update the list if it is partial and the count of failed validations increased compared to the old list
 			if [[ "$failed_subnets_cnt" -gt "$old_failed_subnets_cnt" ]]; then
 				rm "$validated_file" &>/dev/null
-				tld_status="failed"
-				err1="Warning: failed subnets count '$failed_subnets_cnt' for country '$tld' is higher than '$old_failed_subnets_cnt' in the old list."
+				ccode_status="failed"
+				err1="Warning: failed subnets count '$failed_subnets_cnt' for country '$ccode' is higher than '$old_failed_subnets_cnt' in the old list."
 				err2="Not updating the list."
 				echolog -err "$err1" "$err2"
 			else
-				tld_status="Ok"
+				ccode_status="Ok"
 			fi
 		else
 			# old list does not exist
 			# if we are in manual mode, meaning we were launched from either the *install or the *manage script
 			if [[ "$manualmode" ]]; then
 				# if an older existing list is unavailable, ask the user what to do
-				echo -e "\n\nWarning: Ip list for country '$tld' has been fetched but may be incomplete, and there is no older downloaded file for this list."
+				echo -e "\n\nWarning: Ip list for country '$ccode' has been fetched but may be incomplete, and there is no older downloaded file for this list."
 				echo "Use the incomplete list anyway?"
 				while true; do
 					read -p "(Y/N) " -n 1 -r
-					if [[ "$REPLY" =~ ^[Yy]$ ]]; then tld_status="Ok"; break
+					if [[ "$REPLY" =~ ^[Yy]$ ]]; then ccode_status="Ok"; break
 					elif [[ "$REPLY" =~ ^[Nn]$ ]]; then
-						tld_status="failed"
+						ccode_status="failed"
 						rm "$validated_file" &>/dev/null
 					else echo -e "\nPlease press 'y/n'.\n"
 					fi
@@ -408,20 +408,20 @@ for tld in $tlds; do
 
 	echo
 
-	if [[ "$tld_status" = "Ok" ]]; then
-		echo -e "Validated subnets count for country '$tld': $validated_subnets_cnt.\n"
+	if [[ "$ccode_status" = "Ok" ]]; then
+		echo -e "Validated subnets count for country '$ccode': $validated_subnets_cnt.\n"
 	fi
 
-	case "$tld_status" in
+	case "$ccode_status" in
 		Ok | up_to_date ) ;;
 
-		partial | failed ) failed_tlds="$failed_tlds $tld" ;;
+		partial | failed ) failed_ccodes="$failed_ccodes $ccode" ;;
 
-		unknown ) echolog -err "Error: validation status for country '$tld' is unknown. This should not happen. Please file a bug report." ;;
-		* ) echolog -err "Error: validation status for country '$tld' is '$tld_status' which I don't understand. This should not happen. Please file a bug report." ;;
+		unknown ) echolog -err "Error: validation status for country '$ccode' is unknown. This should not happen. Please file a bug report." ;;
+		* ) echolog -err "Error: validation status for country '$ccode' is '$ccode_status' which I don't understand. This should not happen. Please file a bug report." ;;
 	esac
 
-	if [[ "$tld_status" = "Ok" ]]; then
+	if [[ "$ccode_status" = "Ok" ]]; then
 
 		echo -n "Updating $list_path... "
 		mv "$validated_file" "$list_path"; rv=$?
@@ -429,19 +429,19 @@ for tld in $tlds; do
 			echo "Failed."
 			rm "$validated_file" &>/dev/null
 			echolog -err "Failed to overwrite the file '$list_path'"
-			failed_tlds="$failed_tlds $tld"
+			failed_ccodes="$failed_ccodes $ccode"
 		else
 			echo "Ok."
 			touch -d "$ripe_db_time" "$list_path"
-			tlds_to_update="$tlds_to_update $tld"
-			failed_subnets_cnt_arr["$tld"]="$failed_subnets_cnt"
+			ccodes_to_update="$ccodes_to_update $ccode"
+			failed_subnets_cnt_arr["$ccode"]="$failed_subnets_cnt"
 		fi
 
 	fi
 
-	if [[ "$tld_status" = "up_to_date" ]]; then
-		up_to_date_tlds="$up_to_date_tlds $tld"
-		failed_subnets_cnt_arr["$tld"]="$failed_subnets_cnt"
+	if [[ "$ccode_status" = "up_to_date" ]]; then
+		up_to_date_ccodes="$up_to_date_ccodes $ccode"
+		failed_subnets_cnt_arr["$ccode"]="$failed_subnets_cnt"
 	fi
 
 	rm "$validated_file" &>/dev/null
@@ -450,16 +450,16 @@ done
 # report fetch results back to caller via status file
 if [[ -n "$status_file" ]]; then
 	# convert array contents to formatted string for writing to the status file
-	for tld in "${!failed_subnets_cnt_arr[@]}"; do
+	for ccode in "${!failed_subnets_cnt_arr[@]}"; do
 
 		# new line is intentional
 		failed_subnets_cnt_str="$failed_subnets_cnt_str
-LastFailedSubnetsCnt_${tld}=${failed_subnets_cnt_arr[$tld]}"
+LastFailedSubnetsCnt_${ccode}=${failed_subnets_cnt_arr[$ccode]}"
 	done
 
 #	debugprint "failed_subnets_cnt_str: '$failed_subnets_cnt_str'"
 
-	setstatus "$status_file" "tlds_to_update=$tlds_to_update" "up_to_date_tlds=$up_to_date_tlds" "failed_tlds=$failed_tlds" "$failed_subnets_cnt_str" || \
+	setstatus "$status_file" "ccodes_to_update=$ccodes_to_update" "up_to_date_ccodes=$up_to_date_ccodes" "failed_ccodes=$failed_ccodes" "$failed_subnets_cnt_str" || \
 		die "Error: Failed to write to the status file '$status_file'."
 fi
 
