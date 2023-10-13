@@ -258,11 +258,11 @@ if [[ "$action" = "create-backup" ]]; then
 		# the "[IPSET]" line separates portions of the file
 		echo "[IPSET]" >> "${knowngood_file}.new"
 
-	# get tlds from the config file
-	config_tlds="$(getconfig "Countries")" || { die "Error: Couldn't read value for Countries from the config file."; }
+	# get ccodes from the config file
+	config_ccodes="$(getconfig "Countries")" || { die "Error: Couldn't read value for Countries from the config file."; }
 
-	for curr_tld in $config_tlds; do
-		curr_ipset="${suite_name}_${curr_tld}"
+	for curr_ccode in $config_ccodes; do
+		curr_ipset="${suite_name}_${curr_ccode}"
 		echo -n "Creating backup of ipset '$curr_ipset'... "
 		ipset save "$curr_ipset" >> "${knowngood_file}.new"; rv=$?
 		[[ "$rv" -ne 0 ]] && die "Error creating backup of ipset '$curr_ipset'."
