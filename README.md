@@ -52,7 +52,7 @@ Implements optional (enabled by default) persistence across system reboots and a
 
 ## **TL;DR**
 
-_Recommended to read the NOTES section below._
+_Recommended to read the [NOTES.md](/NOTES.md) file._
 
 **To install:**
 
