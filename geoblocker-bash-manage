@@ -432,7 +432,7 @@ if [[ ("$action" = "add" || "$action" = "remove") ]]; then
 
 	[[ "$rv" -ne 0 ]] && {
 		errmsg1="Error: Invalid country codes: '$bad_ccodes'."
-		errmsg2="Look up country codes (ISO 3166-1 alpha-2) online and try again."
+		errmsg2="Look up 2-letter country codes (ISO 3166-1 alpha-2) online and try again."
 		die "$errmsg1" "$errmsg2"
 	}
 fi
