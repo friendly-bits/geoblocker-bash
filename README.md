@@ -158,7 +158,7 @@ After installation, the user interface is provided by simply running "geoblocker
 **The -manage script**: serves as the main user interface to configure geoblocking after installation. You can also call it by simply typing geoblocker-bash (as during installation, a symlink is created to allow that). As most scripts in this suite, you need to use it with 'sudo' because root privileges are required to access the firewall.
 
 ```geoblocker-bash <add|remove> [-c <country_code>]``` :
-* Adds or removes the specified country codes (tld's) to/from the config file
+* Adds or removes the specified country codes to/from the config file
 * Calls the -run script to fetch and apply the ip lists
 * After successful firewall config changes, calls the -backup script to create a backup of current config, ipsets and iptables state.
 
