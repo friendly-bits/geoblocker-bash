@@ -376,6 +376,7 @@ validate_ccode(){
 # validates country code in $1 against cca2.list
 # country code must be in upper case
 # optional $2 may contain path to cca2.list
+# returns 0 if validation successful, 2 if not, 1 if cca2 list read from file is empty
 
 #	to fetch country codes online:
 #	cca2_list="$($fetch_command https://restcountries.com/v3.1/all?fields=cca2 2>/dev/null | jq -r '.[].cca2' 2>/dev/null)"
@@ -393,10 +394,10 @@ validate_ccode(){
 	local rv=0
 	local checked_ccode=""
 	local ccode_list="$(<"$cca2_path")" &>/dev/null
-	[[ -z "$ccode_list" ]] && install_failed "\$ccode_list variable is empty." # if the list variable is empty, revert the installation
+	[[ -z "$ccode_list" ]] && { echo "Error: $ccode_list variable is empty. Perhaps cca2.list is missing?" >&2; return 1; } # if the list variable is empty, revert the installation
 
 	checked_ccode="$(grep -x "$1" <<< "$ccode_list" 2>/dev/null)"; rv=$?
-	[[ "$rv" -eq 0 && -n "$checked_ccode" ]] && return 0 || return 1
+	[[ "$rv" -eq 0 && -n "$checked_ccode" ]] && return 0 || return 2
 }
 
 
