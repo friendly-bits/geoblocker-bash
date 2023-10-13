@@ -14,14 +14,14 @@ All configuration changes required for geoblocking to work are automatically app
 
 Implements optional (enabled by default) persistence across system reboots and automatic update of the ip lists.
 
-**Reliability features**:
-- Downloaded lists go through validation process, with safeguards in place to prevent application of corrupted or incomplete lists to the firewall.
-- All scripts perform extensive error detection and handling at each stage so if something goes wrong, chances for bad consequences are minimal.
+**Reliability**:
+- Downloaded lists go through validation process, which safeguards against application of corrupted or incomplete lists to the firewall.
+- All scripts perform extensive error detection and handling, so if something goes wrong, chances for bad consequences are rather low.
 - Automatic backup of the firewall state before any changes or updates, and automatic restore from backup in case an error occurs during these changes (which normally should never happen but implemented just in case).
 - Scripts which serve as a user interface validate all user input to prevent unintended mistakes.
 - If a user accidentally requests an action that is about to block their own country (which can happen both in blacklist mode and in whitelist mode), the -manage script will warn them and wait for their input before proceeding.
 
-**Efficiency features**:
+**Efficiency**:
 - When creating iptables rules, a list for each country is compiled into an ipset and that ipset is then used with a matching iptables rule. This way the load on the CPU is minimal when the firewall is processing incoming connection requests.
 - Calculates optimized ipset parameters when creating new ipsets, to try and hit the sweet spot for both performance and memory consumption. Typically consumes very little memory (just a couple MB for a very large list) with minimal performance impact.
 - Creating new ipsets is done efficiently, so normally it takes less than a second for a very large list (depending on the CPU of course).
@@ -29,7 +29,7 @@ Implements optional (enabled by default) persistence across system reboots and a
 - Scripts are only active for a short time when invoked either directly by the user or by a cron job (once after a reboot and then periodically for an auto-update).
 - List parsing and validation are implemented through efficient regex processing, so this is very quick (a fraction of a second for parsing and a few milliseconds for validation, for a very large list, depending on the CPU).
 
-**Ease of use features**:
+**Ease of use**:
 - Installation normally only takes a few seconds and requires only 2 parameters: country code(s) to block and geolbocking mode (whitelist/blacklist).
 - Uninstallation takes about a second. It completely removes the suite, removes geoblocking firewall rules and restores pre-install firewall policies. No restart is required.
 - Pre-installation, provides a utility to check whether specific ip addresses you might want to blacklist or whitelist are indeed included in the list fetched from the registry.
