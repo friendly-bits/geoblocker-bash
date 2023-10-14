@@ -125,7 +125,7 @@ missing_deps="$(check_deps "curl|wget" jq)" || die "Error: missing dependencies:
 [[ -z "$arg_ipv4s" ]] &&	{ usage; die "Specify the ip addresses to check with '-i <\"ip_addresses\">'."; }
 
 # check for *fetch
-[[ ! -f  "${script_dir}/${suite_name}-fetch" ]] && die "Error: Can not find '${suite_name}-fetch'. Did you run the -install script?"
+[[ ! -f  "${script_dir}/${suite_name}-fetch" ]] && die "Error: Can not find '${suite_name}-fetch'."
 
 
 #### Main
