@@ -60,7 +60,7 @@ _Recommended to read the [NOTES.md](/NOTES.md) file._
 
 **2)** Download the latest realease: https://github.com/blunderful-scripts/geoblocker-bash/releases
 
-**3)** Extract all scripts included in the release into the same folder somewhere in your home directory and cd into that directory in your terminal
+**3)** Extract all files included in the release into the same folder somewhere in your home directory and cd into that directory in your terminal
 
 _<details><summary>4) Optional:</summary>_
 
