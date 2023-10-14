@@ -34,7 +34,7 @@ Implements optional (enabled by default) persistence of geoblocking config and f
 - Creating new ipsets is done efficiently, so normally it takes less than a second for a very large list (depending on the CPU of course).
 - Only performs necessary actions. For example, if a list is up-to-date and already active in the firewall, it won't be re-validated and re-applied to the firewall until the data timestamp changes.
 - Scripts are only active for a short time when invoked either directly by the user or by a cron job (once after a reboot and then periodically for an auto-update).
-- List parsing and validation are implemented through efficient regex processing, so this is very quick (a fraction of a second for parsing and a few milliseconds for validation, for a very large list, depending on the CPU).</details>
+- List parsing and validation are implemented through efficient regex processing, so this is very quick: a fraction of a second for parsing and a few milliseconds for validation, for a very large list (depends on the CPU).</details>
 
 **Ease of use**:
 - Installation normally takes a few seconds and requires only 2 parameters: country code(s) and geolbocking mode (whitelist/blacklist).
