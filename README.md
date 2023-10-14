@@ -12,7 +12,7 @@ ip lists are fetched from the official regional registries (selected automatical
 
 All configuration changes required for geoblocking to work are automatically applied to the firewall during installation.
 
-Implements optional (enabled by default) persistence across system reboots and automatic update of the ip lists.
+Implements optional (enabled by default) persistence of geoblocking config and functionality across system reboots and automatic update of the ip lists.
 
 **Reliability**:
 - Downloaded lists go through validation process, which safeguards against application of corrupted or incomplete lists to the firewall.
