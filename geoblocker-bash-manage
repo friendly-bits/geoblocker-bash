@@ -596,8 +596,6 @@ else
 
 	${suite_name}-cronsetup; rv=$?
 	[[ "$rv" -ne 0 ]] && die "Error: Failed to create or update cron jobs."
-
-	echo -e "\nView current cron jobs with 'sudo crontab -l'"
 fi
 
 [[ ! "$in_install" ]] && echo
