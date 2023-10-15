@@ -106,10 +106,10 @@ create_cron_job() {
 
 			debugprint "Creating persistence cron job... "
 
-			# using the -s switch for the *run script to skip fetching at reboot
+			# using the apply action for the *run script to skip fetching at reboot
 			## otherwise if there was no internet connection at reboot time, *fetch would fail which would cause *run to fail,
 			## so *apply wouldn't run, which would leave the system without geoblocking rules
-			cron_command="@reboot sleep $sleeptime && \"$run_command\" update -s &>/dev/null # ${suite_name}-persistence"
+			cron_command="@reboot sleep $sleeptime && \"$run_command\" apply &>/dev/null # ${suite_name}-persistence"
 		;;
 
 		*) die -nolog "Unrecognized type of cron job: '$job_type'." ;;
@@ -142,6 +142,7 @@ remove_cron_job() {
 		fi
 
 		debugprint "Removing $job_type cron job for ${suite_name}... "
+		# read crontab -> filter out jobs by the comment ($suite_name-$job_type) -> write resulting lines back to crontab
 		crontab -u root -l 2>/dev/null | grep -v "${suite_name}-${job_type}" | sudo crontab -u root -
 		rv=$?
 
@@ -181,10 +182,10 @@ sleeptime="$(getconfig "RebootSleep")" || { die -nolog "Error: Couldn't read val
 
 #### Main
 
-echo -n "Updating crontab..."
-[[ "$debugmode" ]] && echo
 
 ### remove the persistence cron job before any other action since this will be done anyway
+echo -n "Processing cron jobs..."
+[[ "$debugmode" ]] && echo
 remove_cron_job "persistence"
 
 # only remove the autoupdate cron job now if we know that autoupdate should be disabled
@@ -210,7 +211,7 @@ echo "Ok."
 
 if [[ "$no_persistence" ]]; then
 	echo
-	echo "Note: no persistence was configured during installation. Geoblocking will be deactivated upon reboot!"
+	echo "Note: no-persistence option was specified during installation. Geoblocking will likely be deactivated upon reboot!"
 	echo "To enable persistence, run the *install script again without the '-n' option."
 fi
 
