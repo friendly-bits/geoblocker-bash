@@ -50,16 +50,16 @@ usage() {
 $me
 Serves as a proxy to call the -fetch, -apply and -backup scripts with arguments required for each action.
 
-Usage: $me <action> [-c <"country_code [country_code] ... [country_code]">] [-s] [-d] [-h]
+Usage: $me <action> [-c <"country_code [country_code] ... [country_code]">] [-d] [-h]
 
 Actions:
     add|remove                   : Add or remove country codes to/from geoblocking rules.
     update                       : Fetch ip lists and reactivate them via the *apply script.
+    apply                        : Apply previously downloaded lists (skip fetching)
 
 Options:
     -c <"country_codes">          : country codes (ISO 3166-1 alpha-2). if passing multiple country codes, use double quotes.
 
-    -s                            : Skip fetching (only run the apply script). For update action only.
     -o                            : No backup: don't create backup of current iptables state before the action.
 
     -d                            : Debug
@@ -74,17 +74,23 @@ EOF
 action_run="$1"
 shift 1
 
-# check for valid action
+
+# check for valid action and translate *run action to *apply action
+# *apply does the same thing whether we want to update, apply(refresh) or to add a new ccode, which is why this translation is needed
+
 case "$action_run" in
-	add | remove | update ) ;;
-	* ) usage; err1="Error: Unrecognized action: '$action_run'."; err2="Specify action in the 1st argument!"; die "$err1" "$err2" ;;
+	add) action_apply="add" ;;
+	remove) action_apply="remove" ;;
+	update) action_apply="add" ;;
+	apply) action_apply="add" ;;
+	"") usage; die "Specify action in the 1st argument!" ;;
+	*) usage; err1="Error: Unsupported action: '$action_run'."; err2="Specify action in the 1st argument!"; die "$err1" "$err2" ;;
 esac
 
 # process the rest of the arguments
-while getopts ":c:osdh" opt; do
+while getopts ":c:odh" opt; do
 	case $opt in
 		c) arg_ccodes=$OPTARG;;
-		s) skipfetch="true";;
 		o) nobackup="true";;
 		d) debugmode_args="true";;
 		h) usage; exit 0;;
@@ -105,7 +111,7 @@ echo
 # get debugmode variable from either the args or environment variable, depending on what's set
 debugmode="${debugmode_args:-$debugmode}"
 # set env var to match the result
-export debugmode="$debugmode"
+export debugmode
 
 # Print script enter message for debug
 debugentermsg
@@ -113,10 +119,14 @@ debugentermsg
 
 #### VARIABLES
 
-# Read current set of countries from the the config file into config_ccodes
-config_ccodes="$(getconfig "Countries")" || die "Error: Couldn't read value for Countries from the config file."
+# Read current set of countries from the the config file, unless the variable is already set by a parent script
+config_ccodes="${config_ccodes:-$(getconfig "Countries")}" || die "Error: Couldn't read value for Countries from the config file."
 
-if [[ -z "$arg_ccodes" || "$action_run" = "update" ]]; then
+export config_ccodes
+
+# if no country codes were passed via arguments, and action is update or apply, get the codes from the config file
+# otherwise use the codes from arguments
+if [[ ( -z "$arg_ccodes" ) && ( "$action_run" =~ ^(update|apply)$ ) ]]; then
 	ccodes="$config_ccodes"
 else
 	ccodes="$arg_ccodes"
@@ -130,17 +140,16 @@ ccodes="$(awk '{$1=$1};1' <<< "$ccodes")"
 
 ccodes_cnt=$(echo "$ccodes" | wc -w)
 
-# get list_type from the config file
-list_type="$(getconfig "ListType")" || die "Error: Couldn't read value for ListType from the config file."
+# get list_type from the config file, unless the list_type variable is already set by a parent script
+list_type="${list_type:-$(getconfig "ListType")}" || die "Error: Couldn't read value for ListType from the config file."
 
-# set global variable
-export list_type="$list_type"
+export list_type
 
 #convert to lower case
 action_run="${action_run,,}"
 
-# get datadir from the config file
-datadir="$(getconfig "Datadir")" || die "Error: Couldn't read value for Datadir from the config file."
+# get datadir from the config file, unless the variable is already set by a parent script
+datadir="${datadir:-$(getconfig "Datadir")}" || die "Error: Couldn't read value for Datadir from the config file."
 
 knowngood_file="$datadir/iptables_knowngood.bak"
 iplist_dir="$datadir/ip_lists"
@@ -152,30 +161,18 @@ failed_ccodes_cnt=0
 
 #### CHECKS
 
-missing_deps="$(check_deps "curl|wget" jq iptables-save iptables-restore ipset ${suite_name}-fetch ${suite_name}-apply ${suite_name}-backup)" \
+missing_deps="$(check_deps jq iptables-save iptables-restore ipset ${suite_name}-fetch ${suite_name}-apply ${suite_name}-backup)" \
 	|| die "Error: missing dependencies: $missing_deps."
 
 # check that the config file exists
-[[ ! -f "$conf_file" ]] && die "Config file '$conf_file' doesn't exist! Run the installation script again."
+[[ ! -f "$conf_file" ]] && die "Error: config file '$conf_file' doesn't exist! Run the installation script again."
 
-[[ -z "$knowngood_file" ]] && die "Error: Known-good file path can not be empty! Exiting."
+[[ -z "$knowngood_file" ]] && die "Error: Known-good file path can not be empty!"
 
-[[ -z "$iplist_dir" ]] && die "Error: iplist file path can not be empty! Exiting."
+[[ -z "$iplist_dir" ]] && die "Error: iplist file path can not be empty!"
 
 # check for country ccodes
-[[ -z "$ccodes" ]] && { err="ccodes variable can not be empty! Exiting."; usage; die "$err"; }
-
-# check for valid action
-
-[[ -z "$action_run" ]] && { usage; die "Specify action!"; }
-
-# translate *run action to *apply action
-case "$action_run" in
-	add) action_apply="add" ;;
-	remove) action_apply="remove" ;;
-	update) action_apply="add" ;;
-	*) usage; die "Error: unsupported action '$action_run'" ;;
-esac
+[[ -z "$ccodes" ]] && { err="Error: no country codes were specified!"; usage; die "$err"; }
 
 [[ -z "$list_type" ]] && die "\$list_type variable should not be empty! Something is wrong!"
 
@@ -184,7 +181,7 @@ esac
 
 ### Fetch ip lists
 
-if [[ ! "$skipfetch" && "$action_run" != "remove" ]]; then
+if [[ "$action_run" =~ ^(update|add)$ ]]; then
 
 	# mark all ccodes as failed in the status file before launching *fetch. if *fetch completes successfully, it will reset this
 	setstatus "$status_file" "failed_ccodes=$ccodes" || die "Error: Failed to write to status file '$status_file'."
@@ -203,20 +200,20 @@ if [[ ! "$skipfetch" && "$action_run" != "remove" ]]; then
 
 else
 	ccodes_to_update="$ccodes"
-	debugprint "Skipped fetch because '-s' switch was used"
 fi
-
-echo
 
 
 ### Apply ip lists
 
 if [[ -z "$ccodes_to_update" ]]; then
-	echolog "Ip lists don't require firewall reconfiguration."
+	echolog "Firewall reconfiguration isn't required."
 else
 	if [[ -z "$nobackup" ]]; then
+		rv=0
+
 		# check config coherency vs active ipsets and firewall rules before creating backup
-		check_ccodes_coherency; rv=$?
+		# skip if in manualmode (launched by -manage) because -manage checks coherency anyway
+		[[ ! "$manualmode" ]] && { check_ccodes_coherency; rv=$?; }
 		if [[ $rv -eq 0 ]]; then
 			# call the backup script to create a known-good backup of ipsets and iptables state
 			${suite_name}-backup create-backup
@@ -239,7 +236,7 @@ else
 	if [[ $rv -eq 254 ]]; then
 		debugprint "NOTE: *apply exited with error code 254."
 		echo
-		echolog -err "Error: *apply exited with code '254'. Failed to apply action '$action_apply'."
+		echolog -err "Error: *apply exited with code '254'. Failed to execute action '$action_apply'."
 	elif [[ $rv -gt 0 && $rv -ne 254 ]]; then
 		debugprint "NOTE: *apply exited with error code '$rv'."
 		echo
@@ -250,7 +247,7 @@ else
 		# exit with the same exit code as backup-restore operation
 		die "$rv"
 	else
-		echolog "successfully applied action '$action_run' for countries '$ccodes_to_update'."
+		echolog "Successfully executed action '$action_run' for countries '$ccodes_to_update'."
 	fi
 fi
 
@@ -265,5 +262,6 @@ debugexitmsg
 
 unset debugmode
 unset list_type
+unset config_ccodes
 
 exit "$rv"
