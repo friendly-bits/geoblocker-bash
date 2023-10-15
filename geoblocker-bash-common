@@ -327,7 +327,6 @@ find_active_ccodes() {
 	# check existing variable first and only query if value not set yet
 	iptables_output="${iptables_output:-$(iptables -vL)}"
 	[[ -z iptables_output ]] && die "Error: failed to get iptables state."
-	iptables_output="$iptables_output"
 	ipset_list="${ipset_list:-$(ipset list -n)}"
 
 	current_ipset_ccodes="$(grep "$suite_name" <<< "$ipset_list" | grep -o '..$' | tr '\n' ' ' | awk '{$1=$1};1')"
