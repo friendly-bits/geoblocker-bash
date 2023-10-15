@@ -67,9 +67,14 @@ action="$1"
 shift 1
 
 # check for valid action
+
 case "$action" in
-	add | remove | schedule | status ) ;;
-	* ) usage; err1="Error: Unrecognized action: '$action'."; err2="Specify action in the 1st argument!"; die -nolog "$err1" "$err2" ;;
+	add) ;;
+	remove) ;;
+	status) ;;
+	schedule) ;;
+	"") usage; die -nolog "Specify action in the 1st argument!" ;;
+	*) usage; err1="Error: Unrecognized action: '$action'."; err2="Specify action in the 1st argument!"; die -nolog "$err1" "$err2" ;;
 esac
 
 # process the rest of the arguments
@@ -99,8 +104,8 @@ echo
 # get debugmode variable from either the args or environment variable, depending on what's set
 debugmode="${debugmode_args:-$debugmode}"
 # set env var to match the result
-export debugmode="$debugmode"
-export testmode="$testmode"
+export debugmode
+export testmode
 
 # Print script enter message for debug
 debugentermsg
@@ -115,12 +120,11 @@ report_status() {
 		*) die "Error: unrecognized list type '$list_type'!"
 	esac
 
-	# read iptables state and ipsets list into env variables to avoid querying iptables and ipset every time
-	# check existing variable first and only query if value not set yet
-	iptables_output="${iptables_output:-$(iptables -vL)}"
+	# read iptables state and ipsets list into variables to avoid querying iptables and ipset multiple times
+	# these values are also re-used in some functions in the *common script
+	iptables_output="$(iptables -vL)"
 	[[ -z iptables_output ]] && die "Error: failed to get iptables state."
-	export iptables_output="$iptables_output"
-	export ipset_list="${ipset_list:-$(ipset list -n)}"
+	ipset_list="$(ipset list -n)"
 
 	echo -e "\n${yellow}Geoblocking status report:${no_color}"
 
@@ -201,8 +205,8 @@ report_status() {
 	else
 		echo -e "Cron system service is ${green}enabled${no_color}."
 
-		export cron_jobs="${cron_jobs:-"$(crontab -u root -l 2>/dev/null)"}"
 		# check cron jobs
+		cron_jobs="$(crontab -u root -l 2>/dev/null)"
 		persistence_job="$(grep "${suite_name}-persistence" <<< "$cron_jobs")"
 		[[ -n "$persistence_job" ]] && echo -e "${green}Persistence cron job is active${no_color}." || \
 			echo -e "${purple}WARNING${no_color}: Persistence cron job is ${red}missing${no_color}. Geoblocking will not work after reboot."
@@ -220,15 +224,14 @@ report_status() {
 			echo -e "${yellow}NOTE${no_color}: Autoupdate cron job is ${red}missing${no_color}. Automatic ip list updates are ${red}disabled${no_color}.\n"
 		fi
 	fi
-
-	reset_state_vars
 }
 
 reset_state_vars(){
-# unsets iptables_output, ipset_lists and cron_jobs variables to avoid using irrelevant data
+# unsets iptables_output and ipset_lists variables
+# these vars are used in functions of the sourced *common script to avoid querying the firewall multiple times when its state should not have changed
+# once we expect the state to have changed ( = after calling the -run script), we reset the vars in order to avoid using irrelevant data
 	unset iptables_output
 	unset ipset_lists
-	unset cron_jobs
 }
 
 restore_from_config() {
@@ -362,7 +365,7 @@ check_for_lockout() {
 #### VARIABLES
 
 # set global variables
-export list_type="$list_type"
+export list_type
 
 # set environment variable "nolog" to avoid daughter scripts writing errors
 #	to syslog when encountering incorrect arguments from the user
@@ -404,22 +407,13 @@ missing_deps="$(check_deps jq iptables-save iptables-restore ipset)" || die "Err
 
 [[ -z "$list_type" ]] && die "\$list_type variable should not be empty! Something is wrong!"
 
+
 ## Check arguments for sanity
 
-[[ -z "$action" ]] && { usage; die "Specify action!"; }
-
-case "$action" in
-	add) ;;
-	remove) ;;
-	status) ;;
-	schedule) ;;
-	*) usage; die "Error: unsupported action '$action'." ;;
-esac
-
-# check for valid country codes
 if [[ ("$action" = "add" || "$action" = "remove") ]]; then
+	# check for valid country codes
 	[[ -z "$ccodes_arg" ]] &&die "Error: action '$action' requires to specify countries with '-c <country_codes>'!"
-		rv=0
+	rv=0
 	for ccode in $ccodes_arg; do
 		validate_ccode "$ccode"; rv1=$?
 		case "$rv1" in
@@ -454,7 +448,6 @@ fi
 #### MAIN
 
 # check config coherency vs active ipsets and firewall rules before performing any action
-reset_state_vars
 check_ccodes_coherency || restore_from_config
 
 if [[ "$action" = "status" ]]; then
@@ -576,9 +569,6 @@ else
 	debugprint "Writing new config to file: 'Countries=$new_verified_ccodes'"
 	setconfig "Countries=$new_verified_ccodes" || die "Failed to write updated country codes '$new_verified_ccodes' to the config file"
 
-	config_ccodes="$(getconfig "Countries")" || die "Error: Couldn't read value for Countries from the config file."
-#	debugprint "current $list_type countries in config file: '$config_ccodes'"
-
 ####### Fault recovery test: inject unrequested ccode
 #[ "$testmode" ] &&	$run_command add -o -c "ge"; rv=$?
 #######
@@ -598,17 +588,16 @@ fi
 if [[ "$action" != "schedule" ]]; then
 	debugprint "Skipping cron setup because action is not 'schedule'."
 else
-	[[ -z "$cron_schedule" ]] && cron_schedule="disable"
+	[[ -z "$cron_schedule" ]] && { usage; die "Specify cron schedule for autoupdate or 'disable'."; }
 
 	# write to the config file in order to communicate parameters to *cronsetup
+	# if the requested schedule is invalid, -cronsetup will leave the existing actual cron job as is
 	setconfig "CronSchedule=$cron_schedule" || die "Failed to write the updated CronSchedule value to the config file"
 
 	${suite_name}-cronsetup; rv=$?
-	if [[ "$rv" -eq 0 ]]; then
-		echo -e "\nView current cron jobs with 'sudo crontab -l'"
-	else
-		die "Error: Failed to create or update cron jobs."
-	fi
+	[[ "$rv" -ne 0 ]] && die "Error: Failed to create or update cron jobs."
+
+	echo -e "\nView current cron jobs with 'sudo crontab -l'"
 fi
 
 [[ ! "$in_install" ]] && echo
