@@ -198,6 +198,8 @@ export manualmode="true"
 
 export in_install="true"
 
+export datadir=""
+
 install_dir="/usr/local/bin"
 datadir="/var/lib/${suite_name}"
 preinstall_policies_file="${datadir}/preinstall_policies.bak"
