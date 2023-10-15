@@ -1,3 +1,6 @@
+## Prelude:
+- Most scripts display "usage" when called with the "-h" option. You can find out about some additional options specific to each script by running it with that option.
+
 ## **In detail**
 The suite currently includes 12 scripts:
 1. geoblocker-bash-install
@@ -13,7 +16,7 @@ The suite currently includes 12 scripts:
 11. validate-cron-schedule.sh
 12. check-ip-in-registry.sh
 
-The scripts intended as user interface are **-install**, **-uninstall**, **-manage** and **check-ip-in-registry.sh**. All the other scripts are intended as a back-end, although they can be run by the user as well. If you just want to install and move on, you only need to run the -install script, specify mode with the -m option and specify country codes with the "-c" option. Provided you are not missing any pre-requisites, it should be as easy as that.
+The scripts intended as user interface are **-install**, **-uninstall**, **-manage** and **check-ip-in-registry.sh**. All the other scripts are intended as a back-end, although they can be run by the user as well (I don't recommend that). If you just want to install and move on, you only need to run the -install script, specify mode with the -m option and specify country codes with the "-c" option. Provided you are not missing any pre-requisites, it should be as easy as that.
 After installation, the user interface is provided by simply running "geoblocker-bash", which is a symlink to the -manage script.
 
 **The -install script**
