@@ -32,12 +32,12 @@ check_deps(){
 			local test_alt_cnt=0
 			local err_alt_cnt=0
 			local alt_dep_list=""
-			local dep_alt="$dep"
+			local deps_alt="$dep"
 			# process all |-delimited alternatives
-			for dep in $dep_alt; do
+			for dep_alt in $deps_alt; do
 				let test_alt_cnt++
 				! command -v "$dep" &> /dev/null && let err_alt_cnt++
-				[[ -z "$alt_dep_list" ]] && alt_dep_list="'$dep'" || alt_dep_list="$alt_dep_list or '$dep'"
+				[[ -z "$alt_dep_list" ]] && alt_dep_list="'$dep_alt'" || alt_dep_list="$alt_dep_list or '$dep_alt'"
 			done
 
 			if [[ "$err_alt_cnt" -ge "$test_alt_cnt" ]]; then
@@ -326,7 +326,7 @@ find_active_ccodes() {
 	# read iptables state and ipsets list into env variables to avoid querying iptables and ipset every time
 	# check existing variable first and only query if value not set yet
 	iptables_output="${iptables_output:-$(iptables -vL)}"
-	[[ -z iptables_output ]] && die "Error: failed to get iptables state."
+	[[ -z "$iptables_output" ]] && die "Error: failed to get iptables state."
 	ipset_list="${ipset_list:-$(ipset list -n)}"
 
 	current_ipset_ccodes="$(grep "$suite_name" <<< "$ipset_list" | grep -o '..$' | tr '\n' ' ' | awk '{$1=$1};1')"
@@ -399,6 +399,49 @@ validate_ccode(){
 	[[ "$rv" -eq 0 && -n "$checked_ccode" ]] && return 0 || return 2
 }
 
+detect_init() {
+	# init process is pid 1
+	INIT="$(ls -l /proc/1/exe)"
+	if [[ $INIT == *"upstart"* ]]; then
+		SYSTEMINITDAEMON=upstart
+	elif [[ $INIT == *"initctl"* ]]; then
+		SYSTEMINITDAEMON=sysvinit
+	elif [[ $INIT == *"systemd"* ]]; then
+		SYSTEMINITDAEMON=systemd
+	elif [[ $INIT == *"busybox"* ]]; then
+		SYSTEMINITDAEMON=busybox
+	elif [[ $INIT == *"procd"* ]]; then
+		SYSTEMINITDAEMON=procd
+	elif [[ $INIT == *"/sbin/init"* ]]; then
+		INIT="$(/sbin/init --version)"
+		if [[ $INIT == *"upstart"* ]]; then
+			SYSTEMINITDAEMON=upstart
+		elif [[ $INIT == *"systemd"* ]]; then
+			SYSTEMINITDAEMON=systemd
+		fi
+	else
+		SYSTEMINITDAEMON=unknown
+	fi
+
+	echo "$SYSTEMINITDAEMON"
+}
+
+check_cron() {
+	local rv=0
+
+	# check the init system
+	init_system="$(detect_init)"
+
+	case "$init_system" in
+		systemd )
+			# check if cron service is enabled
+			(systemctl is-enabled cron.service) &>/dev/null; rv=$? ;;
+		* )
+			# check for cron or crond in running processes (filtering out the the grep process itself as it has the word cron in it)
+			ps aux | grep -i '/crond$\|/cron$\|/crond \|cron ' | grep -v "grep" &>/dev/null; rv=$? ;;
+	esac
+	return "$rv"
+}
 
 
 ### Checks
@@ -429,7 +472,7 @@ me="$(basename "$0")"
 me_short="${me//${suite_name}-/}"
 me_short_cap="${me_short^^}"
 
-parent="$(basename "$(ps -o args= $PPID)" 2>/dev/null | awk -v RS='/| ' '/^.*'$suite_name'/ {a=$0} END{print a}')"
+parent="$(basename "$(ps -o args= $PPID)" 2>/dev/null | awk -v RS='/| ' '/^.*'"$suite_name"'/ {a=$0} END{print a}')"
 
 [[ "$parent" = "$me" ]] && parent=""
 parent_short="${parent//"${suite_name}-"/}"
