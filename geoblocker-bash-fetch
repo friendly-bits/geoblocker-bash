@@ -140,7 +140,7 @@ EOF
 	#		<(grep -oP "(?<=arin\|$ccode\|$family\|).*?(?=\|[0-9]*?\|allocated)" < "$fetched_file" | tr "|" " ") | \
 	#	tr -d " " > "$parsed_file"
 
-
+	# 2nd older solution, works well on x86 cpus but slow on embedded
 	# uses 2 "files" for awk input: 1st is the cidr lookup table (fed into awk using the <() construct) 2nd is the fetched file.
 	# BEGIN {FS="\\|"} instructs awk to use | as field separator.
 	# "a[$1] = $2" compiles the lookup table into an associative array named "a" in awk,
@@ -148,11 +148,19 @@ EOF
 	# next portion filters the lines in the fetched file for "$ccode|$family" and "allocated".
 	# "print $4 a[$5]" takes the 4th field (ip subnet) in every resulting line,
 	# then uses the 5th field (ip count) as a key to get matching CIDR pattern from the array, and that gets appended to the output line.
-	awk -v family="$family" -v ccode="$ccode" 'BEGIN {FS="\\|"} NR==FNR {a[$1] = $2; next} $0 ~ ccode"\\|"family".*\\|allocated" {print $4 a[$5]}' \
-	<(printf "%s\n" "$cidr_lookup_table") "$fetched_file" > "$parsed_file"
 
-	# check that $parsed_file is non-empty
-	[[ -s "$parsed_file" ]] && rv=0 || rv=1
+	#awk -v family="$family" -v ccode="$ccode" 'BEGIN {FS="\\|"} NR==FNR {a[$1] = $2; next} $0 ~ ccode"\\|"family".*\\|allocated" {print $4 a[$5]}' \
+	#<(printf "%s\n" "$cidr_lookup_table") "$fetched_file" > "$parsed_file"
+
+	# newer solution, at least 3x faster on embedded cpu. all processing is done in memory because i/o in embedded may be slow
+	# first we use grep -F, which is very fast, to filter only wanted lines
+	# we pipe that into cut which removes everything except the 4th and the 5th fields in every line (ip and addresses count)
+	# now awk has much less data to process, so it's faster. it works the same way as in the 2nd solution (read above)
+	trimmed_arin="$(grep -F "$ccode|$family" "$fetched_file" | grep -F 'allocated' | cut -d\| -f4-5)"
+	parsed_list="$(awk 'BEGIN {FS="\\|"} NR==FNR {a[$1] = $2; next} {print $1 a[$2]}' <(printf "%s\n" "$cidr_lookup_table") <(print "%s\n" "$trimmed_arin"))"
+
+	# check that $parsed_list is non-empty
+	[[ -n "$parsed_list" ]] && rv=0 || rv=1
 	return "$rv"
 }
 
@@ -164,11 +172,17 @@ parse_ripe() {
 
 get_db_time() {
 	case "$registry" in
-		RIPE ) db_time=$(jq -r '.data.query_time' "$fetched_file") ;;
+		RIPE ) ripe_time=$(jq -r '.data.query_time' "$fetched_file")
+				# remove T in the middle
+				db_time="${ripe_time/T/' '}"
+		;;
 		ARIN ) header="$(head -n 1 "$fetched_file")"
-				db_time="$(cut -d '|' -f6 <<< "$header")" ;;
+				arin_time="$(cut -d '|' -f6 <<< "$header")"
+				# convert to more compatible date format yyyy-mm-dd
+				db_time="${arin_time:0:4}-${arin_time:4:2}-${arin_time:6}"
+		;;
 	esac
-echo "$db_time"
+	echo "$db_time"
 }
 
 
@@ -221,7 +235,9 @@ ccodes_cnt="$(wc -l <<< "$ccodes")"
 # check that iplist directory exists
 [[ -n "$iplist_dir" && ! -d "$iplist_dir" ]] && die "Error: Directory '$iplist_dir' doesn't exist!"
 
-[[ -n "$status_file" && ! -f "$status_file" ]] && die "Error: Can not find status file '$status_file'."
+[[ -n "$status_file" && ! -f "$status_file" ]] && { touch "$status_file" || die "Error: failed to create status file '$status_file'."; }
+[[ -n "$output_file" && ! -f "$output_file" ]] && { touch "$output_file" || die "Error: failed to create output file '$output_file'."; }
+
 
 
 #### Main
@@ -232,10 +248,12 @@ for ccode in $ccodes; do
 	ccode="${ccode^^}"
 
 	case "$ccode" in
+		# ARIN country codes
 		AI|AQ|AG|BS|BB|BM|BV|CA|KY|DM|GD|GP|HM|JM|MQ|MS|PR|BL|SH|KN|LC|PM|VC|MF|TC|US|UM|VG|VI )
 			registry="ARIN"
 			url="$arin_url"
 		;;
+		# non-ARIN country codes
 		* ) registry="RIPE"
 			url="${ripe_url}${ccode}"
 		;;
@@ -244,7 +262,7 @@ for ccode in $ccodes; do
 	filename="${family}_${ccode}"
 	# set list_path to $output_file if it is set, or to $iplist_dir/$filename otherwise
 	list_path="${output_file:-$iplist_dir/$filename}"
-	fetched_file=$(mktemp "/tmp/fetched-$ccode-XXXX")
+	fetched_file="/tmp/fetched-$ccode.tmp"
 
 	if [[ "$wget_exists" ]]; then
 		fetch_command="$wget_command $url -O"
@@ -260,15 +278,27 @@ for ccode in $ccodes; do
 	parsed_subnets_cnt=0
 	old_failed_subnets_cnt=""
 
-	# if old list exists and $status_file is set, get LastFailedSubnetsCnt_$ccode from the status file
+	# if $status_file is set and old list physically exists, get LastFailedSubnetsCnt_$ccode from the status file
 	if [[ -s "$list_path" && -n "$status_file" ]]; then
 		old_list_exists="true"
-		date_old=$(stat --printf "%Y" "$list_path")
 		old_subnets_cnt="$(wc -l < "$list_path")"
-		old_failed_subnets_cnt="$(getstatus "$status_file" "LastFailedSubnetsCnt_$ccode")" || {
-			rm "$fetched_file" &>/dev/null
-			die "Error: Couldn't read value for LastFailedSubnetsCnt_$ccode from the status file.";
-		}
+		if [[ "$old_subnets_cnt" -gt 0 ]]; then
+			date_old=$(date -r "$list_path" +%s)
+			old_failed_subnets_cnt="$(getstatus "$status_file" "LastFailedSubnetsCnt_$ccode")"; rv=$?
+			case "$rv" in
+				0) ;;
+				1) die "*common: Error in getconfig() function." ;;
+				2)
+					echolog "Note: status file '$status_file' has no information for country '$ccode'."
+					rm "$fetched_file" &>/dev/null
+					old_list_exists=""
+					date_old=0
+				;;
+			esac
+		else
+			old_list_exists=""
+			date_old=0
+		fi
 	else
 		old_list_exists=""
 		date_old=0
@@ -306,7 +336,7 @@ for ccode in $ccodes; do
 
 			# Parse the fetched file
 			echo -n "Parsing... "
-			parsed_file=$(mktemp "/tmp/parsed-$ccode-XXXX.list")
+			parsed_file="/tmp/parsed-$ccode.tmp"
 
 			case "$registry" in
 				ARIN ) parse_arin; rv=$? ;;
@@ -326,7 +356,7 @@ for ccode in $ccodes; do
 				parsed_subnets_cnt=$(wc -l < "$parsed_file")
 
 				echo -n "Validating... "
-				validated_file=$(mktemp "/tmp/validated-$ccode-XXXX.list")
+				validated_file="/tmp/validated-$ccode.tmp"
 				grep -P "$subnet_regex" "$parsed_file" > "$validated_file"
 				rm "$parsed_file" &>/dev/null
 
@@ -432,7 +462,7 @@ for ccode in $ccodes; do
 			failed_ccodes="$failed_ccodes $ccode"
 		else
 			echo "Ok."
-			touch -d "$ripe_db_time" "$list_path"
+			touch -d "$db_time" "$list_path"
 			ccodes_to_update="$ccodes_to_update $ccode"
 			failed_subnets_cnt_arr["$ccode"]="$failed_subnets_cnt"
 		fi
