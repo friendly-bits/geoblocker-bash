@@ -4,11 +4,11 @@
 
 # Creates a backup of the current iptables state and geoblocker-associated ipsets, or restores them from backup.
 
-#  if restore from backup fails, and if "EmergencyDeactivation" option is enabled in the config file
-#  (disabled by default; can be set set during installation with the '-e' option switch),
-#  assumes a fundamental issue and disables geoblocking completely via the *reset script
+#  if fails at a critical stage while applying changes to the firewall,
+#  assumes a fundamental issue and deactivates geoblocking completely via the *reset script
 #  (removes associated ipsets and iptables rules, restores pre-install policies for INPUT and FORWARD chains,
 #  does not remove installed scripts, config and data).
+
 
 #### Initial setup
 
@@ -103,120 +103,224 @@ debugentermsg
 
 #### FUNCTIONS
 
-restore_from_file() {
-# restores iptables and ipset state from a backup file
-	restoretarget="$1"
-	restorefile="$2"
-	echo "Checking the $restoretarget portion of the backup file..."
-
-	# count lines in the corresponding portion of the backup file
-	case "$restoretarget" in
-		iptables) line_cnt=$(sed -e '/\[IPSET\].*/Q' "$restorefile" | wc -l) ;;
-		ipset) line_cnt=$(sed -n "/create ${suite_name}/,\$p" "$restorefile" | grep "add ${suite_name}" | wc -l) ;;
-	esac
-	debugprint "$restoretarget lines number in backup: $line_cnt"
-
-	if [[ "$line_cnt" -gt 0 ]]; then
-		echo -n "Restoring $restoretarget state from backup... "
-
-		case "$restoretarget" in
-			# reads <$restorefile> from beginning to [IPSET] and pipes the result into iptables-restore
-			iptables) sed -e '/\[IPSET\]/Q' "$restorefile" 2>&1 | iptables-restore; rv="${PIPESTATUS[1]}" ;;
-
-			# reads <$restorefile> from "create ${suite_name}" to EOF and pipes the result into "ipset restore"
-			ipset) sed -n "/create ${suite_name}/,\$p" "$restorefile" 2>&1 | ipset restore; rv="${PIPESTATUS[1]}" ;;
-		esac
-
-		if [[ $rv -eq 0 ]]; then
-			echo "Success."
-
-			return 0
-		else
-			echo "Failure." >&2
-			err1="Failed to restore $restoretarget known-good state from backup."
-		fi
-	else
-		err1="Error: $restoretarget backup appears to be empty or non-existing."
-	fi
-
-	# if we are here then something is seriously broken (unless the script ran in test mode with the -t switch)
-	# run the reset script to deactivate geoblocking and remove associated cron jobs
-	err2="*** Deactivating geoblocking and removing cron jobs ***"
-
-	# if -t switch wasn't specified at launch then it's not a test
-	if [[ ! "$test" ]]; then
-		knowngood_failed "$err1" "$err2"
-	else
-		echo "$err1" >&2
-		echo "-t switch was specified, which means we are in test mode. Skipping emergency deactivation." >&2
-		echo "WARNING: RECOVERY TEST FAILED AND GEOBLOCKER IS CURRENTLY INACTIVE" >&2
-
-		if [[ "$restoretarget" = "iptables" ]]; then
-			die -nolog
-		fi
-	fi
-	echo -e "\n"
-}
-
 restoreknowngood() {
 # resets iptables policies and rules, destroys all associated ipsets and then initiates restore from file
-	restorefile="$1"
+
+	echo "Restoring last known-good firewall state from backup... "
+
+	restorefile="$(getconfig "BackupFile")"; rv=$?
+	if [[ "$rv" -eq 1 ]]; then restore_failed "Error reading the config file."
+	elif [[ "$rv" -eq 2 || -z "$restorefile" ]]; then restore_failed "Can not restore firewall state: no backup registered in the config file."
+	fi
+
+	[[ ! -f "$restorefile" ]] && restore_failed "Can not find the backup file '$restorefile'."
+
+	# detect the archive type and set the $extract_command variable accordingly
+	set_extract_command "$restorefile"
+
+	# extract the backup archive into $firewall_backup_var
+	firewall_backup_var="$($extract_command "$restorefile")" || restore_failed "Error when reading '$restorefile'."
+	[[ -z "$firewall_backup_var" ]] && restore_failed "Error: backup file '$restorefile' is empty."
+
+	echo -e "Successfully read backup file: '$restorefile'.\n"
+
+	for restoretarget in iptables ipset; do
+		echo -n "Checking the $restoretarget portion of the backup file... "
+
+		# count lines in the corresponding portion of the backup file
+		case "$restoretarget" in
+			iptables) line_cnt=$(sed -e '/\[IPSET\].*/Q' <<< "$firewall_backup_var" | wc -l) ;;
+			ipset) line_cnt=$(sed -n "/create ${suite_name}/,\$p" <<< "$firewall_backup_var" | grep "add ${suite_name}" | wc -l) ;;
+		esac
+		debugprint "$restoretarget lines number in backup: $line_cnt"
+		[[ "line_cnt" -eq 0 ]] && {
+			unset fireall_backup_var
+			restore_failed "Error: $restoretarget backup appears to be empty or non-existing."
+		}
+		echo "Ok."
+	done
+
+
 	echo -e "\n"
-	echolog -err "NOTE: Resetting iptables rules for ${suite_name}."
+	echo "Removing iptables rules for ${suite_name}."
 
 	echo "Setting INPUT chain policy to ACCEPT... "
-	iptables -P INPUT ACCEPT
+	iptables -P INPUT ACCEPT || restore_failed "Error when issuing command 'iptables -P INPUT ACCEPT'." "reset"
 
+	echo -n "Deleting firewall rules for $suite_name... "
 	# sed looks for rules with the comment which we use to stamp our rules
 	# sed executes iptables -D (delete) command on matching rules. execution is promtped by the switch /e (only available in GNU sed)
 	iptables-save | sed -r "/INPUT.*comment.*${iptables_comment}/s/-A/iptables -D/e" &>/dev/null; rv=$?
 	if [[ $rv -ne 0 ]]; then
 		echo "Failed."
 		err1="Error removing existing iptables rules with command: 'iptables-save | sed -r \"/INPUT.*comment.*$iptables_comment/s/-A/iptables -D/e\" '."
-		knowngood_failed "$err1"
+		restore_failed "$err1" "reset"
 	else
 		echo "Ok."
 	fi
 
-	sleep 1
+	# Destroy ipsets
+	sleep 0.3
 	for curr_ipset in $(ipset list -n | grep "$ipset_tag"); do
 		echo -n "Destroying ipset '$curr_ipset'... "
 		ipset destroy "$curr_ipset"
 		if [[ $rv -ne 0 ]]; then
-			knowngood_failed "Error destroying ipset '$curr_ipset'."
+			restore_failed "Error destroying ipset '$curr_ipset'." "reset"
 		else
 			echo "Ok."
 		fi
 	done
 
-	echo "NOTE: Restoring last known-good ipset and iptables from backup... " >&2
-	echo -e "Backup file: $restorefile\n" >&2
+	# ipset needs to be restored before iptables
+	for restoretarget in ipset iptables; do
+		echo -n "Restoring $restoretarget state from backup... "
 
-	restore_from_file "ipset" "$restorefile"
-	restore_from_file "iptables" "$restorefile"
+		case "$restoretarget" in
+			# reads <$restorefile> from beginning to [IPSET] and pipes the result into iptables-restore
+			iptables) sed -e '/\[IPSET\]/Q' <<< "$firewall_backup_var" 2>&1 | iptables-restore; rv="${PIPESTATUS[1]}" ;;
+
+			# reads <$restorefile> from "create ${suite_name}" to EOF and pipes the result into "ipset restore"
+			ipset) sed -n "/create ${suite_name}/,\$p" <<< "$firewall_backup_var" 2>&1 | ipset restore; rv="${PIPESTATUS[1]}" ;;
+		esac
+
+		if [[ $rv -eq 0 ]]; then
+			echo "Ok."
+		else
+			echo "Failed." >&2
+			unset fireall_backup_var
+			restore_failed "Failed to restore $restoretarget known-good state from backup." "reset"
+		fi
+	done
+
+	unset firewall_backup_var
+	echo -e "\n"
+	return 0
 }
 
-knowngood_failed() {
-	echo
-	echolog -err "$1" "$2"
-	if [[ -n "$emergency_deactivation" ]]; then ${suite_name}-reset; fi
+restore_failed() {
+	unset firewall_backup_var
+	echo "$1" >&2
+	if [[ "$2" = "reset" ]]; then
+		echo "*** Geoblocking is not working. Removing geoblocking rules from the firewall and removing the associated cron jobs. ***" >&2
+		${suite_name}-reset
+	fi
 	debugexitmsg
 	exit 1
 }
+
+create_backup() {
+# Saves current firewall state to a backup file
+
+	# detect best available archive format and set the $archive_ext and $archive_command variables
+	set_archive_type
+
+	backup_file="$datadir/firewall_backup.bak${archive_ext}"
+	firewall_backup_var=""
+	backup_length=0
+
+	echo -n "Creating backup of current iptables state... "
+
+	# save iptables state to $firewall_backup_var
+	firewall_backup_var="$(iptables-save)"; rv=$?
+	backup_length="$(wc -l <<< "$firewall_backup_var")"
+	[[ "$rv" -ne 0 || -z "$firewall_backup_var" ]] && {
+		unset firewall_backup_var
+		die "Error when reading iptables state."
+	}
+	echo "Ok."
+
+	# we use the same file for iptables and ipset backup
+	# the "[IPSET]" line separates portions of the file
+	firewall_backup_var+=$'\n'"[IPSET]"
+
+	for curr_ccode in $config_ccodes; do
+		curr_ipset_name="${suite_name}_${curr_ccode}"
+		echo -n "Creating backup of ipset '$curr_ipset_name'... "
+
+		# append current ipset content to $firewall_backup_var
+		firewall_backup_var+=$'\n'"$(ipset save "$curr_ipset_name")"; rv=$?
+
+		backup_length_old=$(( backup_length + 1 ))
+		backup_length="$(wc -l <<< "$firewall_backup_var")"
+		[[ "$rv" -ne 0 || -z "$firewall_backup_var" || "$backup_length" -le "$backup_length_old" ]] && {
+			unset firewall_backup_var
+			die "Error creating backup of ipset '$curr_ipset'."
+		} || echo "Ok."
+	done
+
+	$archive_command <<< "$firewall_backup_var" > "${backup_file}.new"; rv=$?
+	[[ "$rv" -ne 0 || ! -s "${backup_file}.new" ]] && {
+			unset firewall_backup_var
+			rm "${backup_file}.new" &>/dev/null
+			die "Error writing firewall backup to file '"${backup_file}.new"'."
+		}
+
+	unset firewall_backup_var
+
+	cp "$conf_file" "$conf_file_backup"; rv=$?
+	[[ "$rv" -ne 0 ]] && { rm "${backup_file}.new"; die "Error creating a backup copy of the config file."; }
+
+	# if backup file name changed since previous backup, delete the old file
+	[[ -n "$old_backup_file" && -f "$old_backup_file" && "$backup_file" != "$old_backup_file" ]] && rm "$old_backup_file"
+
+	mv "${backup_file}.new" "$backup_file" || die "Error writing firewall state backup to file '$backup_file'."
+
+	# save backup file full path to the config file
+	setconfig "BackupFile=$backup_file" || die "Error writing to the config file."	
+}
+
+set_extract_command() {
+# detects archive type (if any) of file passed in 1st argument by its extension
+# and sets the $extract_command variable accordingly
+# assumes that archive type is defined only by the part of the filename after the last dot
+
+	debugprint "Backup file: '$1'"
+	local filename="$(basename "$1")"
+	local file_extension="${filename##*.}"
+	case "$file_extension" in
+		bz2 ) [[ $(command -v bzip2) ]] && extract_command="bzip2 -cd" || die "Error: backup archive type is 'bzip2' but bzip2 utility is not found.";;
+		xz ) [[ $(command -v xz) ]] && extract_command="xz -cd" || die "Error: backup archive type is 'xz' but xz utility is not found." ;;
+		gz ) [[ $(command -v gzip) ]] && extract_command="gzip -cd" || die "Error: backup archive type is 'gzip' but gzip utility is not found." ;;
+		* ) extract_command="cat" ;;
+	esac
+}
+
+set_archive_type() {
+# detects the best available archive type and sets $archive_command and $archive_ext accordingly
+	if [[ $(command -v bzip2) ]]; then
+		archive_command="bzip2 -zc"
+		archive_ext=".bz2"
+	elif [[ $(command -v xz) ]]; then
+		archive_command="xz -zc"
+		archive_ext=".xz"
+	elif [[ $(command -v gzip) ]]; then
+		archive_command="gzip -c"
+		archive_ext=".gz"
+	else
+		# fall back to uncompressed
+		archive_command="cat"
+		archive_ext=""
+	fi
+}
+
 
 #### VARIABLES
 
 iptables_comment="$suite_name"
 ipset_tag="$suite_name"
 
-# get datadir from the config file
-datadir="$(getconfig "Datadir")" || { die "Error: Couldn't read value for Datadir from the config file."; }
+extract_command=""
+archive_command=""
+archive_ext=""
+firewall_backup_var=""
 
-# get EmergencyDeactivation from the config file
-emergency_deactivation="$(getconfig "EmergencyDeactivation")" || { die "Error: Couldn't read value for EmergencyDeactivation from the config file."; }
+# get datadir from the config file
+datadir="$(getconfig "Datadir")" || die "Error: Couldn't read value for Datadir from the config file."
+
+# get ccodes from the config file
+config_ccodes="$(getconfig "Countries")" || die "Error: Couldn't read value for Countries from the config file."
 
 conf_file_backup="$datadir/${suite_name}.conf.bak"
-knowngood_file="$datadir/iptables_knowngood.bak"
 
 
 #### CHECKS
@@ -225,11 +329,6 @@ missing_deps="$(check_deps iptables-save iptables-restore ipset)" || die "Error:
 
 # check that the config file exists
 [[ ! -f "$conf_file" ]] && die "Config file '$conf_file' doesn't exist! Run the installation script again."
-
-# check for knowngood file path
-if [[ -z "$knowngood_file" ]]; then
-	die "Error: Could not read the backup file path from config."
-fi
 
 # check for valid action
 
@@ -245,47 +344,20 @@ esac
 #### MAIN
 
 if [[ "$action" = "create-backup" ]]; then
-### Create backup file for known-good iptables state and save current state to the file
-
-	echo -n "Creating backup of current iptables state... "
-	touch "${knowngood_file}.new"
-
-	iptables-save > "${knowngood_file}.new"; rv=$?
-	[[ "$rv" -ne 0 ]] && die "Error creating backup of iptables state with command: 'iptables-save > ${knowngood_file}.new'."
-	echo "Ok."
-
-		# we use the same file for iptables and ipset backup
-		# the "[IPSET]" line separates portions of the file
-		echo "[IPSET]" >> "${knowngood_file}.new"
-
-	# get ccodes from the config file
-	config_ccodes="$(getconfig "Countries")" || { die "Error: Couldn't read value for Countries from the config file."; }
-
-	for curr_ccode in $config_ccodes; do
-		curr_ipset="${suite_name}_${curr_ccode}"
-		echo -n "Creating backup of ipset '$curr_ipset'... "
-		ipset save "$curr_ipset" >> "${knowngood_file}.new"; rv=$?
-		[[ "$rv" -ne 0 ]] && die "Error creating backup of ipset '$curr_ipset'."
-	echo "Ok."
-	done
-
-	cp "$conf_file" "$conf_file_backup"; rv=$?
-	[[ "$rv" -ne 0 ]] && die "Error creating a backup copy of the config file."
-
-	mv "$knowngood_file.new" "$knowngood_file"; rv=$?
-	[[ "$rv" -ne 0 ]] && die "Error overwriting the backup file."
-
+	create_backup
 	echo -e "\nSuccessfully created backup of config, ipsets and iptables rules."
-	echo "Backup file: '$knowngood_file'"
+	echo "Backup file: '$backup_file'"
 fi
 
 if [[ "$action" = "restore" ]]; then
 ### Restore iptables and ipsets to known-good state from backup file
-	restoreknowngood "$knowngood_file"
-	echolog "Successfully restored known-good ipset and iptables state from backup."
+	restoreknowngood "$backup_file"
 	echo
+	echo -n "Restoring the config file from backup... "
 	cp "$conf_file_backup" "$conf_file"; rv=$?
-	[[ "$rv" -ne 0 ]] && die "Error restoring the config file from backup."
+	[[ "$rv" -ne 0 ]] && die "Error." || echo -e "Ok.\n"
+	echolog "Successfully restored known-good ipset and iptables state from backup."
+	echo -e "\n View current geoblocking status with '${yellow}${suite_name} status${no_color}' (may require 'sudo').\n"
 fi
 
 debugexitmsg
