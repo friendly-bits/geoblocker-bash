@@ -152,7 +152,7 @@ report_status() {
 		[[ "$ipsets_incoherent" ]] && \
 			echo -e "\n${purple}Warning:${no_color} discrepancy detected between existing geoblocking ipsets and geoblocking firewall rules!\n" >&2
 	else
-		echo -e "Country codes in the firewall rules ${green}match${no_color} the config.\n"
+		echo -e "Country codes in the firewall rules ${green}match the config${no_color}.\n"
 	fi
 
 	# report INPUT and FORWARD chain policies
@@ -506,7 +506,7 @@ else
 
 	if [[ -z "$ccodes_to_change" && -z "$force_action" ]]; then
 		config_ccodes="$(getconfig "Countries")" || die "Error: Couldn't read value for Countries from the config file."
-		echo -e "\nCountries in final $list_type: '${yellow}$config_ccodes${no_color}'."
+		echo -e "\nCountries in the final $list_type: '${yellow}$config_ccodes${no_color}'."
 		die 254 "Nothing to do, exiting."
 	fi
 
@@ -527,7 +527,7 @@ else
 				read -p "(Y/N) " -n 1 -r
 				if [[ "$REPLY" =~ ^[Yy]$ ]]; then echo -e "\n\nProceeding..."; break
 				elif [[ "$REPLY" =~ ^[Nn]$ ]]; then
-						[[ ! "$in_install" ]] && echo -e "\n\nCountries in final $list_type: '${yellow}$config_ccodes${no_color}'."
+						[[ ! "$in_install" ]] && echo -e "\n\nCountries in the final $list_type: '${yellow}$config_ccodes${no_color}'."
 						echo
 						die "Aborted action '$action' for countries '$ccodes_to_change'."
 				else echo -e "\nPlease press 'y/n'.\n"
@@ -578,9 +578,9 @@ else
 	reset_state_vars
 	check_ccodes_coherency || { ccodes_to_change=""; restore_from_config; }
 
-	echo -e "\nCountries in final $list_type: '${yellow}$config_ccodes${no_color}'."
+	echo -e "\nCountries in the final $list_type: '${yellow}$config_ccodes${no_color}'."
 	echo
-	[[ ! "$in_install" ]] && echo -e "View current geoblocking status with '${yellow}sudo ${suite_name} status${no_color}'\n"
+	[[ ! "$in_install" ]] && echo -e "View current geoblocking status with '${yellow}${suite_name} status${no_color}' (may require 'sudo').\n"
 fi
 
 
