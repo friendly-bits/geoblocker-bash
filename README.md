@@ -20,31 +20,33 @@ Implements optional (enabled by default) persistence of geoblocking config and f
 <details> <summary>Read more:</summary>
 
 - All scripts perform extensive error detection and handling, so if something goes wrong, chances for bad consequences are rather low.
-- Automatic backup of the firewall state before any changes or updates, and automatic restore from backup in case an error occurs during these changes (which normally should never happen but implemented just in case).
-- Scripts which serve as a user interface validate all user input to prevent unintended mistakes.
+- Automatic backup of the firewall state before any changes or updates.
+- The *backup script also has a restore command. In case an error occurs while applying changes to the firewall (which normally should never happen), or if you mess something up in the firewall, you can use it to restore the firewall to its previous state.
 - If a user accidentally requests an action that is about to block their own country (which can happen both in blacklist mode and in whitelist mode), the -manage script will warn them and wait for their input before proceeding.
 </details>
 
 **Efficiency**:
-- When creating iptables rules, a list for each country is compiled into an ipset and that ipset is then used with a matching iptables rule. This way the load on the CPU is minimal when the firewall is processing incoming connection requests.
+- Utilizes the 'ipset' utility which makes the firewall much more efficient than applying a large amount of individual rules. This way the load on the CPU is minimal when the firewall is processing incoming connection requests.
 
 <details><summary>Read more:</summary>
   
-- Calculates optimized ipset parameters when creating new ipsets, to try and hit the sweet spot for both performance and memory consumption. Typically consumes very little memory (just a couple MB for a very large list) with minimal performance impact.
+- When creating new ipsets, calculates optimized ipset parameters in order to maximize performance and minimize memory consumption.
 - Creating new ipsets is done efficiently, so normally it takes less than a second for a very large list (depending on the CPU of course).
 - Only performs necessary actions. For example, if a list is up-to-date and already active in the firewall, it won't be re-validated and re-applied to the firewall until the data timestamp changes.
+- List parsing and validation are implemented through efficient regex processing, so this is very quick: a fraction of a second for parsing and a few milliseconds for validation, for a very large list (at least on x86 CPU).
 - Scripts are only active for a short time when invoked either directly by the user or by a cron job (once after a reboot and then periodically for an auto-update).
-- List parsing and validation are implemented through efficient regex processing, so this is very quick: a fraction of a second for parsing and a few milliseconds for validation, for a very large list (depends on the CPU).</details>
+
+</details>
 
 **Ease of use**:
-- Installation normally takes a few seconds and requires only 2 parameters: country code(s) and geolbocking mode (whitelist/blacklist).
+- Installation normally takes a few seconds.
 
 <details><summary>Read more:</summary>
   
 - Uninstallation normally takes about a second. It completely removes the suite, removes geoblocking firewall rules and restores pre-install firewall policies. No restart is required.
 - Pre-installation, provides a utility _(check-ip-in-registry.sh)_ to check whether specific ip addresses you might want to blacklist or whitelist are indeed included in the list fetched from the registry.
-- Post-installation, provides a utility _(symlinked to 'geoblocker-bash')_ for the user to manage and change geoblocking config (adding or removing country codes, changing the cron schedule etc).
-- Post-installation, provides a command _('geoblocker-bash status')_ to check current geoblocking status so you don't have to run a few separate utilities and compare their output manually.
+- Post-installation, provides a utility (symlinked to _'geoblocker-bash'_) for the user to manage and change geoblocking config (adding or removing country codes, changing the cron schedule etc).
+- Post-installation, provides a command _('geoblocker-bash status')_ to check geoblocking rules, active ipsets, and whether there are any issues.
 - All that is well documented, read **TL;DR** for more info.
 - Lots of comments in the code, in case you want to change something in it or learn how the scripts are working.
 - If an error or invalid input is encountered, provides useful feedback to help you solve the issue.
