@@ -60,7 +60,7 @@ Actions:
 Options:
     -c <"country_codes">          : country codes (ISO 3166-1 alpha-2). if passing multiple country codes, use double quotes.
 
-    -o                            : No backup: don't create backup of current iptables state before the action.
+    -o                            : No backup: don't create backup of current firewall state before the action.
 
     -d                            : Debug
     -h                            : This help
@@ -121,6 +121,8 @@ debugentermsg
 
 # Read current set of countries from the the config file, unless the variable is already set by a parent script
 config_ccodes="${config_ccodes:-$(getconfig "Countries")}" || die "Error: Couldn't read value for Countries from the config file."
+
+nobackup="${nobackup:-$(getconfig "NoBackup")}" || die "Error: Couldn't read value for NoBackup from the config file."
 
 export config_ccodes
 
@@ -240,11 +242,6 @@ else
 	elif [[ $rv -gt 0 && $rv -ne 254 ]]; then
 		debugprint "NOTE: *apply exited with error code '$rv'."
 		echo
-		# if fatal errors occur in *apply, attempt to restore last known-good ipsets and iptables state
-		# if we're in install, skip this step because there is no backup of ipsets anyway
-		[[ ! "$in_install" ]] && ${suite_name}-backup restore; rv="$?"
-
-		# exit with the same exit code as backup-restore operation
 		die "$rv"
 	else
 		echolog "Successfully executed action '$action_run' for countries '$ccodes_to_update'."
