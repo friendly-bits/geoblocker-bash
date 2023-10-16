@@ -85,7 +85,7 @@ iptables_comment="$suite_name"
 
 ### Delete associated cron jobs
 echo "Deleting cron jobs for ${suite_name}..."
-crontab -u root -l 2>/dev/null |  grep -v "${suite_name}-run" | sudo crontab -u root -
+crontab -u root -l 2>/dev/null |  grep -v "${suite_name}-run" | crontab -u root -
 
 ### Restore pre-install state of default policies for INPUT and FORWARD chains
 
