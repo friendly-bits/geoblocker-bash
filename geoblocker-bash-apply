@@ -130,7 +130,7 @@ destroy_temp_ipsets() {
 	done
 }
 
-getlocalsubnet() {
+getlocalsubnet_ipv4() {
 # attempts to find local subnet for the main network interface
 
 	# regex patterns used for ipv4 validation
@@ -142,7 +142,7 @@ getlocalsubnet() {
 	subnet_regex="${ip_regex}${mask_regex}"
 
 	# returns local ip with subnet mask
-	localip="$(ip addr | grep 'state UP' -A2 | tail -n1 | awk '{print $2}')"
+	localip="$(ip addr | grep 'state UP' -A2 | grep 'inet ' | tail -n1 | awk '{print $2}')"
 
 	# Change last ipv4 octet to 0
 	lsubnet="$(printf "%s" "$localip" | sed 's|\([0-9]*\.[0-9]*\.[0-9]*\.\)[0-9]*|\10|')"
@@ -287,9 +287,11 @@ for ccode in $ccodes; do
 	iptables_comment="${suite_name}_${ccode}"
 	echo -n "Removing existing $list_type iptables rules for country '$ccode'... "
 
+	# sed implementation seems to not work on busybox limited version of sed but i don't want to implement some eval thing
 	# sed looks for rules with the comment which we use to stamp our rules
 	# sed executes iptables -D (delete) command on matching rules. execution is promtped by the switch /e (only available in GNU sed)
 	iptables-save | sed -r "/INPUT.*comment.*${iptables_comment}/s/-A/iptables -D/e" &>/dev/null; rv="${PIPESTATUS[0]}"
+
 	if [[ $rv -ne 0 ]]; then
 		echo "Failed."
 		destroy_temp_ipsets
@@ -346,18 +348,18 @@ if [[ "$list_type" = "whitelist" ]]; then
 	### Set global iptables rules
 
 	# Add rule to allow connections from the local network
-	localsubnet="$(getlocalsubnet)"
-	if [[ -z "$localsubnet" ]]; then
+	localsubnet_ipv4="$(getlocalsubnet_ipv4)"
+	if [[ -z "$localsubnet_ipv4" ]]; then
 		destroy_temp_ipsets
 		die "Error: couldn't determine local subnet."
 	else
-		echo "Found local subnet: '$localsubnet'."
+		echo "Found local subnet: '$localsubnet_ipv4'."
 		echo -n "Appending rule to allow all traffic from the local subnet... "
-		iptables -A INPUT -s "$localsubnet" -j ACCEPT -m comment --comment "${iptables_comment_global}-localsubnet"; rv=$?
+		iptables -A INPUT -s "$localsubnet_ipv4" -j ACCEPT -m comment --comment "${iptables_comment_global}-localsubnet_ipv4"; rv=$?
 
 		if [[ $rv -ne 0 ]]; then
 			destroy_temp_ipsets
-			die "Failed to append rule with command 'iptables -A INPUT -s \"$localsubnet\" -j ACCEPT'."
+			die "Failed to append rule with command 'iptables -A INPUT -s \"$localsubnet_ipv4\" -j ACCEPT'."
 		fi
 		echo "Ok."
 	fi
@@ -377,11 +379,11 @@ fi
 
 # Add rule to allow established/related connections, regardless of the firewall mode (whitelist or blacklist)
 echo -n "Inserting rule to allow established/related connections... "
-iptables -I INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT -m comment --comment "${iptables_comment_global}-established-related"; rv=$?
+iptables -I INPUT -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT -m comment --comment "${iptables_comment_global}-rel-est"; rv=$?
 
 if [[ $rv -ne 0 ]]; then
 	destroy_temp_ipsets
-	die "Failed to insert rules with command 'iptables -I INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT'."
+	die "Failed to insert rules with command 'iptables -I INPUT -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT'."
 fi
 echo "Ok."
 
