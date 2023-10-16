@@ -157,7 +157,7 @@ EOF
 	# we pipe that into cut which removes everything except the 4th and the 5th fields in every line (ip and addresses count)
 	# now awk has much less data to process, so it's faster. it works the same way as in the 2nd solution (read above)
 	trimmed_arin="$(grep -F "$ccode|$family" "$fetched_file" | grep -F 'allocated' | cut -d\| -f4-5)"
-	parsed_list="$(awk 'BEGIN {FS="\\|"} NR==FNR {a[$1] = $2; next} {print $1 a[$2]}' <(printf "%s\n" "$cidr_lookup_table") <(print "%s\n" "$trimmed_arin"))"
+	parsed_list="$(awk 'BEGIN {FS="\\|"} NR==FNR {a[$1] = $2; next} {print $1 a[$2]}' <(printf "%s\n" "$cidr_lookup_table") <(printf "%s\n" "$trimmed_arin"))"
 
 	# check that $parsed_list is non-empty
 	[[ -n "$parsed_list" ]] && rv=0 || rv=1
@@ -165,8 +165,8 @@ EOF
 }
 
 parse_ripe() {
-	jq -r ".data.resources.$family | .[]" "$fetched_file" > "$parsed_file"; rv=$?
-	[[ "$rv" -ne 0 || ! -s "$parsed_file" ]] && rv=1
+	parsed_list="$(jq -r ".data.resources.$family | .[]" "$fetched_file")"; rv=$?
+	[[ "$rv" -ne 0 || -z "$parsed_list" ]] && rv=1
 	return "$rv"
 }
 
@@ -336,7 +336,7 @@ for ccode in $ccodes; do
 
 			# Parse the fetched file
 			echo -n "Parsing... "
-			parsed_file="/tmp/parsed-$ccode.tmp"
+			unset parsed_list
 
 			case "$registry" in
 				ARIN ) parse_arin; rv=$? ;;
@@ -346,19 +346,19 @@ for ccode in $ccodes; do
 			rm "$fetched_file" &>/dev/null
 
 			if [[ "$rv" -ne 0 ]]; then
-				rm "$parsed_file" &>/dev/null
+				unset parsed_list
 				ccode_status="failed"
 				echo -e "\nError: failed to parse the fetched file for country '$ccode'." >&2
 				[[ "$retry_cnt" -ge "$fetch_retries" ]] && break
 			else
 				echo "Ok."
-				# Validate the parsed file
-				parsed_subnets_cnt=$(wc -l < "$parsed_file")
+				# Validate the parsed list
+				parsed_subnets_cnt=$(wc -l <<< "$parsed_list")
 
 				echo -n "Validating... "
 				validated_file="/tmp/validated-$ccode.tmp"
-				grep -P "$subnet_regex" "$parsed_file" > "$validated_file"
-				rm "$parsed_file" &>/dev/null
+				grep -P "$subnet_regex" <<< "$parsed_list" > "$validated_file"
+				unset parsed_list
 
 				validated_subnets_cnt=$(wc -l < "$validated_file")
 
