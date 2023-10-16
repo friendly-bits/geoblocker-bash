@@ -57,7 +57,7 @@ This script:
 7) Calls the *manage script to set up geoblocker and then call the -fetch and -apply scripts.
 8) If an error occurs during installation, calls the uninstall script to revert any changes made to the system.
 
-Usage: $me -c <"country_code [country_code] ... [country_code]"> -m <whitelist|blacklist> [-s <"sch_expression"|disable>] [-e] [-n] [-p] [-d] [-h]
+Usage: $me -c <"country_code [country_code] ... [country_code]"> -m <whitelist|blacklist> [-s <"sch_expression"|disable>] [-o] [-n] [-p] [-d] [-h]
 
 Core Options:
     -c <"country_codes">           : 2-letter country codes (ISO 3166-1 alpha-2) to fetch and apply the iplists for.
@@ -70,14 +70,13 @@ Core Options:
                                      "disable" will *skip* creating the autoupdate cron job so there will be no automatic updates of the ip lists
 
 Extra Options:
-    -e                             : Enable Emergency Deactivation. When enabled, if a severe error is encountered in operation,
-                                            geoblocking will be automatically deactivated until the problem is manually fixed.
-                                            Disabled by default.
+    -o                             : No backup. Will not create a backup of previous firewall state (and geoblocking ipsets) before applying changes.
+                                         (doesn't affect backup of chains policies)
     -n                             : No persistence. Will *skip* creating the cron job which is required for geoblocking to work upon reboot.
     -p                             : No Drop: installs the script and configures the firewall but in the whitelist mode,
                                            skips setting INPUT chain default policy to DROP
                                            (everything will be installed and configured but geoblocking will not be enabled)
-                                           (does not affect blacklist functionality)
+                                           (does't affect blacklist functionality)
     -d                             : Debug
     -h                             : This help
 
@@ -86,12 +85,12 @@ EOF
 
 #### PARSE ARGUMENTS
 
-while getopts ":c:m:s:enpdh" opt; do
+while getopts ":c:m:s:onpdh" opt; do
 	case $opt in
 		c) ccodes=$OPTARG;;
 		m) list_type=$OPTARG;;
 		s) cron_schedule=$OPTARG;;
-		e) emergency_deactivation="true";;
+		o) nobackup="true";;
 		n) no_persistence="true";;
 		p) nodrop="true";;
 		d) debugmode_args="true";;
@@ -203,7 +202,6 @@ export datadir=""
 install_dir="/usr/local/bin"
 datadir="/var/lib/${suite_name}"
 preinstall_policies_file="${datadir}/preinstall_policies.bak"
-knowngood_file="${datadir}/iptables_knowngood.bak"
 iplist_dir="${datadir}/ip_lists"
 
 default_schedule="0 4 * * *"
@@ -277,7 +275,7 @@ mkdir -p "$conf_dir"
 echo -n "Setting initial config... "
 
 setconfig "UserCcode=$user_ccode" "Countries=" "ListType=$list_type" "Installdir=$install_dir" "Datadir=$datadir" "CronSchedule=$cron_schedule" \
-	"DefaultSchedule=$default_schedule" "RebootSleep=$sleeptime" "EmergencyDeactivation=$emergency_deactivation" \
+	"DefaultSchedule=$default_schedule" "RebootSleep=$sleeptime" "NoBackup=$nobackup" \
 	"NoPersistence=$no_persistence" "NoDrop=$nodrop"; rv="$?"
 
 if [[ "$rv" -ne 0 ]]; then
@@ -289,24 +287,6 @@ fi
 # Create the directory for downloaded lists and, if required, parent directories
 mkdir -p "$iplist_dir"
 
-
-## Create a backup file for known-good iptables state
-
-echo -n "Creating file for backup of iptables state..."
-
-# if a backup file already exists, continue installing but skip overwriting the backup file
-if [[ -f "$knowngood_file" ]]; then
-	echo "Backup file already exists, skipping."
-else
-	touch "$knowngood_file"; rv="$?"
-	if [[ $rv -ne 0 ]]; then
-		echo "Error." >&2
-		install_failed
-	fi
-	echo "Ok."
-fi
-
-
 ## run the *reset script to make sure no previous firewall rules and cron jobs exist
 bash ${suite_name}-reset
 
@@ -316,7 +296,7 @@ bash ${suite_name}-reset
 echo -n "Copying scripts to $install_dir... "
 copyscripts "${suite_name}-common" "${suite_name}-fetch" "${suite_name}-apply" "${suite_name}-run" "${suite_name}-manage" \
 	"${suite_name}-cronsetup" "${suite_name}-backup" "${suite_name}-uninstall" "${suite_name}-reset" "validate-cron-schedule.sh" "check-ip-in-registry.sh"
-echo "Ok."
+echo -e "Ok.\n"
 
 ## Create a symlink from ${suite_name}-manage to ${suite_name}
 unlink "${install_dir}/${suite_name}" &> /dev/null
@@ -331,7 +311,7 @@ cp "cca2.list" "$conf_dir" || install_failed "Error copying file 'cca2.list' to 
 
 echo -n "Creating backup of current INPUT and FORWARD iptables chains policies... "
 
-# if a backup file already exists, continue installing but skip overwriting the backup file
+# if the backup file already exists, continue installing but skip overwriting the backup file
 if [[ -f "$preinstall_policies_file" ]]; then
 	echo "Backup file already exists, skipping creation of iptables policies backup." >&2
 else
@@ -380,7 +360,7 @@ else
 	echo -e "Warning: Installed with no persistence and no autoupdate functionality.\n"
 fi
 
-echo -e "View current geoblocking status with '${yellow}sudo ${suite_name} status${no_color}'.\n"
+echo -e "View current geoblocking status with '${yellow}${suite_name} status${no_color}' (may require 'sudo').\n"
 
 echo
 echo "Install done."
