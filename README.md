@@ -117,13 +117,13 @@ _<details><summary>Examples:</summary>_
 
 ## **Pre-requisites**:
 (if a pre-requisite is missing, the -install script will tell you which)
-- bash v4.0 or later (should be included with any relatively modern linux distribution)
-- Linux with systemd (tested on Debian, Ubuntu and Mint, should work on any Debian derivative, may work or may require slight modifications to work on other distributions)
+- bash v4.0 or higher (should be included with any relatively modern linux distribution)
+- Linux (tested on Debian, Ubuntu, Mint, and OpenWRT, should work on any distribution)
 - iptables - firewall management utility (nftables support will likely get implemented later)
-- standard GNU utilities including awk, sed, grep, bc
+- standard (mostly GNU) utilities including awk, sed, grep, bc, comm, ps
 - for persistence and autoupdate functionality, requires the cron service to be enabled
 
-additional mandatory pre-requisites: to install, run (on Debian, Ubuntu etc) ```sudo apt install ipset wget jq```
+additional mandatory pre-requisites: ```ipset wget jq```
 
 optional: the check-ip-in-registry.sh script requires grepcidr. install it with ```sudo apt install grepcidr```
 
