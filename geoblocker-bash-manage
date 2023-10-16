@@ -199,7 +199,7 @@ report_status() {
 	fi
 
 	# check if cron service is enabled
-	(systemctl is-enabled cron.service) > /dev/null || crondisabled="true"
+	check_cron || crondisabled="true"
 	if [[ -n "$crondisabled" ]]; then
 		echo -e "\n${purple}WARNING${no_color}: cron service appears to be disabled. Both persistence across reboots and autoupdates will likely not work.\n"
 	else
