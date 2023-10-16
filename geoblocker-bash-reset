@@ -96,7 +96,7 @@ missing_deps="$(check_deps iptables-save ipset)" || die "Error: missing dependen
 
 ### Delete associated cron jobs
 debugprint "Deleting cron jobs for ${suite_name}..."
-crontab -u root -l 2>/dev/null |  grep -v "${suite_name}-run" | sudo crontab -u root -
+crontab -u root -l 2>/dev/null |  grep -v "${suite_name}-run" | crontab -u root -
 
 
 if [[ -f "$preinstall_policies_file" ]]; then
