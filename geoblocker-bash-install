@@ -140,7 +140,7 @@ copyscripts() {
 
 	# implicitly loops over arguments
 	for scriptfile; do
-		cp "$scriptfile" "$destination" || install_failed "Error copying file '$scriptfile' to '$destination'."
+		cp -p "$scriptfile" "$destination" || install_failed "Error copying file '$scriptfile' to '$destination'."
 		chmod a+x "${destination}${scriptfile}" || install_failed "Error: failed to set 'a+x' permissions for file '${destination}${scriptfile}'."
 	done
 }
@@ -218,12 +218,10 @@ if [[ -n "$list_type" ]]; then
 	export list_type="$list_type"
 fi
 
+
 #### CHECKS
 
-# check for systemd
-[[ "$(! ps -p 1 -o comm=)" != "systemd" ]] && die "Error: systemd is required but this sytem does not appear to be running systemd."
-
-missing_deps="$(check_deps "curl|wget" jq iptables-save iptables-restore ipset)" || die "Error: missing dependencies: $missing_deps."
+missing_deps="$(check_deps jq iptables-save iptables-restore ipset)" || die "Error: missing dependencies: $missing_deps."
 
 # Check for valid country codes
 if [[ -z "$ccodes" ]]; then
@@ -256,6 +254,16 @@ missing_files="$(check_files_exist "${suite_name}-fetch" "${suite_name}-common" 
 	"${suite_name}-run" "${suite_name}-manage" "${suite_name}-cronsetup" "${suite_name}-backup" \
 	"${suite_name}-uninstall" "${suite_name}-reset" "validate-cron-schedule.sh" "check-ip-in-registry.sh" "cca2.list")" || \
 	install_failed "Error: missing files: $missing_files."
+
+if ! [[ "$cron_schedule" = "disable" && "$no_persistence" ]]; then
+	# check cron service
+	check_cron || {
+		err1="Error: cron seems to not be enabled."
+		err2="Enable the cron service before using this script."
+		err3="Or run with options '-n' '-s disable' which will disable persistence and autoupdates."
+		die "$err1" "$err2" "$err3"
+	}
+fi
 
 
 #### MAIN
