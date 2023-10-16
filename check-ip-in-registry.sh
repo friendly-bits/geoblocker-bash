@@ -117,7 +117,7 @@ ip_check_rv=0
 
 #### Checks
 
-missing_deps="$(check_deps "curl|wget" jq)" || die "Error: missing dependencies: $missing_deps."
+missing_deps="$(check_deps grepcidr jq)" || die "Error: missing dependencies: $missing_deps."
 
 [[ -z "$ccode" ]] && { usage; die "Specify country code with '-c <country_code>'."; }
 
@@ -162,9 +162,9 @@ fi
 
 ### Fetch the ip list file
 
-status_file=$(mktemp "/tmp/status-XXXX")
+status_file="/tmp/fetched-status-$ccode.tmp"
 
-list_file=$(mktemp "/tmp/iplist-$ccode-XXXX")
+list_file="/tmp/iplist-$ccode.tmp"
 
 bash "${script_dir}/${suite_name}-fetch" -c "$ccode" -o "$list_file" -s "$status_file"
 
