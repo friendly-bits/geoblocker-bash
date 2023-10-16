@@ -124,6 +124,7 @@ _<details><summary>Examples:</summary>_
 - for persistence and autoupdate functionality, requires the cron service to be enabled
 
 additional mandatory pre-requisites: ```ipset wget jq```
+(will also work with curl instead of wget)
 
 optional: the check-ip-in-registry.sh script requires grepcidr. install it with ```sudo apt install grepcidr```
 
