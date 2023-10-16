@@ -140,4 +140,4 @@ For notes about data safety (mostly intended for security nerds), read [DATASAFE
 ## **Last but not least**
 
 - I have put much work into this project. If you use it and like it, please consider giving it a star on Github.
-- I would appreciate a report of whether it works or doesn't work on your system (please specify which), or if you find a bug. If you have a suggestion for code improvement, please let me know as well. You can use the "Discussions" and "Issues" tabs for that.
+- I would appreciate a report of whether it works or doesn't work on your system (please specify which), or if you find a bug. If you have an interesting idea or suggestion for improvement, you are welcome to suggest as well. You can use the "Discussions" and "Issues" tabs for that.
