@@ -118,7 +118,7 @@ create_cron_job() {
 
 	#### Create new cron job
 
-	echo -e "$(sudo crontab -u root -l 2>/dev/null)\n$cron_command" | sudo crontab -u root -
+	echo -e "$(crontab -u root -l 2>/dev/null)\n$cron_command" | crontab -u root -
 	rv=$?
 
 	if [[ $rv -ne 0 ]]; then
@@ -143,7 +143,7 @@ remove_cron_job() {
 
 		debugprint "Removing $job_type cron job for ${suite_name}... "
 		# read crontab -> filter out jobs by the comment ($suite_name-$job_type) -> write resulting lines back to crontab
-		crontab -u root -l 2>/dev/null | grep -v "${suite_name}-${job_type}" | sudo crontab -u root -
+		crontab -u root -l 2>/dev/null | grep -v "${suite_name}-${job_type}" | crontab -u root -
 		rv=$?
 
 		if [[ $rv -ne 0 ]]; then
@@ -152,14 +152,6 @@ remove_cron_job() {
 			debugprint "Ok."
 		fi
 	fi
-}
-
-
-# check if cron service is enabled
-(systemctl is-enabled cron.service) > /dev/null || {
-	err1="Error: cron service seems to be disabled."
-	err2="On Debian and derivatives, enable the cron service with 'systemctl enable cron.service' before using this script."
-	die -nolog "$err1" "$err2"
 }
 
 
@@ -178,6 +170,19 @@ run_command="${install_dir}/${suite_name}-run"
 
 # get sleeptime (for reboot) from the config file
 sleeptime="$(getconfig "RebootSleep")" || { die -nolog "Error: Couldn't read value for RebootSleep from the config file."; }
+
+
+#### Checks
+
+if ! [[ "$cron_schedule" = "disable" && "$no_persistence" ]]; then
+	# check cron service
+	check_cron || {
+		err1="Error: cron seems to not be enabled."
+		err2="Enable the cron service before using this script."
+		err3="Or install with options '-n' '-s disable' which will disable persistence and autoupdates."
+		die "$err1" "$err2" "$err3"
+	}
+fi
 
 
 #### Main
@@ -211,8 +216,8 @@ echo "Ok."
 
 if [[ "$no_persistence" ]]; then
 	echo
-	echo "Note: no-persistence option was specified during installation. Geoblocking will likely be deactivated upon reboot!"
-	echo "To enable persistence, run the *install script again without the '-n' option."
+	echo "Note: no-persistence option was specified during installation. Geoblocking will likely be deactivated upon reboot!" >&2
+	echo "To enable persistence, run the *install script again without the '-n' option." >&2
 fi
 
 
