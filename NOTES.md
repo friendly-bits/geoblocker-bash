@@ -9,7 +9,7 @@ There are 3 ways to get yourself locked out of your remote server with this suit
 - install in whitelist mode and later remove your country from the whitelist
 - Blacklist your country (either during installation or later)
 
-The -manage script will warn you in each of these situations and wait for your input (you can press Y and do it anyway), but that depends on you correctly specifying your country code during installation. The -install script will ask you about it. If you prefer, you can skip by pressing Enter - that will disable this feature. If you do provide the -install script your country code, it will be added to the config file on your machine and the -manage script will read the value and perform the necessary checks, during installation or later when you want to make changes to the blacklist/whitelist. (if you are worried about data safety, read [DATASAFETY.md](/DATASAFETY.md).
+The -manage script will warn you in each of these situations and wait for your input (you can press Y and do it anyway), but that depends on you correctly specifying your country code during installation. The -install script will ask you about it. If you prefer, you can skip by pressing Enter - that will disable this feature. If you do provide the -install script your country code, it will be added to the config file on your machine and the -manage script will read the value and perform the necessary checks, during installation or later when you want to make changes to the blacklist/whitelist. (if you are worried about data safety, read [DATASAFETY.md](/DATASAFETY.md)).
 
 </details>
 
