@@ -50,7 +50,7 @@ Implements optional (enabled by default) persistence of geoblocking across syste
 - All that is well documented, read **TL;DR** and **NOTES** for more info. There is also the DETAILS.md file which describes each script and its options more in depth.
 - Lots of comments in the code, in case you want to change something in it or learn how the scripts are working.
 - Extensive documentation (see NOTES.md, DETAILS.md and DATASAFETY.md, besides this readme), plus each script displays detailed 'usage' info when executed with the '-h' option.
-- If an error or invalid input is encountered, provides useful feedback to help you solve the issue.
+- Validates all user input, so if you make a mistake, it is unlikely that you break something - the scripts will just say that the input makes no sense and usually tell you what's wrong with it.
 </details>
 
 ## **TL;DR**
@@ -108,7 +108,7 @@ _<details><summary>Examples:</summary>_
  ```sudo geoblocker-bash schedule -s <"cron_schdedule_expression">|disable```
 
  _<details><summary>Examples:</summary>_
-- example (to enable or change periodic cron job schedule): ```sudo geoblocker-bash schedule -s "1 4 * * *"```
+- example (to enable and set periodic cron job schedule): ```sudo geoblocker-bash schedule -s "1 4 * * *"```
 - example (to disable lists autoupdate): ```sudo geoblocker-bash schedule -s disable```
 </details>
  
