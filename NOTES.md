@@ -27,7 +27,7 @@ The -manage script will warn you in each of these situations and wait for your i
 
 </details>
 
-7) The run, fetch and apply scripts write to syslog in case an error occurs. The run and fetch scripts also write to syslog upon success. To verify that cron jobs ran successfully, on Debian and derivatives run ```sudo cat /var/log/syslog | grep geoblocker-bash```
+7) The run, fetch and apply scripts write to syslog in case an error occurs. The run and fetch scripts also write to syslog upon success. To verify that cron jobs ran successfully, on Debian and derivatives run ```sudo cat /var/log/syslog | grep geoblocker-bash```. On other distributions, you may need to figure out how to access the syslog.
 
 8) If you want support for ipv6, please let me know using the Issues tab, and I may consider implementing it.
 
