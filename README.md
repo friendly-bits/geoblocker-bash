@@ -49,7 +49,7 @@ Implements optional (enabled by default) persistence of geoblocking across syste
 - Post-installation, provides a command _('geoblocker-bash status')_ to check geoblocking rules, active ipsets, and whether there are any issues.
 - All that is well documented, read **TL;DR** and **NOTES** for more info. There is also the DETAILS.md file which describes each script and its options more in depth.
 - Lots of comments in the code, in case you want to change something in it or learn how the scripts are working.
-- Extensive documentation (see NOTES.md, DETAILS.md and DATASAFETY.md, besides this readme), plus each script displays detailed 'usage' info when executed with the '-h' option.
+- Besides extensive documentation, each script displays detailed 'usage' info when executed with the '-h' option.
 - Validates all user input, so if you make a mistake, it is unlikely that you break something - the scripts will just say that the input makes no sense and usually tell you what's wrong with it.
 </details>
 
