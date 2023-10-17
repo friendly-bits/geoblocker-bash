@@ -22,7 +22,7 @@ Implements optional (enabled by default) persistence of geoblocking across syste
 - All scripts perform extensive error detection and handling, so if something goes wrong, chances for bad consequences are rather low.
 - Automatic backup of the firewall state before any changes or updates.
 - The *backup script also has a restore command. In case an error occurs while applying changes to the firewall (which normally should never happen), or if you mess something up in the firewall, you can use it to restore the firewall to its previous state.
-- If a user accidentally requests an action that is about to block their own country (which can happen both in blacklist mode and in whitelist mode), the -manage script will warn them and wait for their input before proceeding.
+- If a user accidentally requests an action that is about to block their own country (which can happen both in blacklist mode and in whitelist mode), the *manage script will warn them and wait for their input before proceeding.
 </details>
 
 **Efficiency**:
