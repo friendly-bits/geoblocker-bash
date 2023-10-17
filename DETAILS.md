@@ -41,7 +41,6 @@ After installation, the user interface is provided by simply running "geoblocker
 ```geoblocker-bash <add|remove> [-c <country_code>]``` :
 * Adds or removes the specified country codes to/from the config file
 * Calls the -run script to fetch and apply the ip lists
-* After successful firewall config changes, calls the -backup script to create a backup of current config, ipsets and iptables state.
 
 ```geoblocker-bash status```
 * Displays information on the current state of geoblocking
@@ -74,13 +73,12 @@ After installation, the user interface is provided by simply running "geoblocker
 
 **The -cronsetup script** manages all the cron-related logic in one place. Called by the -manage script. Cron jobs are created based on the settings stored in the config file.
 
-**The -backup script**: Creates a backup of the current iptables state and geoblocker-associated ipsets, or restores them from backup.
+**The -backup script**: Creates a backup of the current iptables state, current geoblocking config and geoblocker-associated ipsets, or restores them from backup. By default (if you didn't run the installation with the '-o' option), a backup be created before every action you apply to the firewall and before automatic list updates are applied. Normally backups should not take much space, maybe a few megabytes if you apply many ip lists. The -backup script also compresses them, so they take even less space. (and automatically extracts when restoring)
 
-```geoblocker-bash-backup create-backup``` : Creates a backup of the current iptables state and geoblocker-associated ipsets.
+```geoblocker-bash-backup create-backup``` : Creates a backup of the current iptables state, geoblocking config and geoblocker-associated ipsets.
 
-```geoblocker-bash-backup restore``` : Used for automatic recovery from fault conditions (should not happen but implemented just in case)
-- Restores ipsets and iptables state from last known good backup
-- If restore from backup fails, either gives up (default behavior) or (if you ran the -install script with the -e option for Emergency Deactivation) deactivates geoblocking entirely
+```geoblocker-bash-backup restore``` : Can be manually used for recovery from fault conditions (unlikely that anybody will ever need this but implemented just in case).
+- Restores ipsets, iptables state and geoblocking config from last known good backup.
 
 **The -reset script** is called by the *install script to clean up previous geoblocking rules in the firewall and reset the config (just in case you install again without uninstalling first)
 
