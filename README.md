@@ -6,7 +6,7 @@ Intended use case is a computer that needs to be publicly accessible only in a c
 ## Features
 _(if you are just looking for installation instructions, skip to the [**TL;DR**](#tldr) section)_
 
-Basic functionality is automatic download of complete ipv4 subnet lists for user-specified countries, then using these lists to create either a whitelist or a blacklist (selected during installation) in the firewall.
+Basic functionality is automatic download of complete ipv4 subnet lists for user-specified countries, then using these lists to create either a whitelist or a blacklist (selected during installation) in the firewall. Besides the basics, there are some additional useful features (continue reading to find out which).
 
 ip lists are fetched from the official regional registries (selected automatically based on the country). Currently supports ARIN (American Registry for Internet Numbers) and RIPE (Regional Internet registry for Europe, the Middle East and parts of Central Asia). RIPE stores ip lists for countries in other regions as well, so currently this can be used for any country in the world.
 
