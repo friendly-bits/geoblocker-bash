@@ -93,11 +93,11 @@ _<details><summary>Examples:</summary>_
 **To check current geoblocking status:**
 - run ```sudo geoblocker-bash status```
 
-**To change configuration:**
+**To add or remove ip lists for countries:**
 
-run ```sudo geoblocker-bash <action> [-c <"country_codes">] | [-s <"cron_schedule">|disable]```
+run ```sudo geoblocker-bash <action> [-c <"country_codes">]
 
-where 'action' is either 'add', 'remove' or 'schedule'.
+where 'action' is either 'add' or 'remove'.
 
 _<details><summary>Examples:</summary>_
 - example (to add ip lists for Germany and Netherlands): ```sudo geoblocker-bash add -c "DE NL"```
