@@ -1,7 +1,5 @@
 # geoblocker-bash
-Geoip blocker for Linux aiming for efficiency, reliability and ease of use. Front-end implemented in Bash and the back-end utilizes iptables (nftables support will get implemented eventually).
-
-Intended use case is a computer that needs to be publicly accessible only in a certain country or countries (whitelist), or should not be accessible from certain countries (blacklist).
+Geoip blocker for Linux focusing on efficiency, reliability and ease of use. Suite of Bash scripts which utilizes the 'iptables' firewall management utility (nftables support will get implemented eventually).
 
 Should work on every modern'ish desktop/server Linux distribution, doesn't matter which hardware (and even works on embedded to some degree).
  
@@ -47,7 +45,7 @@ Implements optional (enabled by default) persistence of geoblocking across syste
 
 <details><summary>Read more:</summary>
 
-- Has only 2 non-standard dependencies which should be available from any modern'ish Linux distribution's package manager (ipset and jq. also needs curl or wget but you probably already have one of these installed).
+- Has only 2 non-standard dependencies which should be available from any modern'ish Linux distribution's package manager (ipset and jq).
 - Uninstallation normally takes about a second. It completely removes the suite, removes geoblocking firewall rules and restores pre-install firewall policies. No restart is required.
 - Sane settings applied during installation by default, but also lots of command-line options for advanced users.
 - Pre-installation, provides a utility _(check-ip-in-registry.sh)_ to check whether specific ip addresses you might want to blacklist or whitelist are indeed included in the list fetched from the registry.
