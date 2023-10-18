@@ -212,9 +212,10 @@ report_status() {
 
 		# check for persistence cron job
 		persistence_job="$(grep "${suite_name}-persistence" <<< "$cron_jobs")"
-		[[ -n "$persistence_job" ]] && echo -e "${green}Persistence cron job is active${no_color}." || \
-			echo -e "${purple}WARNING${no_color}: Persistence cron job is ${red}missing${no_color}."
-			echo -e "Geoblocking ${purple}will not work after reboot${no_color}, unless you have a different persistence tool installed."
+		[[ -n "$persistence_job" ]] && echo -e "${green}Persistence cron job is active${no_color}." || {
+				echo -e "${purple}WARNING${no_color}: Persistence cron job is ${red}missing${no_color}."
+				echo -e "Geoblocking ${purple}will not work after reboot${no_color}, unless you have a different persistence tool installed."
+			}
 
 		# check for autoupdate cron job
 		autoupdate_job="$(grep "${suite_name}-autoupdate" <<< "$cron_jobs")"
