@@ -55,7 +55,7 @@ The **-backup** script can be used individually. By default, it is launched by t
 
 ```geoblocker-bash schedule -s disable``` : disables ip lists autoupdate.
 
-**The -run script**: Serves as a proxy to call the -fetch, -apply and -backup scripts with arguments required for each action. Executes the requested actions, depending on the config set by the -install and -manage scripts, and the command line options.
+**The -run script**: Serves as a proxy to call the -fetch, -apply and -backup scripts with arguments required for each action. Executes the requested actions, depending on the config set by the -install and -manage scripts, and the command line options. If persistence or autoupdates are enabled, the cron jobs call this script with the necessary options.
 
 ```geoblocker-bash-run add -c <"country_codes">``` : Fetches iplists and loads ipsets and iptables rules for specified countries.
 
