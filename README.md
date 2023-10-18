@@ -3,7 +3,7 @@ Geoip blocker for Linux aiming for efficiency, reliability and ease of use. Fron
 
 Intended use case is a computer that needs to be publicly accessible only in a certain country or countries (whitelist), or should not be accessible from certain countries (blacklist).
 
-Should work on every modern'ish Linux distribution, no matter the hardware (and even works on embedded to some degree).
+Should work on every modern'ish Linux distribution, doesn't matter which hardware (and even works on embedded to some degree).
  
 ## Features
 _(if you are just looking for installation instructions, skip to the [**TL;DR**](#tldr) section)_
