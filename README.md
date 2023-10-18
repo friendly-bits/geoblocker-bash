@@ -68,11 +68,11 @@ _Recommended to read the [NOTES.md](/NOTES.md) file._
 
 **2)** Download the latest realease: https://github.com/blunderful-scripts/geoblocker-bash/releases
 
-**3)** Extract all files included in the release into the same folder somewhere in your home directory and cd into that directory in your terminal
+**3)** Extract all files included in the release into the same folder somewhere in your home directory and ```cd``` into that directory in your terminal
 
 _<details><summary>4) Optional:</summary>_
 
-- If intended use is whitelist and you want to install geoblocker-bash on a remote machine, you can run the check-ip-in-registry.sh script before Installation to make sure that your public ip addresses are included in the ip list fetched from the internet registry.
+- If intended use is whitelist and you want to install geoblocker-bash on a remote machine, you can run the ```check-ip-in-registry.sh``` script before Installation to make sure that your public ip addresses are included in the ip list fetched from the internet registry.
 
 _Example: (for US):_ ```bash check-ip-in-registry.sh -c US -i "8.8.8.8 8.8.4.4"``` _(if checking multiple ip addresses, use double quotes)_
 
