@@ -39,6 +39,7 @@ The **-backup** script can be used individually. By default, it is launched by t
 - Restores pre-install state of default policies for INPUT and FORWARD chains
 - Deletes geoblocking iptables rules and removes the associated ipsets
 - Deletes scripts' data folder /var/lib/geoblocker-bash
+- Deletes the config from /etc/geoblocker-bash
 - Deletes the scripts from /usr/local/bin
 
 **The -manage script**: serves as the main user interface to configure geoblocking after installation. You can also call it by simply typing geoblocker-bash (as during installation, a symlink is created to allow that). As most scripts in this suite, you need to use it with 'sudo' because root privileges are required to access the firewall.
