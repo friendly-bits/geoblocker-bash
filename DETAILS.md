@@ -67,7 +67,7 @@ The **-backup** script can be used individually. By default, it is launched by t
 - Fetches ipv4 subnets lists for given country codes from the regional internet registry (automatically selected based on the country).
 - Parses, validates, compiles the downloaded lists, and saves each list to a separate file.
 - Implements extensive sanity checks at each stage (fetching, parsing, validating and saving) and handles errors if they occur.
-- If a "soft" error is encountered (mostly a temporary network error), retries the download up to 3 times.
+- If a "soft" error is encountered (mostly a temporary network error), retries the download again.
 
 **The -apply script**:  directly interfaces with the firewall. Creates or removes ipsets and iptables rules for specified country codes.
 
