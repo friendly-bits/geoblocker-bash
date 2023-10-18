@@ -40,9 +40,9 @@ Implements optional (enabled by default) persistence of geoblocking across syste
 </details>
 
 **Ease of use**:
-- Detailed installation and usage guides (check the [**INSTALLATION**](#INSTALLATION) and [**USAGE**](#USAGE)
+- Detailed installation and usage guides (check the [**INSTALLATION**](#INSTALLATION) and [**USAGE**](#USAGE) sections)
 - Installation is easy, doesn't require many complex command line arguments and normally takes a few seconds.
-- After installation, geoblocking will be already active for the specified countries and you don't have to do anything else for it to work.
+- After installation (provided you have all the [**PRE-REQUISITES**](#PRE-REQUISITES)), geoblocking will be already active for the specified countries and you don't have to do anything else for it to work.
 
 <details><summary>Read more:</summary>
 
