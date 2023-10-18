@@ -40,13 +40,17 @@ All that was downloaded through the commmand-line interface and installed with t
 
 I also had to make some slight modification to the code (now merged into the main branch) to work around limitations in other built-in utilites.
 
+## Issues
 After that, the suite installs and works as expected, except:
 1) the persistence (reboot) cron job doesnt work with the trimmed-down version of crontab which OpenWRT ships (at least in the 2021.02 older verson) because it doesn't support the '@reboot' timing option. Installing the package from the archive reporistory didn't fix this issue.
 2) the /var/lib folder which is used by the suite to store data (such as downloaded ip lists, firewall state backups and the cca2.list file which stores valid country codes, used for user input validation) is mapped to the memory and so doesn't persist across reboots, so the suite doesn't work after a reboot.
 3) I had to add the /var/local/bin directory to my $PATH variable (somehow that stuck across reboots) in order to be able to call the installed scripts directly. Perhaps can be mitigated by installing the scripts into a different directory which is in $PATH to begin with.
+4) The check-ip-in-registry.sh script (which is not an essential part of the suite) can't be used at all (at least on this version) because it requires the grepcidr utility which is not present in the archive and I'm too lazy to make a buildchain for compiling it from source.
 
-The 1st issue should be relatively easy to fix since I know that OpenWRT has some facility for firewall persistence, I just don't know how it's implemented and what's its command-line API. Perhaps someone with this knowledge could suggest a modification required for integration which would replace the cron job.
-
-The 2nd issue should be easy to fix by storing data in some other location (such as in /etc/). If automatic backups are an issue because of storage space limitation, that function can be disaled during installation.
+## Solutions:
+1) should be a _relatively_ easy to fix since I know that OpenWRT has some facility for firewall persistence, I just don't know how it's implemented and what's its command-line API. Perhaps someone with this knowledge could suggest a modification required for integration which would replace the cron job.
+2) should be easy to fix by storing data in a persistent location (such as in /etc/ ??). If automatic backups are an issue because of storage space limitation, that function can be disaled during installation (or completely disabled in a specialized embedded version of the suite).
+3) should be (probably) an easy fix
+4) To fix check_ip_in_registry.sh not working, grepcidr needs to be included in the OpenWRT repositories. But then again, it's just a nice pre-install perk, not an essential part of the suite.
 
 To sum it up, a few rather minor modifications are required for the suite to work on OpenWRT but currently I don't really need it to be running on my router so I'm not going to spend time figuring it out. If someone in the OpenWRT community wants this to work, you are welcome to provide me the info required and I'll modify the code and possibly make an OpenWRT-special version of the suite.
