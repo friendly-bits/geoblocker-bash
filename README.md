@@ -17,7 +17,7 @@ All configuration changes required for geoblocking to work are automatically app
 Implements optional (enabled by default) persistence of geoblocking across system reboots and automatic updates of the ip lists.
 
 **Reliability**:
-- Downloaded lists go through validation process, which safeguards against application of corrupted or incomplete lists to the firewall.
+- Downloaded ip lists go through validation process, which safeguards against application of corrupted or incomplete lists to the firewall.
 
 <details> <summary>Read more:</summary>
 
