@@ -206,11 +206,17 @@ report_status() {
 		echo -e "Cron system service is ${green}enabled${no_color}."
 
 		# check cron jobs
+
+		# store current cron jobs in a variable
 		cron_jobs="$(crontab -u root -l 2>/dev/null)"
+
+		# check for persistence cron job
 		persistence_job="$(grep "${suite_name}-persistence" <<< "$cron_jobs")"
 		[[ -n "$persistence_job" ]] && echo -e "${green}Persistence cron job is active${no_color}." || \
-			echo -e "${purple}WARNING${no_color}: Persistence cron job is ${red}missing${no_color}. Geoblocking will not work after reboot."
+			echo -e "${purple}WARNING${no_color}: Persistence cron job is ${red}missing${no_color}."
+			echo -e "Geoblocking ${purple}will not work after reboot${no_color}, unless you have a different persistence tool installed."
 
+		# check for autoupdate cron job
 		autoupdate_job="$(grep "${suite_name}-autoupdate" <<< "$cron_jobs")"
 		if [[ -n "$autoupdate_job" ]]; then
 			echo -e "${green}Autoupdate cron job is active.${no_color}"
