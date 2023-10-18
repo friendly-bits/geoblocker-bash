@@ -31,7 +31,7 @@ The **-backup** script can be used individually. By default, it is launched by t
 - Required arguments are ```-c <"country_codes">``` and ```-m <whitelist|blacklist>```
 - Accepts optional custom cron schedule expression for autoupdates as an argument with the '-s' option. Default cron schedule is "0 4 * * *" - at 4:00 [am] every day. 'disable' instead of the schedule will disable autoupdate.
 - Accepts the '-n' option to disable persistence (reboot cron job won't be created so after system reboot, there will be no more geoblocking - although if you have an autoupdate cron job then it will eventually kick in and re-activate geoblocking)
-- Acepts the '-o' option to disable automatic backups of the firewall state, ipsets and config before an action is executed (actions include those launched by the cron jobs to implement autoupdate and persistence)
+- Acepts the '-o' option to disable automatic backups of the firewall state, ipsets and config before an action is executed (actions include those launched by the cron jobs to implement autoupdate and persistence, as well as any action launched manually which requires making changes to the firewall)
 
 **The -uninstall script**
 - Doesn't require any arguments
