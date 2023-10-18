@@ -51,8 +51,8 @@ Implements optional (enabled by default) persistence of geoblocking across syste
 - Sane settings are applied during installation by default, but also lots of command-line options for advanced users or for special corner cases.
 - Pre-installation, provides a utility _(check-ip-in-registry.sh)_ to check whether specific ip addresses you might want to blacklist or whitelist are indeed included in the list fetched from the registry.
 - Post-installation, provides a utility (symlinked to _'geoblocker-bash'_) for the user to manage and change geoblocking config (adding or removing country codes, changing the cron schedule etc).
-- Post-installation, provides a command _('geoblocker-bash status')_ to check geoblocking rules, active ipsets, and whether there are any issues.
-- All that is well documented, read **TL;DR** and **NOTES** for more info. There is also the DETAILS.md file which describes each script and its options more in depth.
+- Post-installation, provides a command _('geoblocker-bash status')_ to check geoblocking rules, active ipsets, autoupdate and persistence cron jobs, and whether there are any issues.
+- All that is well documented, read **INSTALLAION**, **NOTES** and **DETAILS** sections for more info.
 - Lots of comments in the code, in case you want to change something in it or learn how the scripts are working.
 - Besides extensive documentation, each script displays detailed 'usage' info when executed with the '-h' option.
 - Validates all user input, so if you make a mistake, it is unlikely that you break something - the scripts will just say that the input makes no sense and usually tell you what's wrong with it.
