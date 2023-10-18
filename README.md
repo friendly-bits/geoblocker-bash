@@ -64,7 +64,7 @@ _Recommended to read the [NOTES.md](/NOTES.md) file._
 
 **To install:**
 
-**1)** Install pre-requisites. Use your distro's package manager to install ```ipset``` and ```jq``` (also needs ```wget``` or ```curl``` but you probably have one of these installed already). For examples for most popular distros, check out the [PREREQUISITES](#PREREQUISITES) section.
+**1)** Install pre-requisites. Use your distro's package manager to install ```ipset``` and ```jq``` (also needs ```wget``` or ```curl``` but you probably have one of these installed already). For examples for most popular distros, check out the [Pre-requisites](#Pre-requisites) section.
 
 **2)** Download the latest realease: https://github.com/blunderful-scripts/geoblocker-bash/releases
 
