@@ -6,13 +6,13 @@ Should work on every modern'ish desktop/server Linux distribution, doesn't matte
 ## Features
 _(for installation instructions, skip to the [**INSTALLATION**](#INSTALLATION) section)_
 
-Basic functionality is automatic download of complete ipv4 subnet lists for user-specified countries, then using these lists to create either a whitelist or a blacklist (selected during installation) in the firewall. Besides the basics, there are additional useful features (continue reading to find out which).
+* Basic functionality is automatic download of complete ipv4 subnet lists for user-specified countries, then using these lists to create either a whitelist or a blacklist (selected during installation) in the firewall. Besides the basics, there are additional useful features (continue reading to find out which).
 
-ip lists are fetched from the official regional registries (selected automatically based on the country). Currently supports ARIN (American Registry for Internet Numbers) and RIPE (Regional Internet registry for Europe, the Middle East and parts of Central Asia). RIPE stores ip lists for countries in other regions as well, so currently this can be used for any country in the world.
+* ip lists are fetched from the official regional registries (selected automatically based on the country). Currently supports ARIN (American Registry for Internet Numbers) and RIPE (Regional Internet registry for Europe, the Middle East and parts of Central Asia). RIPE stores ip lists for countries in other regions as well, so currently this can be used for any country in the world.
 
-All configuration changes required for geoblocking to work are automatically applied to the firewall during installation.
+* All configuration changes required for geoblocking to work are automatically applied to the firewall during installation.
 
-Implements optional (enabled by default) persistence of geoblocking across system reboots and automatic updates of the ip lists.
+* Implements optional (enabled by default) persistence of geoblocking across system reboots and automatic updates of the ip lists.
 
 **Reliability**:
 - Downloaded ip lists go through validation process, which safeguards against application of corrupted or incomplete lists to the firewall.
