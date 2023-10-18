@@ -72,7 +72,7 @@ The **-backup** script can be used individually. By default, it is launched by t
 **The -apply script**:  directly interfaces with the firewall. Creates or removes ipsets and iptables rules for specified country codes.
 
 ```geoblocker-bash-apply add -c <"country_codes">``` :
-- Loads an ip list file for specified countries into ipsets and sets iptables rules to only allow connections from the local subnet and from subnets included in the ipsets.
+- Loads ip list files for specified countries into ipsets and sets iptables rules to only allow connections from the local subnet and from subnets included in the ipsets.
 
 ```geoblocker-bash-apply remove -c <"country_codes">``` :
 - removes ipsets and associated iptables rules for specified countries.
