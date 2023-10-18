@@ -28,7 +28,7 @@ Implements optional (enabled by default) persistence of geoblocking across syste
 </details>
 
 **Efficiency**:
-- Utilizes the 'ipset' utility which makes the firewall much more efficient than applying a large amount of individual rules. This way the load on the CPU is minimal when the firewall is processing incoming connection requests.
+- Utilizes the 'ipset' utility for creating whitelists/blacklists, which makes the firewall much more efficient than applying a large amount of individual rules. This way the load on the CPU is minimal when the firewall is processing incoming connection requests.
 
 <details><summary>Read more:</summary>
   
