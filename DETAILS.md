@@ -19,6 +19,8 @@ The suite currently includes 12 scripts:
 The scripts intended as user interface are **-install**, **-uninstall**, **-manage** and **check-ip-in-registry.sh**. All the other scripts are intended as a back-end, although they can be run by the user as well (I don't recommend that). If you just want to install and move on, you only need to run the -install script, specify mode with the -m option and specify country codes with the "-c" option. Provided you are not missing any pre-requisites, it should be as easy as that.
 After installation, the user interface is provided by simply running "geoblocker-bash", which is a symlink to the -manage script.
 
+The **-backup** script can be used individually. By default, it is launched by the -run script to create a backup of the firewall state and the geoblocking ipsets before every action you apply to the firewall. If you encounter issues, you can use the -backup script with the 'restore' command to restore the firewall to its previous state. It also restores the previous config.
+
 **The -install script**
 - Creates system folder structure for scripts, config and data.
 - Copies all scripts included in this suite to /usr/local/bin
