@@ -62,7 +62,7 @@ _Recommended to read the [NOTES.md](/NOTES.md) file._
 
 **To install:**
 
-**1)** Install pre-requisites. On Debian, Ubuntu and derivatives run: ```sudo apt install ipset jq wget``` (on other distributions, use their built-in package manager).
+**1)** Install pre-requisites. Use your distro's package manager to install ```ipset jq wget```.
 
 **2)** Download the latest realease: https://github.com/blunderful-scripts/geoblocker-bash/releases
 
@@ -124,9 +124,9 @@ _<details><summary>Examples:</summary>_
 ## **Pre-requisites**:
 (if a pre-requisite is missing, the -install script will tell you which)
 - bash v4.0 or higher (should be included with any relatively modern linux distribution)
-- Linux (tested on Debian, Ubuntu, Mint, and occasionally on OpenWRT, should work on any distribution)
+- Linux. Tested on Debian-like systems and occasionally on OpenWRT, should work on any distribution.
 - iptables - firewall management utility (nftables support will likely get implemented later)
-- standard (mostly GNU) utilities including awk, sed, grep, bc, comm, ps which are included with every server/desktop linux distro but may not be included with things like Busybox (or included in trimmed-down versions)
+- standard (mostly GNU) utilities including awk, sed, grep, bc, comm, ps which are included with every server/desktop linux distro. For embedded (like OpenWRT), may require some of the GNU coreutils full (or less trimmed-down) versions and possibly additional packages.
 - for persistence and autoupdate functionality, requires the cron service to be enabled
 
 additional mandatory pre-requisites: ```ipset wget jq```
