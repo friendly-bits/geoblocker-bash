@@ -63,7 +63,21 @@ _Recommended to read the [NOTES.md](/NOTES.md) file._
 
 **To install:**
 
-**1)** Install pre-requisites. Use your distro's package manager to install ```ipset jq``` (also needs ```wget``` or ```curl``` but you probably have one of these installed already).
+**1)** Install pre-requisites. Use your distro's package manager to install ```ipset``` and ```jq``` (also needs ```wget``` or ```curl``` but you probably have one of these installed already).
+
+_<details><summary>Examples</summary>_
+
+Debian, Ubuntu, Linux Mint and any other Debian/Ubuntu derivative: ```sudo apt install ipset jq```
+
+OpenSUSE: ```sudo zypper install ipset jq```
+
+Arch: ```sudo pacman -S jq```
+
+Fedora: Update yum database with dnf with ```sudo dnf makecache --refresh```. Next, install the dependencies with ```sudo dnf -y install jq ipset```
+
+RHEL/CentOS: you need the EPEL Repository for ```jq```. I'm not an expert on RHEL and CentOS, so you'll need to figure some things out by yourself (and please let me know if you do so I update this guide), including how to add that repository to your specific OS version. Once the repo is added, run ```sudo yum update -y```. Next, install the dependencies with ```sudo yum install jq ipset```. I suspect it will then work as is but you may (?) need to also make some config changes, epsecially if using a specialized firewall management utility such as 'scf' which may preserve the iptables and ipsets between reboots (so you won't need to enable the suite's persistence feature). Anyway, I'd recommend after installing the suite, reboot your computer, wait 30 seconds and then run ```sudo geoblocker-bash status``` and see if it reports any issues.
+
+</details>
 
 **2)** Download the latest realease: https://github.com/blunderful-scripts/geoblocker-bash/releases
 
