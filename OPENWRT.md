@@ -34,7 +34,7 @@ Then I downloaded (using wget) and installed the following packages - these requ
 - grep_3.6-1
 - librt_1.2.4-4
 - jq_1.6-1
-- (i think I also installed sed_4.8-3)
+- (i _think_ I also installed had to install sed_4.8-3)
 
 All that was downloaded through the commmand-line interface and installed with the opkg package manager.
 
