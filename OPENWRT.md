@@ -14,7 +14,7 @@ https://archive.openwrt.org/releases/21.02.0/packages/mips_24kc/packages/
 
 (_note_ that these are packages for the specific architecture of my router but your router _likely_ has a similar package archive, as long as it's supported by OpenWRT)
 
-(if you are using a modern unmodified version of OpenWRT, probably you can download and install directly through the LUCI interface and don't need to care about the specific versions)
+(if you are using a modern unmodified version of OpenWRT, probably you can download and install directly through the LUCI interface without having to care about the specific versions)
 
 The I downloaded and installed the following packages (using wget) - these required to change the address from https to http because the trimmed-down wget didnt' support SSl.
 - librt_1.2.4-4
