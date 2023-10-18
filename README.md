@@ -45,7 +45,7 @@ Implements optional (enabled by default) persistence of geoblocking across syste
 
 <details><summary>Read more:</summary>
 
-- Has only 2 non-standard dependencies which should be available from any modern'ish Linux distribution's package manager (ipset and jq).
+- Has only 2 non-standard dependencies (_ipset_ and _jq_) which should be available from any modern'ish Linux distribution's package manager.
 - Comes with an *uninstall script. Uninstallation normally takes about a second. It completely removes the suite, removes geoblocking firewall rules and restores pre-install firewall policies. No restart is required.
 - Sane settings applied during installation by default, but also lots of command-line options for advanced users.
 - Pre-installation, provides a utility _(check-ip-in-registry.sh)_ to check whether specific ip addresses you might want to blacklist or whitelist are indeed included in the list fetched from the registry.
