@@ -109,24 +109,26 @@ Generally, once the installation completes, you don't have to do anything else f
 
 **To check current geoblocking status:** run ```sudo geoblocker-bash status```
 
-**To add or remove ip lists for countries:**
+**To add or remove ip lists for countries:** run ```sudo geoblocker-bash <action> [-c <"country_codes">]```
 
-run ```sudo geoblocker-bash <action> [-c <"country_codes">]```
-
-where 'action' is either 'add' or 'remove'.
+where 'action' is either ```add``` or ```remove```.
 
 _<details><summary>Examples:</summary>_
 - example (to add ip lists for Germany and Netherlands): ```sudo geoblocker-bash add -c "DE NL"```
 - example (to remove the ip list for Germany): ```sudo geoblocker-bash remove -c DE```
 </details>
 
- To disable/enable/change the autoupdate schedule, use the '-s' option followed by either cron schedule expression in doulbe quotes, or 'disable':
- ```sudo geoblocker-bash schedule -s <"cron_schdedule_expression">|disable```
+ **To enable or change the autoupdate schedule**, use the ```-s``` option followed by the cron schedule expression in doulbe quotes:
 
- _<details><summary>Examples:</summary>_
-- example (to enable and set periodic cron job schedule): ```sudo geoblocker-bash schedule -s "1 4 * * *"```
-- example (to disable lists autoupdate): ```sudo geoblocker-bash schedule -s disable```
+```sudo geoblocker-bash schedule -s <"cron_schdedule_expression">```
+
+ _<details><summary>Example</summary>_
+
+```sudo geoblocker-bash schedule -s "1 4 * * *"```
+
 </details>
+
+**To disable ip lists autoupdates**, use the '-s' option followed by the word ```disable```: ```sudo geoblocker-bash schedule -s disable```
  
 **To uninstall:** run ```sudo geoblocker-bash-uninstall```
 
