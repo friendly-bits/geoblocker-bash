@@ -29,6 +29,7 @@ The **-backup** script can be used individually. By default, it is launched by t
 - If an error occurs during the installation, it is propagated back through the execution chain and eventually the -install script calls the -uninstall script to revert any changes made to the system.
 - Accepts optional custom cron schedule expression for autoupdates as an argument with the '-s' option. Default cron schedule is "0 4 * * *" - at 4:00 [am] every day. 'disable' instead of the schedule will disable autoupdate.
 - Accepts the '-n' option to disable persistence (reboot cron job won't be created so after system reboot, there will be no more geoblocking - although if you have an autoupdate cron job then it will eventually kick in and re-activate geoblocking)
+- Acepts the '-o' option to disable automatic backups of the firewall state, ipsets and config before an action is executed (actions include those launched by the cron jobs to implement autoupdate and persistence)
 
 **The -uninstall script**
 - Doesn't require any arguments
@@ -51,7 +52,7 @@ The **-backup** script can be used individually. By default, it is launched by t
 
 ```geoblocker-bash-manage schedule -s disable``` : disables ip lists autoupdate.
 
-**The -run script**: Serves as a proxy to call the -fetch, -apply and -backup scripts with arguments required for each action.
+**The -run script**: Serves as a proxy to call the -fetch, -apply and -backup scripts with arguments required for each action. Executes the requested actions, depending on the config set by the -install and -manage scripts, and the command line options.
 
 ```geoblocker-bash-run add -c <"country_codes">``` : Fetches iplists and loads ipsets and iptables rules for specified countries.
 
