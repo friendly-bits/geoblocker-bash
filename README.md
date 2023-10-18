@@ -6,7 +6,7 @@ Intended use case is a computer that needs to be publicly accessible only in a c
 Should work on every modern'ish desktop/server Linux distribution, doesn't matter which hardware (and even works on embedded to some degree).
  
 ## Features
-_(if you are just looking for installation instructions, skip to the [**TL;DR**](#tldr) section)_
+_(for installation instructions, skip to the [**TL;DR**](#tldr) section)_
 
 Basic functionality is automatic download of complete ipv4 subnet lists for user-specified countries, then using these lists to create either a whitelist or a blacklist (selected during installation) in the firewall. Besides the basics, there are some additional useful features (continue reading to find out which).
 
