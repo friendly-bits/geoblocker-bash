@@ -53,6 +53,6 @@ After that, the suite installs and works as expected, except:
 2) should be easy to fix by storing data in a persistent location (such as in /etc/ ??). If automatic backups are an issue because of storage space limitation, that function can be disaled during installation (or completely disabled in a specialized embedded version of the suite).
 3) should be (probably) an easy fix
 4) To fix check_ip_in_registry.sh not working, grepcidr needs to be included in the OpenWRT repositories. But then again, it's just a nice pre-install perk, not an essential part of the suite.
-5) For a manual installation, the proposed fix is include ssl-enabled wget in the distribution (which may have already happened in the newer version?)
+5) For a manual installation, the proposed fix is include ssl-enabled wget in the distribution (which may have already happened in the newer version?) I'm pretty sure that ssl-enabled wget (or curl) are also required for ip lists fetching from the regional registries (both for initial install and for auto-updates).
 
 To sum it up, a few rather minor modifications are required for the suite to work on OpenWRT but currently I don't really need it to be running on my router so I'm not going to spend time figuring it out. If someone in the OpenWRT community wants this to work, you are welcome to provide me the info required and I'll modify the code and possibly make an OpenWRT-special version of the suite.
