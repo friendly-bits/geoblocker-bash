@@ -129,11 +129,9 @@ _<details><summary>Examples:</summary>_
 - example (to disable lists autoupdate): ```sudo geoblocker-bash schedule -s disable```
 </details>
  
-**To uninstall:**
-- run ```sudo geoblocker-bash-uninstall```
+**To uninstall:** run ```sudo geoblocker-bash-uninstall```
 
-**To switch mode (from whitelist to blacklist or the opposite):**
-- simply re-install
+**To switch mode (from whitelist to blacklist or the opposite):** simply re-install
 
 ## **Pre-requisites**:
 (if a pre-requisite is missing, the -install script will tell you which)
