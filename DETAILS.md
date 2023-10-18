@@ -23,9 +23,9 @@ The **-backup** script can be used individually. By default, it is launched by t
 
 **The -install script**
 - Creates system folder structure for scripts, config and data.
-- Copies all scripts included in this suite to /usr/local/bin
-- Creates backup of pre-install policies for INPUT and FORWARD chains
-- Calls geoblocker-bash-manage to set up geoblocker and then call the -fetch and -apply scripts.
+- Scripts are then copied to ```/usr/local/bin```. Config goes in ```/etc/geoblocker-bash```. Data goes in ```/var/lib/geoblocker-bash```.
+- Creates backup of pre-install policies for INPUT and FORWARD chains.
+- Calls geoblocker-bash-manage to set up geoblocker. The -manage script, in turn, calls the -run script, which calls -backup, -fetch and -apply scripts to perform the requested actions. (there is a reason for this chain of execution: each script has its own purpose)
 - If an error occurs during the installation, calls the uninstall script to revert any changes made to the system.
 - Accepts optional custom cron schedule expression for autoupdates as an argument with the '-s' option. Default cron schedule is "0 4 * * *" - at 4:00 [am] every day. 'disable' instead of the schedule will disable autoupdate.
 - Accepts the '-n' option to disable persistence (reboot cron job won't be created so after system reboot, there will be no more geoblocking - although if you have an autoupdate cron job then it will eventually kick in and re-activate geoblocking)
