@@ -1,4 +1,4 @@
-## **OpenWRT installation and use**
+## **OpenWRT installation, issues and possible solutions**
 - I tested this suite on my OpenWRT WNDR3700-v2 router, running OpenWRT SFE r15568-b3eccbca7c, which is a snapshot from 2020, modified with patches from the SFE project.
 
 More info about SFE patches here:
