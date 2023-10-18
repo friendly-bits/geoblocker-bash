@@ -188,6 +188,9 @@ For more detailed description of each script, read [DETAILS.md](/DETAILS.md).
 ## **Data safety**
 For notes about data safety (mostly intended for security nerds), read [DATASAFETY.md](/DATASAFETY.md).
 
+## **OpenWRT**
+For compatibility with OpenWRT, read (OPENWRT.md)[/OPENWRT.MD]. Some help needed!
+
 ## **Last but not least**
 
 - I have put much work into this project. If you use it and like it, please consider giving it a star on Github.
