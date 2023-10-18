@@ -41,7 +41,7 @@ All that was downloaded through the commmand-line interface and installed with t
 I also had to make some slight modification to the code (now merged into the main branch) to work around limitations in other built-in utilites.
 
 After that, the suite installs and works as expected, except:
-1) the persistence (reboot) cron job doesnt work with the trimmed-down version of crontab which OpenWRT ships (at list in the 2021.02 older verson) because it doesn't support the '@reboot' timing option. Installing the package from the archive reporistory didn't fix this issue.
+1) the persistence (reboot) cron job doesnt work with the trimmed-down version of crontab which OpenWRT ships (at least in the 2021.02 older verson) because it doesn't support the '@reboot' timing option. Installing the package from the archive reporistory didn't fix this issue.
 2) the /var/lib folder which is used by the suite to store data (such as downloaded ip lists, firewall state backups and the cca2.list file which stores valid country codes, used for user input validation) is mapped to the memory and so doesn't persist across reboots, so the suite doesn't work after a reboot.
 
 The 1st issue should be relatively easy to fix since I know that OpenWRT has some facility for firewall persistence, I just don't know how it's implemented and what's its command-line API. Perhaps someone with this knowledge could suggest a modification required for integration which would replace the cron job.
