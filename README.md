@@ -124,7 +124,7 @@ _<details><summary>Examples:</summary>_
 - bash v4.0 or higher (should be included with any relatively modern linux distribution)
 - Linux (tested on Debian, Ubuntu, Mint, and occasionally on OpenWRT, should work on any distribution)
 - iptables - firewall management utility (nftables support will likely get implemented later)
-- standard (mostly GNU) utilities including awk, sed, grep, bc, comm, ps
+- standard (mostly GNU) utilities including awk, sed, grep, bc, comm, ps which are included with every server/desktop linux distro but may not be included with things like Busybox (or included in trimmed-down versions)
 - for persistence and autoupdate functionality, requires the cron service to be enabled
 
 additional mandatory pre-requisites: ```ipset wget jq```
