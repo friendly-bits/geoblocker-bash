@@ -42,7 +42,8 @@ Implements optional (enabled by default) persistence of geoblocking across syste
 </details>
 
 **Ease of use**:
-- Installation normally takes a few seconds.
+- Installation is easy, doesn't require many complex command line arguments and normally takes a few seconds.
+- After installation, geoblocking will be already active for the specified countries and in most cases, you don't have to do anything else.
 
 <details><summary>Read more:</summary>
   
