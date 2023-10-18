@@ -101,7 +101,7 @@ Generally, once the installation completes, you don't have to do anything else f
 
 **To add or remove ip lists for countries:**
 
-run ```sudo geoblocker-bash <action> [-c <"country_codes">]
+run ```sudo geoblocker-bash <action> [-c <"country_codes">]```
 
 where 'action' is either 'add' or 'remove'.
 
