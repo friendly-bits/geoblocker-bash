@@ -4,7 +4,7 @@ Geoip blocker for Linux focusing on reliability, efficiency and ease of use. Sui
 Should work on every modern'ish desktop/server Linux distribution, doesn't matter which hardware (even works on embedded to some degree).
  
 ## Features
-_(for installation instructions, skip to the [**INSTALLATION**](#INSTALLATION) section)_
+_(for installation instructions, skip to the [**Installation**](#Installation) section)_
 
 * Basic functionality is automatic download of complete ipv4 subnet lists for user-specified countries, then using these lists to create either a whitelist or a blacklist (selected during installation) in the firewall. Besides the basics, there are additional useful features (continue reading to find out which).
 
@@ -40,9 +40,9 @@ _(for installation instructions, skip to the [**INSTALLATION**](#INSTALLATION) s
 </details>
 
 **Ease of use**:
-- Detailed installation and usage guides (check the [**INSTALLATION**](#INSTALLATION) and [**USAGE**](#USAGE) sections)
+- Detailed installation and usage guides (check the [**Installation**](#Installation) and [**Usage**](#Usage) sections)
 - Installation is easy, doesn't require many complex command line arguments and normally takes a few seconds.
-- After installation (provided you have all the [**PRE-REQUISITES**](#PRE-REQUISITES)), geoblocking will be already active for the specified countries and you don't have to do anything else for it to work.
+- After installation (provided you have all the [**Pre-requisites**](#Pre-requisites)), geoblocking will be already active for the specified countries and you don't have to do anything else for it to work.
 
 <details><summary>Read more:</summary>
 
@@ -58,7 +58,7 @@ _(for installation instructions, skip to the [**INSTALLATION**](#INSTALLATION) s
 - Validates all user input, so if you make a mistake, it is unlikely that you break something - the scripts will just say that the input makes no sense and usually tell you what's wrong with it.
 </details>
 
-## **INSTALLATION**
+## **Installation**
 
 _Recommended to read the [NOTES.md](/NOTES.md) file._
 
@@ -72,7 +72,7 @@ _Recommended to read the [NOTES.md](/NOTES.md) file._
 
 _<details><summary>4) Optional:</summary>_
 
-- If intended use is whitelist and you want to install geoblocker-bash on a remote machine, you can run the check-ip-in-registry.sh script before installation to make sure that your public ip addresses are included in the ip list fetched from the internet registry.
+- If intended use is whitelist and you want to install geoblocker-bash on a remote machine, you can run the check-ip-in-registry.sh script before Installation to make sure that your public ip addresses are included in the ip list fetched from the internet registry.
 
 _Example: (for US):_ ```bash check-ip-in-registry.sh -c US -i "8.8.8.8 8.8.4.4"``` _(if checking multiple ip addresses, use double quotes)_
 
@@ -105,7 +105,7 @@ then rebooting the computer, waiting 30 seconds and then running ```sudo geobloc
 
 **6)** That's it! By default, ip lists will be updated daily at 4am - you can verify that automatic updates work by running ```sudo cat /var/log/syslog | grep geoblocker-bash``` on the next day (change syslog path if necessary, according to the location assigned by your distro).
 
-## **USAGE**
+## **Usage**
 Generally, once the installation completes, you don't have to do anything else for geoblocking to work. But you can.
 
 **To check current geoblocking status:** run ```sudo geoblocker-bash status```
