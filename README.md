@@ -90,13 +90,15 @@ _<details><summary>Examples:</summary>_
 (when specifying multiple countries, put the list in double quotes)
 </details>
 
-- **NOTE**: If your distro (or you) have enabled automatic iptables and ipsets persistence (check online), you can skip the built-in persistence feature by adding the ```-o``` (for no-persistence) option when running the -install script.
+- **NOTE**: If your distro (or you) have enabled automatic iptables and ipsets persistence, you can skip the built-in persistence feature by adding the ```-o``` (for no-persistence) option when running the -install script.
 
-<details><summary>More about persistence</summary>
+<details><summary>Checking and verifying persistence</summary>
 
-So something like
+Generally automatic persistence of iptables and ipsets is not enabled for Debian or Ubuntu-based desktop distros (and probalby for most others). The easiest way to make sure is running the -install script with the ```-o``` option (for no-persistence) like so:
+
 ```sudo bash geoblocker-bash-install -m <whitelist|blacklist> -c <"country_codes"> -o```
-Generally this is not the case for Debian or Ubuntu-based desktop distros. The easiest way to make sure is probably running the -install script with the ```-o``` option, rebooting the computer, waiting 30 seconds and then running ```sudo geoblocker-bash status```. If it complains about incoherency between the config file and the firewall state then your distro and you have not enabled persistence. In that case, install again without the ```-o``` option. Installation normally takes just a few seconds, so it's not a big deal.
+
+then rebooting the computer, waiting 30 seconds and then running ```sudo geoblocker-bash status```. If it complains about incoherency between the config file and the firewall state then your distro and you have not enabled persistence. In that case, install again without the ```-o``` option for cron-based persistence, reboot again and test again (should not complain now). Installation normally takes just a few seconds, so it's not a big deal.
 
 </details>
 
