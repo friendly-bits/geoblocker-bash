@@ -79,7 +79,7 @@ The **-backup** script can be used individually. By default, it is launched by t
 
 **The -cronsetup script** manages all the cron-related logic in one place. Called by the -manage script. Cron jobs are created based on the settings stored in the config file.
 
-**The -backup script**: Creates a backup of the current iptables state, current geoblocking config and geoblocker-associated ipsets, or restores them from backup. By default (if you didn't run the installation with the '-o' option), backup will be created before every action you apply to the firewall and before automatic list updates are applied. Normally backups should not take much space, maybe a few megabytes if you have many ip lists. The -backup script also compresses them, so they take even less space. (and automatically extracts when restoring)
+**The -backup script**: Creates a backup of the current iptables state, current geoblocking config and geoblocker-associated ipsets, or restores them from backup. By default (if you didn't run the installation with the '-o' option), backup will be created before every action you apply to the firewall and also before automatic list updates are applied. Normally backups should not take much space, maybe a few megabytes if you have many ip lists. The -backup script also compresses them, so they take even less space. (and automatically extracts when restoring)
 
 ```geoblocker-bash-backup create-backup``` : Creates a backup of the current iptables state, geoblocking config and geoblocker-associated ipsets.
 
