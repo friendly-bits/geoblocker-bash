@@ -132,8 +132,7 @@ _<details><summary>Examples:</summary>_
 - standard (mostly GNU) utilities including awk, sed, grep, bc, comm, ps which are included with every server/desktop linux distro. For embedded (like OpenWRT), may require some of the GNU coreutils full (or less trimmed-down) versions and possibly additional packages.
 - for persistence and autoupdate functionality, requires the cron service to be enabled
 
-additional mandatory pre-requisites: ```ipset wget jq```
-(will also work with curl instead of wget)
+additional mandatory pre-requisites: ```ipset jq``` (also needs ```wget``` or ```curl``` but you probably have one of these installed already)
 
 optional: the check-ip-in-registry.sh script requires grepcidr. install it with ```sudo apt install grepcidr```
 
