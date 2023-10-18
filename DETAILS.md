@@ -51,9 +51,9 @@ The **-backup** script can be used individually. By default, it is launched by t
 ```geoblocker-bash status```
 * Displays information on the current state of geoblocking
 
-```geoblocker-bash-manage schedule -s <"schedule_expression">``` : enables automatic ip lists update and configures the schedule for the periodic cron job which implements this feature.
+```geoblocker-bash schedule -s <"schedule_expression">``` : enables automatic ip lists update and configures the schedule for the periodic cron job which implements this feature.
 
-```geoblocker-bash-manage schedule -s disable``` : disables ip lists autoupdate.
+```geoblocker-bash schedule -s disable``` : disables ip lists autoupdate.
 
 **The -run script**: Serves as a proxy to call the -fetch, -apply and -backup scripts with arguments required for each action. Executes the requested actions, depending on the config set by the -install and -manage scripts, and the command line options.
 
