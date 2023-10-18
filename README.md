@@ -107,8 +107,7 @@ then rebooting the computer, waiting 30 seconds and then running ```sudo geobloc
 ## USAGE
 Generally, once the installation completes, you don't have to do anything else for geoblocking to work. But you can.
 
-**To check current geoblocking status:**
-- run ```sudo geoblocker-bash status```
+**To check current geoblocking status:** run ```sudo geoblocker-bash status```
 
 **To add or remove ip lists for countries:**
 
