@@ -63,21 +63,7 @@ _Recommended to read the [NOTES.md](/NOTES.md) file._
 
 **To install:**
 
-**1)** Install pre-requisites. Use your distro's package manager to install ```ipset``` and ```jq``` (also needs ```wget``` or ```curl``` but you probably have one of these installed already).
-
-_<details><summary>Examples</summary>_
-
-Debian, Ubuntu, Linux Mint and any other Debian/Ubuntu derivative: ```sudo apt install ipset jq```
-
-OpenSUSE: ```sudo zypper install ipset jq```
-
-Arch: ```sudo pacman -S jq```
-
-Fedora: Update yum database with dnf with ```sudo dnf makecache --refresh```. Next, install the dependencies with ```sudo dnf -y install jq ipset```
-
-RHEL/CentOS: you need the EPEL Repository for ```jq```. I'm not an expert on RHEL and CentOS, so you'll need to figure some things out by yourself (and please let me know if you do so I update this guide), including how to add that repository to your specific OS version. Once the repo is added, run ```sudo yum update -y```. Next, install the dependencies with ```sudo yum install jq ipset```. I suspect it will then work as is but you may (?) need to also make some config changes, epsecially if using a specialized firewall management utility such as 'scf' which may preserve the iptables and ipsets between reboots (so you won't need to enable the suite's persistence feature). Anyway, I'd recommend after installing the suite, reboot your computer, wait 30 seconds and then run ```sudo geoblocker-bash status``` and see if it reports any issues.
-
-</details>
+**1)** Install pre-requisites. Use your distro's package manager to install ```ipset``` and ```jq``` (also needs ```wget``` or ```curl``` but you probably have one of these installed already). For examples for most popular distros, check out the [PREREQUISITES](#PREREQUISITES) section.
 
 **2)** Download the latest realease: https://github.com/blunderful-scripts/geoblocker-bash/releases
 
@@ -96,13 +82,22 @@ _Example: (for US):_ ```bash check-ip-in-registry.sh -c US -i "8.8.8.8 8.8.4.4"`
 </details>
 
 **5)** run ```sudo bash geoblocker-bash-install -m <whitelist|blacklist> -c <"country_codes">```
-
 _<details><summary>Examples:</summary>_
 
 - example (whitelist Germany and block all other countries): ```sudo bash geoblocker-bash-install -m whitelist -c DE```
 - example (blacklist Germany and Netherlands and allow all other countries): ```sudo bash geoblocker-bash-install -m blacklist -c "DE NL"```
 
 (when specifying multiple countries, put the list in double quotes)
+</details>
+
+- **NOTE**: If your distro (or you) have enabled automatic iptables and ipsets persistence (check online), you can skip the built-in persistence feature by adding the ```-o``` (for no-persistence) option when running the -install script.
+
+<details><summary>More about persistence</summary>
+
+So something like
+```sudo bash geoblocker-bash-install -m <whitelist|blacklist> -c <"country_codes"> -o```
+Generally this is not the case for Debian or Ubuntu-based desktop distros. The easiest way to make sure is probably running the -install script with the ```-o``` option, rebooting the computer, waiting 30 seconds and then running ```sudo geoblocker-bash status```. If it complains about incoherency between the config file and the firewall state then your distro and you have not enabled persistence. In that case, install again without the ```-o``` option. Installation normally takes just a few seconds, so it's not a big deal.
+
 </details>
 
 **6)** That's it! By default, ip lists will be updated daily at 4am - you can verify that automatic updates work by running ```sudo cat /var/log/syslog | grep geoblocker-bash``` on the next day (change syslog path if necessary, according to the location assigned by your distro).
@@ -147,6 +142,28 @@ _<details><summary>Examples:</summary>_
 - for persistence and autoupdate functionality, requires the cron service to be enabled
 
 additional mandatory pre-requisites: ```ipset jq``` (also needs ```wget``` or ```curl``` but you probably have one of these installed already)
+
+_<details><summary>Examples for popular distributions</summary>_
+
+Debian, Ubuntu, Linux Mint and any other Debian/Ubuntu derivative: ```sudo apt install ipset jq```
+
+OpenSUSE: you may (?) need to add repositories to install jq and ipset as explained here:
+
+https://software.opensuse.org/download/package?package=jq&project=utilities
+https://software.opensuse.org/download/package?package=ipset&project=security%3Anetfilter
+
+then run ```sudo zypper install ipset jq```
+
+(if you have verified information, please le me know)
+
+Arch: (you need the Extra repository enabled) ```sudo pacman -S ipset jq```
+
+Fedora: Update yum database with dnf with ```sudo dnf makecache --refresh```. Next, install the dependencies with ```sudo dnf -y install ipset jq```
+
+RHEL/CentOS: you need the EPEL Repository for ```jq```. I'm not an expert on RHEL and CentOS, so you'll need to figure some things out by yourself (and please let me know if you do so I update this guide), including how to add that repository to your specific OS version. Once the repo is added, run ```sudo yum update -y```. Next, install the dependencies with ```sudo yum install jq ipset```. I suspect it will then work as is but you may (?) need to also make some config changes, epsecially if using a specialized firewall management utility such as 'scf' which may preserve the iptables and ipsets between reboots (so you won't need to enable the suite's persistence feature). Anyway, I'd recommend after installing the suite, reboot your computer, wait 30 seconds and then run ```sudo geoblocker-bash status``` and see if it reports any issues.
+
+</details>
+
 
 optional: the check-ip-in-registry.sh script requires grepcidr. install it with ```sudo apt install grepcidr```
 
