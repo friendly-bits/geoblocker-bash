@@ -16,7 +16,7 @@ https://archive.openwrt.org/releases/21.02.0/packages/mips_24kc/packages/
 
 (if you are using a modern unmodified version of OpenWRT, probably you can download and install directly through the LUCI interface without having to care about the specific versions)
 
-Then I downloaded and installed the following packages (using wget) - these required to change the address from https to http because the trimmed-down wget didnt' support SSL.
+Then I downloaded (using wget) and installed the following packages - these required to change the address from https to http because the trimmed-down wget didnt' support SSL.
 - librt_1.2.4-4
 - wget wget-ssl_1.21.1-1
 
