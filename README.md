@@ -90,9 +90,9 @@ _<details><summary>Examples:</summary>_
 (when specifying multiple countries, put the list in double quotes)
 </details>
 
-- **NOTE**: If your distro (or you) have enabled automatic iptables and ipsets persistence, you can skip the built-in persistence feature by adding the ```-o``` (for no-persistence) option when running the -install script.
+- **NOTE**: If your distro (or you) have enabled automatic iptables and ipsets persistence, you can skip the built-in cron-based persistence feature by adding the ```-o``` (for no-persistence) option when running the -install script.
 
-<details><summary>Checking and verifying persistence</summary>
+<details><summary>Verifying persistence</summary>
 
 Generally automatic persistence of iptables and ipsets is not enabled for Debian or Ubuntu-based desktop distros (and probalby for most others). The easiest way to make sure is running the -install script with the ```-o``` option (for no-persistence) like so:
 
