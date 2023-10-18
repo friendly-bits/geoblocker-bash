@@ -18,7 +18,7 @@ https://archive.openwrt.org/releases/21.02.0/packages/mips_24kc/packages/
 
 Then I downloaded (using wget) and installed the following packages - these required to change the address from https to http because the trimmed-down wget didnt' support SSL.
 - librt_1.2.4-4
-- wget wget-ssl_1.21.1-1
+- wget-ssl_1.21.1-1
 
 (after that, I could finally download with wget from the https:// website)
 
