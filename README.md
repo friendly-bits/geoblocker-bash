@@ -58,6 +58,15 @@ _(for installation instructions, skip to the [**Installation**](#Installation) s
 - Validates all user input, so if you make a mistake, it is unlikely that you break something - the scripts will just say that the input makes no sense and usually tell you what's wrong with it.
 </details>
 
+**Compatibility**:
+- Since the code is written in Bash, the suite is basically compatible with everything Linux (as long as it has the pre-requisites)
+
+<details> <summary>Read more:</summary>
+ 
+ - Embedded hardware-oriented distributions (like OpenWRT) generally tend to use stripped-down versions of standard utilities by default, so these may need to upgrade to full versions or at least less-stripped-down versions of some utilities. For more info on OpenWRT compatibiliy, read the (OPENWRT.md)[/OPENWRT.MD] file.
+ - Some distros have their own firewall management utilities and even implement their own firewall persistence across reboots. The suite should work on these, too, but you probably should disable the cron-based persistence solution (more info in the [Pre-requisites](#Pre-requisites) section).
+</details>
+
 ## **Installation**
 
 _Recommended to read the [NOTES.md](/NOTES.md) file._
