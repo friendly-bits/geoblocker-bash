@@ -40,6 +40,7 @@ Implements optional (enabled by default) persistence of geoblocking across syste
 </details>
 
 **Ease of use**:
+- Detailed installation and usage guides (check the [**INSTALLATION**](#INSTALLATION) and [**USAGE**](#USAGE)
 - Installation is easy, doesn't require many complex command line arguments and normally takes a few seconds.
 - After installation, geoblocking will be already active for the specified countries and you don't have to do anything else for it to work.
 
@@ -104,7 +105,7 @@ then rebooting the computer, waiting 30 seconds and then running ```sudo geobloc
 
 **6)** That's it! By default, ip lists will be updated daily at 4am - you can verify that automatic updates work by running ```sudo cat /var/log/syslog | grep geoblocker-bash``` on the next day (change syslog path if necessary, according to the location assigned by your distro).
 
-## USAGE
+## **USAGE**
 Generally, once the installation completes, you don't have to do anything else for geoblocking to work. But you can.
 
 **To check current geoblocking status:** run ```sudo geoblocker-bash status```
