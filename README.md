@@ -34,7 +34,7 @@ Implements optional (enabled by default) persistence of geoblocking across syste
 - Creating new ipsets is done efficiently, so normally it takes less than a second for a very large list (depending on the CPU of course).
 - Only performs necessary actions. For example, if a list is up-to-date and already active in the firewall, it won't be re-validated and re-applied to the firewall until the data timestamp changes.
 - List parsing and validation are implemented through efficient regex processing, so this is very quick: a fraction of a second for parsing and a few milliseconds for validation, for a very large list (at least on x86 CPU).
-- The scripts perform most operations (such as parsing and validating ip lists, or processing backups) in memory to avoid unnecessary disk access. So they should be plenty fast even with a slow storage device.
+- The scripts perform all heavy-lifting operations (such as parsing and validating ip lists, or processing backups) in memory to avoid unnecessary storage device access. So they should be plenty fast even with a slow storage device. At the expense of some memory (which only matters for embedded systems - in my testing, OpenWRT router with 128MB of memory handles this easily).
 - Scripts are only active for a short time when invoked either directly by the user or by a cron job (once after a reboot and then periodically for an auto-update - both cron jobs are optional and enabled by default).
 
 </details>
