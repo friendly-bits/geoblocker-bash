@@ -180,7 +180,7 @@ then run ```sudo zypper install ipset jq```
 </details>
 
 
-**Optional**: the check-ip-in-registry.sh script requires grepcidr. install it with ```sudo apt install grepcidr``` on Debian and derivatives. For other distros, look it up.
+**Optional**: the _check-ip-in-registry.sh_ script requires grepcidr. install it with ```sudo apt install grepcidr``` on Debian and derivatives. For other distros, look it up.
 
 ## **Notes**
 For some helpful notes about using this suite, read [NOTES.md](/NOTES.md).
