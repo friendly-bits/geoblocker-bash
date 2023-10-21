@@ -21,9 +21,11 @@ me=$(basename "$0")
 
 suite_name="geoblocker-bash"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC2015
 [[ -n "$script_dir" ]] && cd "$script_dir" || { err="$me: Error: Couldn't cd into '$script_dir'."; echo "$err" >&2; \
 	[[ ! "$nolog" ]] && logger "$err"; exit 1; }
 
+# shellcheck source=geoblocker-bash-common
 source "$script_dir/${suite_name}-common" || { err="$me: Error: Can't source ${suite_name}-common."; echo "$err" >&2; \
 	[[ ! "$nolog" ]] && logger "$err"; exit 1; }
 
@@ -102,7 +104,7 @@ debugentermsg
 parse_arin() {
 
 # lookup table needed to translate ARIN's quirky data to CIDR patterns
-# ip addresses number on the left, matching CIDR pattern on the right
+# ip addresses number on the left, matching CIDR subnet mask on the right
 # delimited by pipe because this is the delimiter in ARIN's data and using the same delimiter makes it easier to process with awk
 cidr_lookup_table=$(cat <<EOF
 1|/32
@@ -134,28 +136,15 @@ cidr_lookup_table=$(cat <<EOF
 67108864|/6
 EOF
 )
-
-	# older solution, much more complex, slightly slower and less flexible (e.g. more work to adapt it to ipv6 in the future)
-	#	awk 'NR==FNR {a[$1] = $2; next} {$2 = a[$2]} 1' <(printf "%s" "$cidr_lookup_table") \
-	#		<(grep -oP "(?<=arin\|$ccode\|$family\|).*?(?=\|[0-9]*?\|allocated)" < "$fetched_file" | tr "|" " ") | \
-	#	tr -d " " > "$parsed_file"
-
-	# 2nd older solution, works well on x86 cpus but slow on embedded
-	# uses 2 "files" for awk input: 1st is the cidr lookup table (fed into awk using the <() construct) 2nd is the fetched file.
-	# BEGIN {FS="\\|"} instructs awk to use | as field separator.
-	# "a[$1] = $2" compiles the lookup table into an associative array named "a" in awk,
-	# using the 1st field (ip count) of the table as key and 2nd field (cidr pattern) as value.
-	# next portion filters the lines in the fetched file for "$ccode|$family" and "allocated".
-	# "print $4 a[$5]" takes the 4th field (ip subnet) in every resulting line,
-	# then uses the 5th field (ip count) as a key to get matching CIDR pattern from the array, and that gets appended to the output line.
-
-	#awk -v family="$family" -v ccode="$ccode" 'BEGIN {FS="\\|"} NR==FNR {a[$1] = $2; next} $0 ~ ccode"\\|"family".*\\|allocated" {print $4 a[$5]}' \
-	#<(printf "%s\n" "$cidr_lookup_table") "$fetched_file" > "$parsed_file"
-
-	# newer solution, at least 3x faster on embedded cpu. all processing is done in memory because i/o in embedded may be slow
+	# all processing is done in memory to speed it up
 	# first we use grep -F, which is very fast, to filter only wanted lines
 	# we pipe that into cut which removes everything except the 4th and the 5th fields in every line (ip and addresses count)
-	# now awk has much less data to process, so it's faster. it works the same way as in the 2nd solution (read above)
+	# now awk has much less data to process, so it's faster.
+	# BEGIN {FS="\\|"} instructs awk to use | as field separator.
+	# "a[$1] = $2" compiles the lookup table into an associative array named "a" in awk,
+	# using the 1st field (ip count) of the table as key and 2nd field (cidr subnet mask) as value.
+	# "print $1 a[$2]" takes the 1st field (ip) in every resulting line,
+	# then uses the 2nd field (ip count) as a key to get matching CIDR subnet mask from the array, and that gets appended to the output line.
 	trimmed_arin="$(grep -F "$ccode|$family" "$fetched_file" | grep -F 'allocated' | cut -d\| -f4-5)"
 	parsed_list="$(awk 'BEGIN {FS="\\|"} NR==FNR {a[$1] = $2; next} {print $1 a[$2]}' <(printf "%s\n" "$cidr_lookup_table") <(printf "%s\n" "$trimmed_arin"))"
 
@@ -308,7 +297,7 @@ for ccode in $ccodes; do
 
 	# Make $fetch_retries attempts to fetch the list for each ccode (or until successful fetch and no validation errors)
 	while true; do
-		let retry_cnt++
+		(( retry_cnt++ ))
 
 		$fetch_command "$fetched_file"; rv=$?
 
@@ -328,7 +317,7 @@ for ccode in $ccodes; do
 			# and we are not in manual mode, and force_update wasn't requested
 			if [[ "$old_list_exists" &&  "$date_new" -le "$date_old" && ! "$force_update" && \
 							! "$manualmode" && "$old_failed_subnets_cnt" -eq 0 ]]; then
-				echolog "Subnets list for country '$ccode' is already up-to-date. Timestamp: '$(date --date=@$date_new)'."
+				echolog "Subnets list for country '$ccode' is already up-to-date. Timestamp: '$(date --date=@"$date_new")'."
 				ccode_status="up_to_date"
 				rm "$fetched_file" &>/dev/null
 				break
@@ -493,9 +482,5 @@ LastFailedSubnetsCnt_${ccode}=${failed_subnets_cnt_arr[$ccode]}"
 		die "Error: Failed to write to the status file '$status_file'."
 fi
 
-#debugprint "status file contents:"
-#[ "$debugmode" ] && { echo "'" >&2; cat "$status_file"; echo "'" >&2; }
-
-debugexitmsg
 
 exit 0
