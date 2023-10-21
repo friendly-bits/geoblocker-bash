@@ -1,7 +1,7 @@
 ## **Prelude**
 - Most scripts display "usage" when called with the "-h" option. You can find out about some additional options specific to each script by running it with that option.
 
-## **In detail**
+## **Overview**
 The suite currently includes 12 scripts:
 1. geoblocker-bash-install
 2. geoblocker-bash-uninstall
@@ -21,6 +21,7 @@ After installation, the user interface is provided by simply running "geoblocker
 
 The **-backup** script can be used individually. By default, it is launched by the -run script to create a backup of the firewall state and the geoblocking ipsets before every action you apply to the firewall. If you encounter issues, you can use the -backup script with the 'restore' command to restore the firewall to its previous state. It also restores the previous config.
 
+## **In detail**
 **The -install script**
 - Checks pre-requisites.
 - Creates system folder structure for scripts, config and data.
