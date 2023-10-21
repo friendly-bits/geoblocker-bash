@@ -24,9 +24,11 @@ me=$(basename "$0")
 
 suite_name="geoblocker-bash"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC2015
 [[ -n "$script_dir" ]] && cd "$script_dir" || { err="$me: Error: Couldn't cd into '$script_dir'."; echo "$err" >&2; \
 	[[ ! "$nolog" ]] && logger "$err"; exit 1; }
 
+# shellcheck source=geoblocker-bash-common
 source "$script_dir/${suite_name}-common" || { err="$me: Error: Can't source ${suite_name}-common."; echo "$err" >&2; \
 	[[ ! "$nolog" ]] && logger "$err"; exit 1; }
 
@@ -261,7 +263,7 @@ if [[ "$action" = "add" ]]; then
 
 		echo "Ok."
 
-		[[ "$debugmode" ]] && ipset_lines_cnt="$(ipset save "$temp_ipset" | grep "add $temp_ipset" | wc -l)"
+		[[ "$debugmode" ]] && ipset_lines_cnt="$(ipset save "$temp_ipset" | grep -c "add $temp_ipset")"
 		debugprint "subnets in the temporary ipset: $ipset_lines_cnt"
 
 		ipset_hashsizes["$ccode"]="$ipset_hash"
@@ -500,7 +502,5 @@ fi
 [[ "$test" ]] && die "Test test test"
 
 echo
-
-debugexitmsg
 
 exit "$exitvalue"
