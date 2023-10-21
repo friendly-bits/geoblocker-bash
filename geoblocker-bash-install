@@ -24,8 +24,10 @@ me=$(basename "$0")
 
 suite_name="geoblocker-bash"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC2015
 [[ -n "$script_dir" ]] && cd "$script_dir" || { echo "$me: Error: Couldn't cd into '$script_dir'." >&2; exit 1; }
 
+# shellcheck source=geoblocker-bash-common
 source "$script_dir/${suite_name}-common" || { echo "$me: Error: Can't source '${suite_name}-common'." >&2; exit 1; }
 
 # **NOTE** that some functions and variables are sourced from the *common script
@@ -148,7 +150,7 @@ install_failed() {
 	echo "$*" >&2
 	echo -e "\nInstallation failed." >&2
 	echo "Uninstalling ${suite_name}..." >&2
-	bash ${suite_name}-uninstall
+	call_script ${suite_name}-uninstall
 	exit 1
 }
 
@@ -288,7 +290,7 @@ fi
 mkdir -p "$iplist_dir"
 
 ## run the *reset script to make sure no previous firewall rules and cron jobs exist
-bash ${suite_name}-reset
+call_script ${suite_name}-reset
 
 
 ## Copy scripts to $install_dir
@@ -338,11 +340,13 @@ chown -R root:root "$datadir"
 
 # cd into the install directory
 # exit in case "cd" fails
+
+# shellcheck disable=SC2015
 [[ -n "$install_dir" ]] && cd "$install_dir" || install_failed "Error: Couldn't cd into '$install_dir'."
 
 
 ### Add iplist(s) for $ccodes to managed iplists, then fetch and apply the iplist(s)
-${suite_name}-manage add -f -c "$ccodes"; rv="$?"
+call_script ${suite_name}-manage add -f -c "$ccodes"; rv="$?"
 
 # the *manage script exits with return value 254 if requested country is already included in the config
 if [[ $rv -ne 0 && $rv -ne 254 ]]; then
@@ -351,7 +355,7 @@ fi
 
 if [[ ! "$no_persistence" && "$cron_schedule" != "disable" ]]; then
 	### Set up cron jobs
-	${suite_name}-manage schedule -s "$cron_schedule"; rv="$?"
+	call_script ${suite_name}-manage schedule -s "$cron_schedule"; rv="$?"
 
 	if [[ $rv -ne 0 ]]; then
 		install_failed "Error: failed to set up cron jobs."
