@@ -19,9 +19,11 @@ me=$(basename "$0")
 
 suite_name="geoblocker-bash"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC2015
 [[ -n "$script_dir" ]] && cd "$script_dir" || { err="$me: Error: Couldn't cd into '$script_dir'."; echo "$err" >&2; \
 	[[ ! "$nolog" ]] && logger "$err"; exit 1; }
 
+# shellcheck source=geoblocker-bash-common
 source "$script_dir/${suite_name}-common" || { err="$me: Error: Can't source ${suite_name}-common."; echo "$err" >&2; \
 	[[ ! "$nolog" ]] && logger "$err"; exit 1; }
 
@@ -83,7 +85,6 @@ if [[ "$rv" -ne 0 || -z "$datadir" ]]; then datadir="/var/lib/${suite_name}"; fi
 
 preinstall_policies_file="$datadir/preinstall_policies.bak"
 
-iptables_comment_global="${suite_name}_global"
 iptables_comment="${suite_name}"
 
 
@@ -124,5 +125,3 @@ sleep 0.3
 	debugprint "Found ipset \"$ipset_name\", destroying..."
 	ipset destroy "$ipset_name"
 done
-
-debugexitmsg
