@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2015
 
 # geoblocker-bash-backup
 
@@ -24,9 +25,11 @@ me=$(basename "$0")
 
 suite_name="geoblocker-bash"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC2015
 [[ -n "$script_dir" ]] && cd "$script_dir" || { err="$me: Error: Couldn't cd into '$script_dir'."; echo "$err" >&2; \
 	[[ ! "$nolog" ]] && logger "$err"; exit 1; }
 
+# shellcheck source=geoblocker-bash-common
 source "$script_dir/${suite_name}-common" || { err="$me: Error: Can't source ${suite_name}-common."; echo "$err" >&2; \
 	[[ ! "$nolog" ]] && logger "$err"; exit 1; }
 
@@ -130,7 +133,7 @@ restoreknowngood() {
 		# count lines in the corresponding portion of the backup file
 		case "$restoretarget" in
 			iptables) line_cnt=$(sed -e '/\[IPSET\].*/Q' <<< "$firewall_backup_var" | wc -l) ;;
-			ipset) line_cnt=$(sed -n "/create ${suite_name}/,\$p" <<< "$firewall_backup_var" | grep "add ${suite_name}" | wc -l) ;;
+			ipset) line_cnt=$(sed -n "/create ${suite_name}/,\$p" <<< "$firewall_backup_var" | grep -c "add ${suite_name}") ;;
 		esac
 		debugprint "$restoretarget lines number in backup: $line_cnt"
 		[[ "line_cnt" -eq 0 ]] && {
@@ -202,9 +205,8 @@ restore_failed() {
 	echo "$1" >&2
 	if [[ "$2" = "reset" ]]; then
 		echo "*** Geoblocking is not working. Removing geoblocking rules from the firewall and removing the associated cron jobs. ***" >&2
-		${suite_name}-reset
+		call_script "${suite_name}-reset"
 	fi
-	debugexitmsg
 	exit 1
 }
 
@@ -252,7 +254,7 @@ create_backup() {
 	[[ "$rv" -ne 0 || ! -s "${backup_file}.new" ]] && {
 			unset firewall_backup_var
 			rm "${backup_file}.new" &>/dev/null
-			die "Error writing firewall backup to file '"${backup_file}.new"'."
+			die "Error writing firewall backup to file '${backup_file}.new'."
 		}
 
 	unset firewall_backup_var
@@ -275,6 +277,7 @@ set_extract_command() {
 # assumes that archive type is defined only by the part of the filename after the last dot
 
 	debugprint "Backup file: '$1'"
+	# shellcheck disable=SC2155
 	local filename="$(basename "$1")"
 	local file_extension="${filename##*.}"
 	case "$file_extension" in
@@ -360,6 +363,5 @@ if [[ "$action" = "restore" ]]; then
 	echo -e "\n View current geoblocking status with '${yellow}${suite_name} status${no_color}' (may require 'sudo').\n"
 fi
 
-debugexitmsg
 
 exit 0
