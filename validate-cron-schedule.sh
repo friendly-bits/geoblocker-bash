@@ -17,8 +17,10 @@
 me=$(basename "$0")
 suite_name="geoblocker-bash"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC2015
 [[ -n "$script_dir" ]] && cd "$script_dir" || { echo "Error: Couldn't cd into '$script_dir'." >&2; exit 1; }
 
+# shellcheck source=geoblocker-bash-common
 source "$script_dir/${suite_name}-common" || { echo "Error: Can't find ${suite_name}-common." >&2; exit 1; }
 
 # **NOTE** that some functions and variables are sourced from the *common script
@@ -60,7 +62,7 @@ while getopts ":x:hd" opt; do
 	case $opt in
 	x) sourceline=$OPTARG;;
 	h) usage; exit 0;;
-	d) debug="-d";;
+	d) debugmode="-d";;
 	\?) usage; exit 1;;
 	esac
 done
@@ -90,7 +92,7 @@ validateNum() {
 		return 1
 	elif [[ "$num" = '*' ]] ; then
 		return 0
-	elif [[ -n "$(echo $num | sed 's/[[:digit:]]//g')" ]] ; then
+	elif [[ -n "${num//[[:digit:]]/}" ]] ; then
 		return 1
 	elif [[ "$num" -lt "$min" || "$num" -gt "$max" ]] ; then
 		return 1
@@ -150,7 +152,7 @@ validateField() {
 	if [[ "${fieldString:0:1}" = "-" || "${fieldString: -1}" = "-" ]]; then
 		err="Invalid input '$fieldString' for field $fieldName: it starts or ends with '-' ."
 		[[ -z "$errors_str" ]] && errors_str="$err" || errors_str="$errors_str \n$err"
-		let errors++
+		(( errors++ ))
 		return 1
 	fi
 
@@ -158,7 +160,7 @@ validateField() {
 	if [[ "${fieldString:0:1}" = "," || "${fieldString: -1}" = "," ]]; then
 		err="Invalid input '$fieldString' for field $fieldName : it starts or ends with ',' ."
 		[[ -z "$errors_str" ]] && errors_str="$err" || errors_str="$errors_str \n$err"
-		let errors++
+		(( errors++ ))
 		return 1
 	fi
 
@@ -177,7 +179,7 @@ validateField() {
 					# if that fails, the segment is invalid - return 1 and exit the function
 					err="Invalid value '$segment' in field: $fieldName."
 					[[ -z "$errors_str" ]] && errors_str="$err" || errors_str="$errors_str \n$err"
-					let errors++
+					(( errors++ ))
 					return 1
 				fi
 			fi
@@ -185,12 +187,12 @@ validateField() {
 			# segment validation was successful
 
 			# segmentsnum is used to count dash-separated segments in a slice
-			let segmentsnum++
+			(( segmentsnum++ ))
 			# segmentsnum_field is used to count all segments in a field
-			let segmentsnum_field++
+			(( segmentsnum_field++ ))
 			if [[ "$segment" = "*" ]]; then
 				# count asterisks for later verification that the field containing it doesn't contain any additional segments
-				let asterisknum_field++
+				(( asterisknum_field++ ))
 			fi
 		done
 
@@ -198,7 +200,7 @@ validateField() {
 		if [[ "$segmentsnum" -gt 2 ]]; then
 			err="Invalid value '$slice' in $fieldName '$fieldString'."
 			[[ -z "$errors_str" ]] && errors_str="$err" || errors_str="$errors_str \n$err"
-			let errors++
+			(( errors++ ))
 			return 1
 		fi
 	done
@@ -207,7 +209,7 @@ validateField() {
 	if [[ "$asterisknum_field" -gt 0 && "$segmentsnum_field" -gt 1 ]]; then
 		err="Invalid $fieldName '$fieldString'."
 		[[ -z "$errors_str" ]] && errors_str="$err" || errors_str="$errors_str \n$err"
-		let errors++
+		(( errors++ ))
 		return 1
 	fi
 }
@@ -277,6 +279,5 @@ else
 	exitstatus=0
 fi
 
-debugexitmsg
 
 exit $exitstatus
