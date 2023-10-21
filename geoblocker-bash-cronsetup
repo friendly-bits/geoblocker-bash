@@ -18,8 +18,10 @@ me=$(basename "$0")
 
 suite_name="geoblocker-bash"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC2015
 [[ -n "$script_dir" ]] && cd "$script_dir" || { echo "$me: Error: Couldn't cd into '$script_dir'." >&2; exit 1; }
 
+# shellcheck source=geoblocker-bash-common
 source "$script_dir/${suite_name}-common" || { echo "$me: Error: Can't source ${suite_name}-common." >&2; exit 1; }
 
 # **NOTE** that some functions and variables are sourced from the *common script
@@ -89,7 +91,7 @@ create_cron_job() {
 			[[ -z "$cron_schedule" ]] && die -nolog "Error: cron schedule in the config file is empty!"
 			# Validate cron schedule
 			debugprint "Validating cron schedule: '$cron_schedule'."
-			validate-cron-schedule.sh -x "$cron_schedule"; rv=$?
+			call_script "validate-cron-schedule.sh" -x "$cron_schedule"; rv=$?
 			if [[ "$rv" -ne 0 ]]; then
 				die -nolog "Error validating cron schedule '$cron_schedule'."
 			else
@@ -220,7 +222,5 @@ if [[ "$no_persistence" ]]; then
 	echo "To enable persistence, run the *install script again without the '-n' option." >&2
 fi
 
-
-debugexitmsg
 
 exit 0
