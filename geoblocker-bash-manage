@@ -17,8 +17,10 @@ me=$(basename "$0")
 
 suite_name="geoblocker-bash"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC2015
 [[ -n "$script_dir" ]] && cd "$script_dir" || { echo "$me: Error: Couldn't cd into '$script_dir'." >&2; exit 1; }
 
+# shellcheck source=geoblocker-bash-common
 source "$script_dir/${suite_name}-common" || { echo "$me: Error: Can't source ${suite_name}-common." >&2; exit 1; }
 
 # **NOTE** that some functions and variables are sourced from the *common script
@@ -123,7 +125,7 @@ report_status() {
 	# read iptables state and ipsets list into variables to avoid querying iptables and ipset multiple times
 	# these values are also re-used in some functions in the *common script
 	iptables_output="$(iptables -vL)"
-	[[ -z iptables_output ]] && die "Error: failed to get iptables state."
+	[[ -z $iptables_output ]] && die "Error: failed to get iptables state."
 	ipset_list="$(ipset list -n)"
 
 	echo -e "\n${yellow}Geoblocking status report:${no_color}"
@@ -131,14 +133,15 @@ report_status() {
 	echo -e "\nGeoblocking mode: ${yellow}${list_type}${no_color}."
 
 	# report default chain policies
-	input_policy="$(awk '$0 ~ "INPUT" {-F"policy| "; print $4}' <<< $iptables_output)"
-	forward_policy="$(awk '$0 ~ "FORWARD" {-F"policy| "; print $4}' <<< $iptables_output)"
+	input_policy="$(awk '$0 ~ "INPUT" {-F"policy| "; print $4}' <<< "$iptables_output")"
+	forward_policy="$(awk '$0 ~ "FORWARD" {-F"policy| "; print $4}' <<< "$iptables_output")"
 
 	if [[ -z "$input_policy" || -z "$forward_policy" ]]; then
 		die "Error: failed to determine current policies for INPUT and FORWARD chains."
 	fi
 
 	# check ipsets and iptables rules for active ccodes
+	# shellcheck disable=SC2119
 	active_ccodes="$(find_active_ccodes)"; rv=$?
 	if [[ -z "$active_ccodes" ]]; then
 		echo -e "\n${red}Warning${no_color}: no firewall rules found for any country codes!\n"
@@ -146,7 +149,8 @@ report_status() {
 		echo -e "$list_type is configured for country codes: '${yellow}$active_ccodes${no_color}'."
 	fi
 
-	check_ccodes_coherency; rv=$?
+	# shellcheck disable=SC2015
+	[[ -n "$config_coherent" ]] && rv=0 || { check_ccodes_coherency; rv=$?; }
 	if [[ "$rv" -ne 0 ]]; then
 		echo -e "\n${red}Error${no_color}: discrepancy detected between the config file and iptables rules!\n" >&2
 		[[ "$ipsets_incoherent" ]] && \
@@ -177,7 +181,7 @@ report_status() {
 	# report global iptables rules
 	iptables_rules_header="$(grep -m1 "prot opt" <<< "$iptables_output" | cut -b12-150)"
 
-	echo -e "\n${yellow}Global iptables rules${no_color} rules for $suite_name:"
+	echo -e "\n${yellow}Global iptables rules${no_color} for $suite_name:"
 	echo "------------------------------------------------------------------------------------------------------------------------"
 	echo -e "$iptables_rules_header"
 	echo "------------------------------------------------------------------------------------------------------------------------"
@@ -212,6 +216,7 @@ report_status() {
 
 		# check for persistence cron job
 		persistence_job="$(grep "${suite_name}-persistence" <<< "$cron_jobs")"
+		#shellcheck disable=SC2015
 		[[ -n "$persistence_job" ]] && echo -e "${green}Persistence cron job is active${no_color}." || {
 				echo -e "${purple}WARNING${no_color}: Persistence cron job is ${red}missing${no_color}."
 				echo -e "Geoblocking ${purple}will not work after reboot${no_color}, unless you have a different persistence tool installed."
@@ -237,15 +242,13 @@ reset_state_vars(){
 # unsets iptables_output and ipset_lists variables
 # these vars are used in functions of the sourced *common script to avoid querying the firewall multiple times when its state should not have changed
 # once we expect the state to have changed ( = after calling the -run script), we reset the vars in order to avoid using irrelevant data
-	unset iptables_output
-	unset ipset_lists
+	unset iptables_output ipset_lists
 }
 
 restore_from_config() {
 # restore ccodes from the config file
 
-	echo
-	echo -e "Warning: Config incoherence detected between the firewall current status and the config file."
+	echo -e "\nWarning: Config incoherence detected between the firewall current status and the config file."
 	[[ -n "$unexpected_ccodes" ]] && echo "Unexpected ccodes in the firewall: '$unexpected_ccodes'" >&2
 	[[ -n "$missing_ccodes" ]] && echo "Missing ccodes in the firewall: '$missing_ccodes'" >&2
 	echo "Would you like to re-apply the rules from the config file to fix this?"
@@ -264,7 +267,7 @@ restore_from_config() {
 
 	echo "Restoring $list_type countries set '$config_ccodes' from the config file... "
 	ccodes_to_remove="$(merge_lists "$config_ccodes" "$unexpected_ccodes" "$ccodes_to_change")"
-	$run_command remove -o -c "$ccodes_to_remove"
+	call_script "$run_command" remove -o -c "$ccodes_to_remove"
 	[[ -n "$config_ccodes" ]] && $run_command add -o -c "$config_ccodes"
 
 	reset_state_vars
@@ -277,7 +280,7 @@ restore_from_config() {
 		[[ -n "$missing_ccodes" ]] && echo "Missing $list_type ccodes in the firewall: '$missing_ccodes'" >&2
 		[[ "$ipsets_incoherent" ]] && echo "Warning: discrepancy detected between existing geoblocking ipsets and geoblocking firewall rules!" >&2
 		# call the *backup script to initiate recovery from fault
-		${suite_name}-backup restore; rv=$?
+		call_script "${suite_name}-backup" restore; rv=$?
 
 		reset_state_vars
 		check_ccodes_coherency; rv1=$?; rv=$(( rv + rv1 ))
@@ -455,14 +458,13 @@ fi
 #### MAIN
 
 # check config coherency vs active ipsets and firewall rules before performing any action
-check_ccodes_coherency || restore_from_config
+unset config_coherent
+# shellcheck disable=SC2015
+check_ccodes_coherency && config_coherent="true" || restore_from_config
 
 if [[ "$action" = "status" ]]; then
 	report_status
-	unset list_type
-	unset debugmode
-	unset nolog
-	unset manualmode
+	unset list_type debugmode nolog manualmode
 	exit 0
 fi
 
@@ -545,7 +547,7 @@ else
 
 	### Call the *run script
 
-	$run_command "$action" -c "$ccodes_to_change"; rv=$?
+	call_script "$run_command" "$action" -c "$ccodes_to_change"; rv=$?
 
 	# positive return code means apply failure or another permanent error, except for 254
 	if [[ $rv -gt 0 && $rv -ne 254 ]]; then
@@ -558,6 +560,7 @@ else
 	fi
 
 	reset_state_vars
+	# shellcheck disable=SC2119
 	new_verified_ccodes="$(find_active_ccodes)"
 	failed_ccodes="$(find_lists_difference "$new_verified_ccodes" "$planned_ccodes")"
 
@@ -601,18 +604,13 @@ else
 	# if the requested schedule is invalid, -cronsetup will leave the existing actual cron job as is
 	setconfig "CronSchedule=$cron_schedule" || die "Failed to write the updated CronSchedule value to the config file"
 
-	${suite_name}-cronsetup; rv=$?
+	call_script "${suite_name}-cronsetup"; rv=$?
 	[[ "$rv" -ne 0 ]] && die "Error: Failed to create or update cron jobs."
 fi
 
 [[ ! "$in_install" ]] && echo
 
-debugexitmsg
 
-unset list_type
-unset debugmode
-unset nolog
-unset manualmode
-unset testmode
+unset list_type debugmode nolog manualmode testmode
 
 exit 0
