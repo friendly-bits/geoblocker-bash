@@ -1,4 +1,4 @@
-## Prelude:
+## **Prelude**
 - Most scripts display "usage" when called with the "-h" option. You can find out about some additional options specific to each script by running it with that option.
 
 ## **In detail**
@@ -61,7 +61,8 @@ The **-backup** script can be used individually. By default, it is launched by t
 
 ```geoblocker-bash-run remove -c <"country_codes">``` : Removes iplists, ipsets and iptables rules for specified countries.
 
-```geoblocker-bash-run update``` : intended for triggering from periodic cron jobs. Updates the ipsets for all country codes that had been previously configured. Also used by the reboot cron job to implement persistence.
+```geoblocker-bash-run update``` : Updates the ipsets for all country codes that had been previously configured. Intended for triggering from periodic cron jobs.
+```geoblocker-bash-run apply``` : Skips the fetch script, calls the *apply script to restore ipsets and firewall rules as configured. Used by the reboot cron job to implement persistence.
 
 **The -fetch script**
 - Fetches ipv4 subnets lists for given country codes from the regional internet registry (automatically selected based on the country).
