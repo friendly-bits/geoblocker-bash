@@ -10,8 +10,10 @@ me=$(basename "$0")
 
 suite_name="geoblocker-bash"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC2015
 [[ -n "$script_dir" ]] && cd "$script_dir" || { err="$me: Error: Couldn't cd into '$script_dir'."; echo "$err" >&2; exit 1; }
 
+# shellcheck source=geoblocker-bash-common
 source "$script_dir/${suite_name}-common" || { err="$me: Error: Can't source ${suite_name}-common."; echo "$err" >&2; exit 1; }
 
 # **NOTE** that some functions and variables are sourced from the *common script
@@ -27,7 +29,7 @@ $me
           in the list fetched from a regional internet registry for a given country code.
 
 Requires "jq" and "grepcidr" utilities.
-Requires GNU 'grep' and 'awk' utilities (most Linux distributions include these by default).
+Requires the ${suite_name}-fetch script.
 
 Usage: $me -c <country_code> -i <"ip [ip ... ip]"> [-d] [-h]
 
@@ -75,7 +77,7 @@ while getopts ":c:i:dh" opt; do
 	case $opt in
 	c) ccode=$OPTARG;;
 	i) arg_ipv4s=$OPTARG;;
-	d) debug=true;;
+	d) debugmode=true;;
 	h) usage; exit 0;;
 	\?) usage; die "Unknown option: '$OPTARG'." ;;
 	esac
@@ -92,28 +94,20 @@ shift $((OPTIND -1))
 
 export nolog=true
 
-# color escape codes
-red='\033[0;31m'
-green='\033[0;32m'
-yellow='\033[1;33m'
-purple='\033[0;35m'
-no_color='\033[0m'
-
 # convert to upper case
 ccode="${ccode^^}"
 
 ## only parsing the ipv4 section at this time
-family="ipv4"
+#family="ipv4"
 
 # using Perl regex syntax because grep is faster with it than with native grep syntax
 # regex compiled from 2 suggestions found here:
 # https://stackoverflow.com/questions/5284147/validating-ipv4-addresses-with-regexp
 ipv4_regex='^((25[0-5]|(2[0-4]|1\d|[1-9]|)\d)\.?\b){4}'
-mask_regex='(/([01]?\d\d?|2[0-4]\d|25[0-5]))$'
-subnet_regex="${ipv4_regex}${mask_regex}"
 
 ip_check_rv=0
 
+fetch_script="${script_dir}/${suite_name}-fetch"
 
 #### Checks
 
@@ -125,7 +119,7 @@ missing_deps="$(check_deps grepcidr jq)" || die "Error: missing dependencies: $m
 [[ -z "$arg_ipv4s" ]] &&	{ usage; die "Specify the ip addresses to check with '-i <\"ip_addresses\">'."; }
 
 # check for *fetch
-[[ ! -f  "${script_dir}/${suite_name}-fetch" ]] && die "Error: Can not find '${suite_name}-fetch'."
+[[ ! -f "$fetch_script" ]] && die "Error: Can not find '$fetch_script'."
 
 
 #### Main
@@ -150,8 +144,8 @@ for arg_ipv4 in $arg_ipv4s; do
 done
 
 # trim extra whitespaces
-validated_arg_ipv4s="$(awk '{$1=$1};1' <<< "$validated_arg_ipv4s")"
-invalid_arg_ipv4s="$(awk '{$1=$1};1' <<< "$invalid_arg_ipv4s")"
+validated_arg_ipv4s="$(trim_spaces "$validated_arg_ipv4s")"
+invalid_arg_ipv4s="$(trim_spaces "$invalid_arg_ipv4s")"
 
 # if $validated_arg_ipv4 is empty then validation of all ip's failed
 if [[ -z "$validated_arg_ipv4s" ]]; then
@@ -166,7 +160,7 @@ status_file="/tmp/fetched-status-$ccode.tmp"
 
 list_file="/tmp/iplist-$ccode.tmp"
 
-bash "${script_dir}/${suite_name}-fetch" -c "$ccode" -o "$list_file" -s "$status_file"
+bash "$fetch_script" -c "$ccode" -o "$list_file" -s "$status_file"
 
 # read *fetch results from the status file
 failed_ccodes="$(getstatus "$status_file" "failed_ccodes")" || { die "Error: Couldn't read value for 'ccodes_to_update' from status file '$status_file'."; }
@@ -199,13 +193,13 @@ for validated_arg_ipv4 in $validated_arg_ipv4s; do
 	[[ "$grepcidr_error" ]] && { rm "$list_file" &>/dev/null; die "Failed to process grepcidr results."; }
 
 	# increment the return value if matching didn't succeed for any reason
-	[[ "$true_grep_rv" -ne 0 ]] && let ip_check_rv++
+	[[ "$true_grep_rv" -ne 0 ]] && (( ip_check_rv++ ))
 done
 
 
 if [[ -n "$invalid_arg_ipv4s" ]]; then
 	echo -e "${red}Invalid${no_color} ipv4 addresses: '$invalid_arg_ipv4s'"
-	let ip_check_rv++
+	(( ip_check_rv++ ))
 fi
 
 rm "$list_file" &>/dev/null
