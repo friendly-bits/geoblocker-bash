@@ -1,11 +1,47 @@
 #!/bin/bash
+# shellcheck disable=SC2034
 
 # geoblocker-bash-common
 
 # Common functions and variables for geoblocker-bash suite
 # This script does nothing if called directly. It is sourced from other scripts.
 
+
 ### Functions
+
+call_script() {
+# calls antother script and makes sure that the config file cache resets on exit
+# the reasons for this function:
+# 1) for debug
+# 2) to minimize config file reads. the only feasible way to do this is to cache the config file contents in a variable.
+#       bash doesn't allow to propagate changes made to a variable by a daughter script back to the parent script.
+#       so we need to track when the daughter script exits, and then reset the parent script's $config_var.
+#       once $config_var gets reset, getconfig() function will know that it needs to re-read the config file.
+
+# uncomment for debug
+#	local arguments=("$@")
+#	debugprint "\033[1;33mStarted *call_script* with args: $(for arg in "${arguments[@]}"; do printf "%s" "'$arg' "; done)\033[0m"
+
+
+	local script_to_call="$1"
+	shift
+
+	# call the daughter script, then reset the $config_file var to force re-read of the config file next time getconfig() gets called
+	[[ -n "$script_to_call" ]] && { bash "$script_to_call" "$@"; rv=$?; export config_var=""; } || rv=1
+	set_script_names
+	debugexitmsg
+
+	return $rv
+}
+
+set_script_names(){
+# sets some strings we use for debug
+	# shellcheck disable=SC2154
+	me_base="$(basename "$me")"
+	export me_short="${me_base//${suite_name}-/}"
+	export me_short_cap="${me_short^^}"
+}
+
 
 check_deps(){
 # tests commands specified in arguments and complains if something's missing (by echo'ing it out in the end and setting return value to 1)
@@ -35,20 +71,20 @@ check_deps(){
 			local deps_alt="$dep"
 			# process all |-delimited alternatives
 			for dep_alt in $deps_alt; do
-				let test_alt_cnt++
-				! command -v "$dep" &> /dev/null && let err_alt_cnt++
+				(( test_alt_cnt++ ))
+				! command -v "$dep" &> /dev/null && (( err_alt_cnt++ ))
 				[[ -z "$alt_dep_list" ]] && alt_dep_list="'$dep_alt'" || alt_dep_list="$alt_dep_list or '$dep_alt'"
 			done
 
 			if [[ "$err_alt_cnt" -ge "$test_alt_cnt" ]]; then
 				[[ -z "$missing_deps" ]] && missing_deps="$alt_dep_list" || missing_deps="${missing_deps}, $alt_dep_list"
-				let err++
+				(( err++ ))
 			fi
 
 		else
 			if ! command -v "$dep" &> /dev/null; then
 				[[ -z "$missing_deps" ]] && missing_deps="'$dep'" || missing_deps="${missing_deps}, '$dep'"
-				let err++
+				(( err++ ))
 			fi
 		fi
 	done
@@ -95,7 +131,7 @@ debugentermsg() {
 }
 
 debugexitmsg() {
-	[[ -n "$parent_short_cap" ]] && debugprint "\033[1;33mBack to *$parent_short_cap*...\033[0m"
+	[[ -n "$me_short_cap" ]] && debugprint "\033[1;33mBack to *$me_short_cap*...\033[0m"
 }
 
 die() {
@@ -118,7 +154,6 @@ die() {
 			[[ ! "$nolog" ]] && logger -t "$me" "$arg"
 		done
 	fi
-	[[ -n "$parent_short_cap" ]] && debugprint "\033[1;33mBack to $parent_short_cap...\033[0m"
 	echo >&2
 	exit "$rv"
 }
@@ -126,16 +161,28 @@ die() {
 getconfig() {
 # reads a field named $1 from the config file $conf_file (or from file $2 if specified)
 # outputs the resulting field
+# if $conf_file=$2 then re-uses its value in order to minimiza file reads
 # returns 0 if successful, 1 if missing arguments, 2 if key is not present in the config file
-	key_conf="$1"
-	target_file="${2:-$conf_file}"
+	local key_conf="$1"
+	local target_file="${2:-$conf_file}"
 	[[ -z "$key_conf" || -z "$target_file" ]] && return 1
 
-	entry="$(grep "$key_conf=" "$target_file" 2>/dev/null)" || return 2
+	local conf=""
 
-	value_conf="${entry//$key_conf=}"
+	# re-use existing $config_var (if it's set) to minimize file reads, unless an unusual target file is specified
+	if [[ "$target_file" = "$conf_file" ]]; then
+		conf="${config_var:-"$(<"$target_file")"}" || return 1
+	else
+		conf="$(<"$target_file")"
+	fi
+
+	local conf_line=""
+	conf_line="$(grep "$key_conf=" <<< "$conf" 2>/dev/null)" || return 2
+
+	local value_conf="${conf_line//$key_conf=}"
 	printf "%s" "$value_conf"
 
+#[[ -z "$2" ]] && debugprint "getconfig: key - '$key_conf', value - '$value_conf'"
 	return 0
 }
 
@@ -177,7 +224,7 @@ setconfig() {
 		   		if [[ "$key_conf" = "target_file" ]]; then
 					arguments_target_file="$value_conf"
 				else
-					[[ -n "$key_conf" ]] && arguments_arr["$key_conf"]="$(awk '{$1=$1};1' <<< "$value_conf")"
+					[[ -n "$key_conf" ]] && arguments_arr["$key_conf"]="$(trim_spaces "$value_conf")"
 				fi
 			fi
 		done
@@ -224,61 +271,75 @@ setstatus() {
 	return $rv
 }
 
+trim_spaces() {
+	set -f
+	# shellcheck disable=SC2048,2086
+	set -- $*	# no quotes on purpose
+	local IFS_OLD="$IFS"
+	IFS=$' \t\n'
+	local trimmed_strings="$*"
+	set +f
+	IFS="$IFS_OLD"
+	printf "%s" "$trimmed_strings"
+}
+
 sanitize_string() {
-# trims leading, trailing, and extra in-between whitespaces in input string
-# replaces new lines (if any) with spaces
-# also sorts and removes duplicates
-	input_str="$*"
-	result_str="$(printf "%s" "$input_str" | tr ' ' '\n' | sort -ibu |  tr '\n' ' ' | awk '{$1=$1};1')"
-	printf "%s" "$result_str"
+# 1) replaces tabs with spaces in the input string
+# 2) trims leading, trailing, and extra in-between whitespaces
+# 3) replaces new lines (if any) with spaces
+# 4) sorts and removes duplicates
+	local input_str="$*"
+	local input_space_sep="${input_str//$'\t'/ }"	# replace tabs with spaces
+	# shellcheck disable=SC2155
+	local input_sorted="$(printf "%s" "${input_space_sep// /$'\n'}" | sort -ibu)"	# replace spaces with newlines -> sort and remove duplicates
+	local sorted_str="${input_sorted//$'\n'/ }"	# replace newlines with spaces
+	printf "%s" "$(trim_spaces "$sorted_str")"	# trim extra spaces and print out
 }
 
 find_lists_intersection() {
 # finds duplicates-free intersection between space-delimited fields in input strings $1 and $2,
 #      and outputs the intersection as a string
-
+	local list1=""; local list2=""; local intersect_str=""
 	# convert space-separated lists to newline-separated sorted lists
-	str1="$(printf "%s\n" "$1" | tr ' ' '\n' | sort -u)"
-	str2="$(printf "%s\n" "$2" | tr ' ' '\n' | sort -u)"
-
+	list1="$(printf "%s\n" "${1// /$'\n'}" | sort -u)"
+	list2="$(printf "%s\n" "${2// /$'\n'}" | sort -u)"
 
 	# piping into comm is not allowed so using the "<()" constructions
 	# result is space separated intersection list
-	intersect_str="$(comm -12 <(printf "%s" "$str1") <(printf "%s" "$str2"))"
-	result_str="$(sanitize_string "$intersect_str")"
-	printf "%s" "$result_str"
+	intersect_str="$(comm -12 <(printf "%s" "$list1") <(printf "%s" "$list2"))"
+	printf "%s" "$(trim_spaces "$intersect_str")"
 }
 
 find_lists_difference() {
 # finds space-delimited fields that exist in strings $1 or $2 but not both
 #      and outputs the difference as a string
+	local list1=""; local list2=""; local diff_list=""
 
 	# convert space-separated lists to newline-separated sorted lists
-	str1="$(printf "%s\n" "$1" | tr ' ' '\n' | sort -u)"
-	str2="$(printf "%s\n" "$2" | tr ' ' '\n' | sort -u)"
+	list1="$(printf "%s\n" "${1// /$'\n'}" | sort -u)"
+	list2="$(printf "%s\n" "${2// /$'\n'}" | sort -u)"
 
 	# can't pipe into comm so using the "<()" constructions
 	# result is space separated difference list
-	diff_str="$(comm -3 <(printf "%s" "$str1") <(printf "%s" "$str2"))"
-	result_str="$(sanitize_string "$diff_str")"
-	printf "%s" "$result_str"
+	diff_list="$(comm -3 <(printf "%s\n" "$list1") <(printf "%s\n" "$list2"))"
+	printf "%s" "$(trim_spaces "$diff_list")"
 }
 
 subtract_list_a_from_b() {
 # removes all space-delimited fields found in string $1 from string $2, outputs the result as a string
+	local list1=""; local list2=""
 
-	str1="$1"; str2="$2"
+	list1="$1"; list2="$2"
 	while read -r field_str; do
-		str2="${str2//$field_str/}"
-	done < <(printf "%s\n" "$str1" | tr ' ' '\n' )
-	result_str="$(sanitize_string "$str2")"
-	printf "%s" "$result_str"
+		list2="${list2//$field_str/}"
+	done < <(printf "%s\n" "${list1// /$'\n'}")
+	printf "%s" "$(trim_spaces "$list2")"
 }
 
 merge_lists() {
 # merges string lists then sanitizes the list by removing extra white spaces and replacing \n with " "
 	merged_list="$*"
-	result_list="$(sanitize_string "$merged_list")"
+	result_list="$(trim_spaces "$merged_list")"
 	printf "%s" "$result_list"
 }
 
@@ -289,11 +350,13 @@ check_ccodes_coherency() {
 	debugprint "Verifying config coherency..."
 
 	# check for a valid list type
+	# shellcheck disable=SC2154
 	[[ "$list_type" != "whitelist" && "$list_type" != "blacklist" ]] &&  die "Error: Unrecognized list type '$list_type'!"
 
 	# initialize variables
 	unexpected_ccodes=""; missing_ccodes=""
 	config_ccodes="$(getconfig "Countries")" || die "Error: Couldn't read value for Countries from the config file."
+	# shellcheck disable=SC2119
 	active_ccodes="$(find_active_ccodes)" || return 1
 #	debugprint "active_ccodes: '$active_ccodes'"
 #	debugprint "config_ccodes: '$config_ccodes'"
@@ -312,6 +375,7 @@ check_ccodes_coherency() {
 	fi
 }
 
+# shellcheck disable=SC2120
 find_active_ccodes() {
 # checks current ipsets and iptables rules for geoblocker
 # returns a list of active ccodes (country codes)
@@ -342,6 +406,7 @@ find_active_ccodes() {
 		printf "%s" "$ccodes_intersection"
 	fi
 
+	# shellcheck disable=SC2015
 	[[ -z "$ccodes_difference" ]] && return 0 || { ipsets_incoherent="true"; return 1; }
 }
 
@@ -365,7 +430,7 @@ sanitize_args() {
 	arguments=()
 	for arg in "$@"; do
 		# trim leading and trailing whitespaces
-		arg="$(awk '{$1=$1};1' <<< "$arg")"
+		arg="$(trim_spaces "$arg")"
 		# add to array while discarding empty arguments
 		[[ -n "$arg" ]] && arguments+=("$arg")
 	done
@@ -392,7 +457,8 @@ validate_ccode(){
 	cca2_path="${2:-"$conf_dir/cca2.list"}"
 	local rv=0
 	local checked_ccode=""
-	local ccode_list="$(<"$cca2_path")" &>/dev/null
+	# shellcheck disable=SC2155
+	local ccode_list="$(<"$cca2_path")"
 	[[ -z "$ccode_list" ]] && { echo "Error: \$ccode_list variable is empty. Perhaps cca2.list is missing?" >&2; return 1; } # if the list variable is empty, revert the installation
 
 	checked_ccode="$(grep -x "$1" <<< "$ccode_list" 2>/dev/null)"; rv=$?
@@ -438,6 +504,7 @@ check_cron() {
 			(systemctl is-enabled cron.service) &>/dev/null; rv=$? ;;
 		* )
 			# check for cron or crond in running processes (filtering out the the grep process itself as it has the word cron in it)
+			# shellcheck disable=SC2009
 			ps aux | grep -i '/crond$\|/cron$\|/crond \|cron ' | grep -v "grep" &>/dev/null; rv=$? ;;
 	esac
 	return "$rv"
@@ -467,17 +534,6 @@ yellow='\033[1;33m'
 purple='\033[0;35m'
 no_color='\033[0m'
 
-
-me="$(basename "$0")"
-me_short="${me//${suite_name}-/}"
-me_short_cap="${me_short^^}"
-
-parent="$(basename "$(ps -o args= $PPID)" 2>/dev/null | awk -v RS='/| ' '/^.*'"$suite_name"'/ {a=$0} END{print a}')"
-
-[[ "$parent" = "$me" ]] && parent=""
-parent_short="${parent//"${suite_name}-"/}"
-parent_short_cap="${parent_short^^}"
-
 conf_dir="/etc/${suite_name}"
 conf_file="${conf_dir}/${suite_name}.conf"
 
@@ -487,6 +543,8 @@ missing_ccodes=""
 ipsets_incoherent=""
 
 ### Main
+set_script_names
+
 arguments=("$@")
 
 return 0
