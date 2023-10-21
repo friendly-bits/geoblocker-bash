@@ -2,6 +2,8 @@
 Geoip blocker for Linux focusing on reliability, efficiency and ease of use. Suite of Bash scripts which utilizes the 'iptables' firewall management utility (nftables support will get implemented eventually).
 
 Should work on every modern'ish desktop/server Linux distribution, doesn't matter which hardware (even works on embedded to some degree).
+
+Currently only supports ipv4 but ipv6 support is likely coming (you can speed it up by opening an issue requesting it).
  
 ## Features
 _(for installation instructions, skip to the [**Installation**](#Installation) section)_
@@ -63,8 +65,8 @@ _(for installation instructions, skip to the [**Installation**](#Installation) s
 
 <details> <summary>Read more:</summary>
  
- - Embedded hardware-oriented distributions (like OpenWRT) generally tend to use stripped-down versions of standard utilities by default, so these may need to upgrade to full versions or at least less-stripped-down versions of some utilities. For more info on OpenWRT compatibiliy, read the (OPENWRT.md)[/OPENWRT.MD] file.
- - Some distros have their own firewall management utilities and even implement their own firewall persistence across reboots. The suite should work on these, too, but you probably should disable the cron-based persistence solution (more info in the [Pre-requisites](#Pre-requisites) section).
+ - Embedded hardware-oriented distributions (like OpenWRT) generally tend to use trimmed-down versions of standard utilities by default, so these may need to upgrade to full versions or at least less-trimmed-down versions of some utilities. For more info on OpenWRT compatibiliy, read the [OPENWRT.md](/OPENWRT.MD) file.
+ - Some (mostly commercial) distros have their own firewall management utilities and even implement their own firewall persistence across reboots. The suite should work on these, too, provided they use iptables as the back-end, but you probably should disable the cron-based persistence solution (more info in the [Pre-requisites](#Pre-requisites) section).
 </details>
 
 ## **Installation**
@@ -102,7 +104,7 @@ _<details><summary>Examples:</summary>_
 
 - **NOTE**: If your distro (or you) have enabled automatic iptables and ipsets persistence, you can skip the built-in cron-based persistence feature by adding the ```-n``` (for no-persistence) option when running the -install script.
 
-<details><summary>Verifying persistence</summary>
+<details><summary>**Verifying persistence**</summary>
 
 Generally automatic persistence of iptables and ipsets is not enabled for Debian or Ubuntu-based desktop distros (and probalby for most others). The easiest way to make sure is running the -install script with the ```-n``` option (for no-persistence) like so:
 
@@ -156,9 +158,13 @@ additional mandatory pre-requisites: ```ipset jq``` (also needs ```wget``` or ``
 
 _<details><summary>Examples for popular distributions</summary>_
 
-Debian, Ubuntu, Linux Mint and any other Debian/Ubuntu derivative: ```sudo apt install ipset jq```
+**Debian, Ubuntu, Linux Mint** and any other Debian/Ubuntu derivative: ```sudo apt install ipset jq```
 
-OpenSUSE: you may (?) need to add repositories to install jq and ipset as explained here:
+**Arch**: (you need to have the Extra repository enabled) ```sudo pacman -S ipset jq```
+
+**Fedora**: Update the database with ```sudo dnf makecache --refresh```. Next, install the dependencies with ```sudo dnf -y install ipset jq```
+
+**OpenSUSE**: you may (?) need to add repositories to install jq and ipset as explained here:
 
 https://software.opensuse.org/download/package?package=jq&project=utilities
 https://software.opensuse.org/download/package?package=ipset&project=security%3Anetfilter
@@ -167,16 +173,14 @@ then run ```sudo zypper install ipset jq```
 
 (if you have verified information, please le me know)
 
-Arch: (you need the Extra repository enabled) ```sudo pacman -S ipset jq```
 
-Fedora: Update yum database with dnf with ```sudo dnf makecache --refresh```. Next, install the dependencies with ```sudo dnf -y install ipset jq```
+**RHEL/CentOS**: you need the EPEL Repository for ```jq```. I'm not an expert on RHEL and CentOS, so you'll need to figure some things out by yourself (and please let me know if you do so I update this guide), including how to add that repository to your specific OS version. Once the repo is added, run ```sudo yum update -y```. Next, install the dependencies with ```sudo yum install jq ipset```. I suspect it will then work as is but you may (?) need to also make some config changes, epsecially if using a specialized firewall management utility such as 'scf' which may preserve the iptables and ipsets between reboots (so you would probably want to disable the suite's cron-based persistence feature). Anyway, I'd recommend after installing the suite, reboot your computer, wait 30 seconds and then run ```sudo geoblocker-bash status``` and see if it reports any issues.
 
-RHEL/CentOS: you need the EPEL Repository for ```jq```. I'm not an expert on RHEL and CentOS, so you'll need to figure some things out by yourself (and please let me know if you do so I update this guide), including how to add that repository to your specific OS version. Once the repo is added, run ```sudo yum update -y```. Next, install the dependencies with ```sudo yum install jq ipset```. I suspect it will then work as is but you may (?) need to also make some config changes, epsecially if using a specialized firewall management utility such as 'scf' which may preserve the iptables and ipsets between reboots (so you won't need to enable the suite's persistence feature). Anyway, I'd recommend after installing the suite, reboot your computer, wait 30 seconds and then run ```sudo geoblocker-bash status``` and see if it reports any issues.
-
+**OpenWRT**: Read the [OPENWRT.md](/OPENWRT.md) file.
 </details>
 
 
-optional: the check-ip-in-registry.sh script requires grepcidr. install it with ```sudo apt install grepcidr```
+**Optional**: the _check-ip-in-registry.sh_ script requires grepcidr. install it with ```sudo apt install grepcidr``` on Debian and derivatives. For other distros, look it up.
 
 ## **Notes**
 For some helpful notes about using this suite, read [NOTES.md](/NOTES.md).
@@ -186,6 +190,9 @@ For more detailed description of each script, read [DETAILS.md](/DETAILS.md).
 
 ## **Data safety**
 For notes about data safety (mostly intended for security nerds), read [DATASAFETY.md](/DATASAFETY.md).
+
+## **OpenWRT**
+For compatibility with OpenWRT, read [OPENWRT.md](/OPENWRT.md). Help needed!
 
 ## **Last but not least**
 
