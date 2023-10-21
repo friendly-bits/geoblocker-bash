@@ -27,9 +27,11 @@ me=$(basename "$0")
 
 suite_name="geoblocker-bash"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC2015
 [[ -n "$script_dir" ]] && cd "$script_dir" || { err="$me: Error: Couldn't cd into '$script_dir'."; echo "$err" >&2; \
 	[[ ! "$nolog" ]] && logger "$err"; exit 1; }
 
+# shellcheck source=geoblocker-bash-common
 source "$script_dir/${suite_name}-common" || { err="$me: Error: Can't source ${suite_name}-common."; echo "$err" >&2; \
 	[[ ! "$nolog" ]] && logger "$err"; exit 1; }
 
@@ -138,7 +140,7 @@ fi
 ccodes="${ccodes//\'}"
 
 # trim extra whitespaces
-ccodes="$(awk '{$1=$1};1' <<< "$ccodes")"
+ccodes="$(trim_spaces "$ccodes")"
 
 ccodes_cnt=$(echo "$ccodes" | wc -w)
 
@@ -178,8 +180,8 @@ missing_deps="$(check_deps jq iptables-save iptables-restore ipset ${suite_name}
 
 [[ -z "$list_type" ]] && die "\$list_type variable should not be empty! Something is wrong!"
 
-#### MAIN
 
+#### MAIN
 
 ### Fetch ip lists
 
@@ -188,7 +190,7 @@ if [[ "$action_run" =~ ^(update|add)$ ]]; then
 	# mark all ccodes as failed in the status file before launching *fetch. if *fetch completes successfully, it will reset this
 	setstatus "$status_file" "failed_ccodes=$ccodes" || die "Error: Failed to write to status file '$status_file'."
 
-	${suite_name}-fetch -c "$ccodes" -p "$iplist_dir" -s "$status_file"
+	call_script "${suite_name}-fetch" -c "$ccodes" -p "$iplist_dir" -s "$status_file"
 
 	# read *fetch results from the status file
 	ccodes_to_update="$(getstatus "$status_file" "ccodes_to_update")" || { die "Error: Couldn't read value for 'ccodes_to_update' from status file '$status_file'."; }
@@ -218,7 +220,7 @@ else
 		[[ ! "$manualmode" ]] && { check_ccodes_coherency; rv=$?; }
 		if [[ $rv -eq 0 ]]; then
 			# call the backup script to create a known-good backup of ipsets and iptables state
-			${suite_name}-backup create-backup
+			call_script "${suite_name}-backup" create-backup
 		else
 			echolog -err "Warning: actual $list_type firewall config differs from the config file!"
 			echolog -err "Please run the *manage script to restore config coherency!"
@@ -231,7 +233,7 @@ else
 		debugprint "Skipping backup of current firewall state."
 	fi
 
-	${suite_name}-apply "$action_apply" -c "$ccodes_to_update"; rv=$?
+	call_script "${suite_name}-apply" "$action_apply" -c "$ccodes_to_update"; rv=$?
 
 #	[[ "$testmode" ]] && rv=1
 
@@ -255,10 +257,7 @@ else
 	rv=0
 fi
 
-debugexitmsg
 
-unset debugmode
-unset list_type
-unset config_ccodes
+unset debugmode list_type config_ccodes
 
 exit "$rv"
