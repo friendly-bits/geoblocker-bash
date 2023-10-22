@@ -17,6 +17,7 @@ _(for installation instructions, skip to the [**Installation**](#Installation) s
 * Implements optional (enabled by default) persistence of geoblocking across system reboots and automatic updates of the ip lists.
 
 **Reliability**:
+- Does not depend on 3rd parties for supplying the ip lists (while most other similar projects do), which has reliability and security implications.
 - Downloaded ip lists go through validation process, which safeguards against application of corrupted or incomplete lists to the firewall.
 
 <details> <summary>Read more:</summary>
