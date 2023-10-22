@@ -1,7 +1,7 @@
 # geoblocker-bash
 Geoip blocker for Linux focusing on reliability, compatibility, efficiency and ease of use. Suite of Bash scripts which utilizes the 'iptables' firewall management utility (nftables support will get implemented eventually).
 
-Should work on every modern'ish desktop/server Linux distribution, doesn't matter which hardware (even works on embedded to some degree).
+Should work on every modern'ish desktop/server Linux distribution, doesn't matter which hardware. Works on embedded, as long as it has the pre-requisites. For OpenWRT and similar distributions, read the [OPENWRT.md](/OPENWRT.md) file.
 
 Currently only supports ipv4 but ipv6 support is likely coming (you can speed it up by opening an issue requesting it).
  
@@ -66,7 +66,7 @@ _(for installation instructions, skip to the [**Installation**](#Installation) s
 
 <details> <summary>Read more:</summary>
  
- - Embedded hardware-oriented distributions (like OpenWRT) generally tend to use trimmed-down versions of standard utilities by default, so these may need to upgrade to full versions or at least less-trimmed-down versions of some utilities. For more info on OpenWRT compatibiliy, read the [OPENWRT.md](/OPENWRT.MD) file.
+ - Embedded hardware-oriented distributions (like OpenWRT) generally tend to use trimmed-down versions of standard utilities by default, so these may need to upgrade to full versions or at least less-trimmed-down versions of some utilities. For more info on OpenWRT compatibiliy, read the [OPENWRT.md](/OPENWRT.md) file.
  - Some (mostly commercial) distros have their own firewall management utilities and even implement their own firewall persistence across reboots. The suite should work on these, too, provided they use iptables as the back-end, but you probably should disable the cron-based persistence solution (more info in the [Pre-requisites](#Pre-requisites) section).
 </details>
 
