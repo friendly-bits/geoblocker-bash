@@ -47,7 +47,7 @@ The **-backup** script can be used individually. By default, it is launched by t
 
 ```geoblocker-bash <add|remove> [-c <country_code>]``` :
 * Adds or removes the specified country codes to/from the config file
-* Calls the -run script to fetch and apply the ip lists
+* Calls the -run script to fetch and apply the ip lists for specified countries to the firewall (or to remove them)
 
 ```geoblocker-bash status```
 * Displays information on the current state of geoblocking
