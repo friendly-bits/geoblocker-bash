@@ -95,5 +95,5 @@ The **-backup** script can be used individually. By default, it is launched by t
 
 **The validate-cron-schedule.sh script** is used by the -cronsetup script. It accepts a cron schedule expression and attempts to make sure that it conforms to the crontab format. Technically, it can be used outside the suite as it doesn't depend on the -common script. This is a heavily modified and improved version of a prior 'verifycron' script I found circulating on the internets (not sure who wrote it so can't give them credit).
 
-**The check-ip-in-registry.sh script** can be used to verify that a certain ip address belongs to a subnet found in regional registry's records for a given country. It is intended for manual use and is not called from other scripts. It does depend on the *fetch script, and on the *common script, and in addition, it requires the grepcidr utility.
+**The check-ip-in-registry.sh script** can be used to verify that a certain ip address belongs to a subnet found in regional registry's records for a given country. It is intended for manual use and is not called from other scripts. It does depend on the *fetch script, and on the *common script (they just need to be in the same directory), and in addition, it requires the grepcidr utility installed in your system.
 
