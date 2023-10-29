@@ -1,5 +1,7 @@
 ## **Prelude**
+- This document mainly intends to give some info on the purspose and basic use cases of each script and how they work in tandem.
 - Most scripts display "usage" when called with the "-h" option. You can find out about some additional options specific to each script by running it with that option.
+- If you understand some shell code and would like to learn more about some of the scripts, you are most welcome to read the code. It has a lot of comments and I hope that it's fairly easily readable.
 
 ## **Overview**
 The suite currently includes 12 scripts:
