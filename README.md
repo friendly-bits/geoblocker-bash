@@ -150,7 +150,7 @@ _<details><summary>Examples:</summary>_
 ## **Pre-requisites**:
 (if a pre-requisite is missing, the -install script will tell you which)
 - bash v4.0 or higher (should be included with any relatively modern linux distribution)
-- Linux. Tested on Debian-like systems and occasionally on OpenWRT, should work on any distribution.
+- Linux. Tested on Debian-like systems and occasionally on [OPENWRT](/OPENWRT.md), should work on any distribution.
 - iptables - firewall management utility (nftables support will likely get implemented later)
 - standard (mostly GNU) utilities including awk, sed, grep, bc, comm, ps which are included with every server/desktop linux distro. For embedded (like OpenWRT), may require some of the GNU coreutils full (or less trimmed-down) versions and possibly additional packages.
 - for persistence and autoupdate functionality, requires the cron service to be enabled
