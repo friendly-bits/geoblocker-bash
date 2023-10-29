@@ -107,7 +107,7 @@ _<details><summary>Examples:</summary>_
 
 <details><summary>**Verifying persistence**</summary>
 
-Generally automatic persistence of iptables and ipsets is not enabled for Debian or Ubuntu-based desktop distros (and probalby for most others). The easiest way to make sure is running the -install script with the ```-n``` option (for no-persistence) like so:
+Generally automatic persistence of iptables and ipsets is not enabled for Debian or Ubuntu-based desktop distros by default (and probalby for most others). This is why the suite creates a cron job to re-apply geoblocking upon reboot. The easiest way to make sure whether your particular distro has firewall persistence enabled without the cron job is running the -install script with the ```-n``` option (for no-persistence) like so:
 
 ```sudo bash geoblocker-bash-install -m <whitelist|blacklist> -c <"country_codes"> -n```
 
