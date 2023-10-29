@@ -94,7 +94,7 @@ _Example: (for US):_ ```bash check-ip-in-registry.sh -c US -i "8.8.8.8 8.8.4.4"`
 
 </details>
 
-**5)** run ```sudo bash geoblocker-bash-install -m <whitelist|blacklist> -c <"country_codes">```
+**5)** run ```sudo bash geoblocker-bash-install -m <whitelist|blacklist> -c <"country_codes">```. The *install script will gracefully fail if it detects that you are missing some pre-requisites and tell you which.
 _<details><summary>Examples:</summary>_
 
 - example (whitelist Germany and block all other countries): ```sudo bash geoblocker-bash-install -m whitelist -c DE```
