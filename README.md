@@ -90,7 +90,7 @@ _Example: (for US):_ ```bash check-ip-in-registry.sh -c US -i "8.8.8.8 8.8.4.4"`
 
 - If intended use is blacklist and you know in advance some of the ip addresses you want to block, you can use check-ip-in-registry.sh script to verify that those ip addresses are included in the list fetched from the registry. The syntax is the same as above.
 
-**Note**: check-ip-in-registry.sh has an additional pre-requisite: grepcidr. Install it with ```sudo apt install grepcidr```.
+**Note**: check-ip-in-registry.sh has an additional pre-requisite: grepcidr. Install it with your distro's package manager.
 
 </details>
 
