@@ -163,7 +163,7 @@ _<details><summary>Examples for popular distributions</summary>_
 
 **Arch**: (you need to have the Extra repository enabled) ```sudo pacman -S ipset jq```
 
-**Fedora**: Update the database with ```sudo dnf makecache --refresh```. Next, install the dependencies with ```sudo dnf -y install ipset jq```
+**Fedora**: ```sudo dnf -y install ipset jq```
 
 **OpenSUSE**: you may (?) need to add repositories to install jq and ipset as explained here:
 
@@ -173,7 +173,6 @@ https://software.opensuse.org/download/package?package=ipset&project=security%3A
 then run ```sudo zypper install ipset jq```
 
 (if you have verified information, please le me know)
-
 
 **RHEL/CentOS**: you need the EPEL Repository for ```jq```. I'm not an expert on RHEL and CentOS, so you'll need to figure some things out by yourself (and please let me know if you do so I update this guide), including how to add that repository to your specific OS version. Once the repo is added, run ```sudo yum update -y```. Next, install the dependencies with ```sudo yum install jq ipset```. I suspect it will then work as is but you may (?) need to also make some config changes, epsecially if using a specialized firewall management utility such as 'scf' which may preserve the iptables and ipsets between reboots (so you would probably want to disable the suite's cron-based persistence feature). Anyway, I'd recommend after installing the suite, reboot your computer, wait 30 seconds and then run ```sudo geoblocker-bash status``` and see if it reports any issues.
 
