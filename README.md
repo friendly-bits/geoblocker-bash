@@ -115,7 +115,7 @@ then rebooting the computer, waiting 30 seconds and then running ```sudo geobloc
 
 </details>
 
-**6)** That's it! By default, ip lists will be updated daily at 4am - you can verify that automatic updates work by running ```sudo cat /var/log/syslog | grep geoblocker-bash``` on the next day (change syslog path if necessary, according to the location assigned by your distro).
+**6)** That's it! By default, ip lists will be updated daily at 4am local time (4 o'clock at night) - you can verify that automatic updates work by running ```sudo cat /var/log/syslog | grep geoblocker-bash``` on the next day (change syslog path if necessary, according to the location assigned by your distro).
 
 ## **Usage**
 Generally, once the installation completes, you don't have to do anything else for geoblocking to work. But I implemented some tools to change geoblocking settings and check geoblocking state.
