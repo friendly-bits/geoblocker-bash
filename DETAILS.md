@@ -28,7 +28,7 @@ The **-backup** script can be used individually. By default, it is launched by t
 - Checks pre-requisites.
 - Creates system folder structure for scripts, config and data.
 - Scripts are then copied to ```/usr/local/bin```. Config goes in ```/etc/geoblocker-bash```. Data goes in ```/var/lib/geoblocker-bash```.
-- Creates backup of pre-install policies for INPUT and FORWARD chains.
+- Creates backup of pre-install policies for INPUT and FORWARD chains (the backup is used by the -uninstall script to restore the policies).
 - Calls geoblocker-bash-manage to set up geoblocker. The -manage script, in turn, calls the -run script, which calls -backup, -fetch and -apply scripts to perform the requested actions. (there is a reason for this chain of execution: each script has its own purpose)
 - If an error occurs during the installation, it is propagated back through the execution chain and eventually the -install script calls the -uninstall script to revert any changes made to the system.
 - Required arguments are ```-c <"country_codes">``` and ```-m <whitelist|blacklist>```
