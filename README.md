@@ -111,7 +111,7 @@ Generally automatic persistence of iptables and ipsets is not enabled for Debian
 
 ```sudo bash geoblocker-bash-install -m <whitelist|blacklist> -c <"country_codes"> -n```
 
-then rebooting the computer, waiting 30 seconds and then running ```sudo geoblocker-bash status```. If it complains about incoherency between the config file and the firewall state then your distro and you have not enabled persistence. In that case, install again without the ```-n``` option for cron-based persistence, reboot again and test again (should not complain now). Installation normally takes just a few seconds, so it's not a big deal.
+then rebooting the computer, waiting 30 seconds and then running ```sudo geoblocker-bash status```. If it complains about incoherency between the config file and the firewall state then your distro and you have not enabled persistence. In that case, install again without the ```-n``` option to enable cron-based persistence, reboot again and test again (should not complain now). Installation normally takes just a few seconds, so it's not a big deal.
 
 </details>
 
