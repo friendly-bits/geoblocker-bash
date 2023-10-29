@@ -63,6 +63,7 @@ The **-backup** script can be used individually. By default, it is launched by t
 ```geoblocker-bash-run remove -c <"country_codes">``` : Removes iplists, ipsets and iptables rules for specified countries.
 
 ```geoblocker-bash-run update``` : Updates the ipsets for all country codes that had been previously configured. Intended for triggering from periodic cron jobs.
+
 ```geoblocker-bash-run apply``` : Skips the fetch script, calls the *apply script to restore ipsets and firewall rules as configured. Used by the reboot cron job to implement persistence.
 
 **The -fetch script**
