@@ -87,7 +87,7 @@ The **-backup** script can be used individually. By default, it is launched by t
 ```geoblocker-bash-backup create-backup``` : Creates a backup of the current iptables state, geoblocking config and geoblocker-associated ipsets.
 
 ```geoblocker-bash-backup restore``` : Can be manually used for recovery from fault conditions (unlikely that anybody will ever need this but implemented just in case).
-- Restores ipsets, iptables state and geoblocking config from last known good backup.
+- Restores ipsets, iptables state and geoblocking config from the last backup.
 
 **The -reset script** is called by the *install script to clean up previous geoblocking rules in the firewall and reset the config (just in case you install again without uninstalling first)
 
