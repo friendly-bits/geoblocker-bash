@@ -1,8 +1,6 @@
 #!/bin/bash -l
 
-# Fetches ip subnets for given country codes from regional internet registry
-#        (supports for all registries)
-#
+# Fetches ip subnets for given country codes from RIPE API or from ipdeny
 #
 # Parses, validates the downloaded lists, and saves each one to a separate file.
 #
