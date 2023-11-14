@@ -389,7 +389,7 @@ process_list() {
 	failed_subnets_cnt=0
 	parsed_subnets_cnt=0
 
-	# checks for existence of old list and populates $prev_list_registered, $prev_list_date_raw, $prev_failed_subnets_cnt
+	# checks the status file and populates $prev_list_registered, $prev_list_date_raw, $prev_failed_subnets_cnt
 	check_prev_list
 
 	echo -e "Fetching ip list for '${purple}$list_id${no_color}' from ${dl_source^^}..."
