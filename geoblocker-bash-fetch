@@ -38,8 +38,8 @@ usage() {
     cat <<EOF
 
 This script:
-1) Fetches ip subnets for given country codes from regional internet registries.
-     (supports all registries but RIPENCC seems to store lists for all countries, so if your download is slow, use the '-r RIPENCC' option)
+1) Fetches ip subnets for given country codes from RIPE API or from ipdeny
+     (RIPE seems to store lists for all countries)
      (supports any combination of ipv4 and ipv6 lists)
 
 2) Parses, validates the downloaded lists, and saves each one to a separate file.
