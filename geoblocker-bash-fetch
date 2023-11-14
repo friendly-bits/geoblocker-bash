@@ -633,7 +633,7 @@ families_arg="${families_arg,,}"
 
 families="${families_arg:-"$default_families"}"
 
-# convert country codes to upper case, remove duplicates and extra spaces
+# convert country codes to upper case
 [[ -n "$ccodes_arg" ]] && ccodes_arg="${ccodes_arg^^}"
 
 source_arg="${source_arg,,}"
