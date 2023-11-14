@@ -229,7 +229,7 @@ parse_ripe_json() {
 
 ## Core functions
 
-group_ccodes_by_regisry() {
+group_ccodes_by_registry() {
 # populates $registries, ${fetch_ccodes[$registry]}
 local registry ccode invalid_ccodes
 
@@ -678,7 +678,7 @@ ccodes_arg_cnt="$(wc -w <<< "$ccodes_arg")"
 
 # groups ccodes by registry
 # populates $registries, ${fetch_ccodes[$registry]}
-group_ccodes_by_regisry
+group_ccodes_by_registry
 
 [[ -z "$registries" ]] && die "Error: failed to determine relevant regions."
 
