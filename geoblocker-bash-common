@@ -9,6 +9,36 @@
 
 ### Functions
 
+round_up_to_power2() {
+# rounds the input number up to the next high power of 2
+	echo "\
+		if($1==0) x=0 else \
+			x=l($1)/l(2); \
+		scale=0; \
+		y=2^((x+1)/1); \
+		if($1==y/2 && $1!=1) \
+			print $1 \
+		else \
+			print y"\
+	 | bc -l
+}
+
+get_file_size() {
+# outputs file size in bytes for a given file
+# works regardless (?) of how 'ls' is implemented
+
+# shellcheck disable=SC2015,SC2012
+[ -f "$1" ] && ls -dnL -- "$1" | awk '{print $5;exit}' || { echo ""; return 1; }
+
+# previous implementation, also works. but the above looks nicer and probably slightly faster
+	# # this is very touchy! so don't touch it.
+	# # this line is to catch the error code
+	# ls -ln "$1" &>/dev/null; rv=$?
+	# # shellcheck disable=SC2207
+	# ( IFS=$' \t'; set -f; ls_output=( $(ls -ln "$1" 2>/dev/null) ); printf "%s" "${ls_output[4]}" )
+	# return "$rv"
+}
+
 call_script() {
 # calls antother script and makes sure that the config file cache resets on exit
 # the reasons for this function:
@@ -96,16 +126,19 @@ check_deps(){
 echolog() {
 # outputs arguments to stdout and writes them to syslog
 # if one of the arguments is "-err" then redirect output to stderr
-	msg_args1=()
+	local msg_args1=() msg_args2=() arg msg_is_err first_el new_line
 	# check for "-err" option in arguments
-	for msg_arg in "$@"; do
-		[[ "$msg_arg" = "-err" ]] && msg_is_err="true" || msg_args1+=( "$msg_arg" )
+	for arg in "$@"; do
+		[[ "$arg" = "-err" ]] && msg_is_err="true" || msg_args1+=( "$arg" )
 	done
 
-	msg_args2=()
+	#check for '\n' in the biginning of the line and strip it if it's there
+	first_el="${msg_args1[0]}"
+	if [[ "${first_el:0:2}" = '\n' ]]; then new_line=$'\n'; msg_args1[0]="${first_el:2}"; fi
+
 	# check for "-noecho" option in arguments
-	for msg_arg in "${msg_args1[@]}"; do
-		[[ "$msg_arg" = "-noecho" ]] && noecho="true" || msg_args2+=( "$msg_arg" )
+	for arg in "${msg_args1[@]}"; do
+		[[ "$arg" = "-noecho" ]] && noecho="true" || msg_args2+=( "$arg" )
 	done
 
 	if [[ -n "${msg_args2[*]}" ]]; then
@@ -113,16 +146,16 @@ echolog() {
 		# "$nolog" is set as environment variable (used in *manage and *install scripts)
 		for arg in "${msg_args2[@]}"; do
 			if [[ ! "$noecho" ]]; then
-				[[ "$msg_is_err" ]] && echo "$me_short: $arg" 1>&2 || echo "$me_short: $arg"
+				[[ "$msg_is_err" ]] && echo -e "${new_line}$me_short: $arg" 1>&2 || echo -e "${new_line}$me_short: $arg"
 			fi
-			[[ ! "$nolog" ]] && logger -t "$me" "$arg"
+			[[ ! "$nolog" ]] && logger -t "$me" "$(echo -e "$arg" | sed -e 's/\x1b\[[0-9;]*m//g')"
 		done
 	fi
 }
 
 debugprint() {
 # prints a debug message
-	[[ "$debugmode" ]] && echo -e "	Debug: ${me_short}: $*" >&2
+	[[ "$debugmode" ]] && echo -e "\n	Debug: ${me_short}: $*" >&2
 }
 
 debugentermsg() {
@@ -150,8 +183,10 @@ die() {
 		# loop through arguments and print them to stderr and to the syslog
 		# "$nolog" is set either when calling die() or as environment variable (used in *manage and *install scripts)
 		for arg in "${die_args[@]}"; do
-			echo "$me_short: $arg" >&2
-			[[ ! "$nolog" ]] && logger -t "$me" "$arg"
+			echo -e "$yellow$me_short$no_color: $arg" >&2
+			# shellcheck disable=SC2001
+			arg_nocolors="$(sed $'s/\e\\[[0-9;:]*[a-zA-Z]//g' <<< "$arg")"
+			[[ ! "$nolog" ]] && logger -t "$me" "$arg_nocolors"
 		done
 	fi
 	echo >&2
@@ -171,9 +206,17 @@ getconfig() {
 
 	# re-use existing $config_var (if it's set) to minimize file reads, unless an unusual target file is specified
 	if [[ "$target_file" = "$conf_file" ]]; then
-		conf="${config_var:-"$(<"$target_file")"}" || return 1
+		if [[ -n "$config_var" ]]; then
+			conf="$config_var"
+		elif [[ -s "$target_file" ]]; then
+			conf="$(<"$target_file")" || return 1
+		else return 1
+		fi
 	else
-		conf="$(<"$target_file")"
+		if [[ -s "$target_file" ]]; then
+			conf="$(<"$target_file")" || return 1
+		else return 1
+		fi
 	fi
 
 	local conf_line=""
@@ -203,10 +246,11 @@ setconfig() {
 # if one of the value pairs is "target_file=[file]" then writes to $file instead
 # returns 0 if successful, 1 if not
 
-# uncomment for debug
-#	local arguments=("$@")
-#	local args="$(for arg in "${arguments[@]}"; do printf "%s" "'$arg' "; done)"
-#	debugprint "\033[1;33mStarted *setconfig* with args: ${args}\033[0m"
+# # uncomment for debug
+# local arguments=("$@")
+# # shellcheck disable=SC2155
+# local args="$(for arg in "${arguments[@]}"; do printf "%s" "'$arg' "; done)"
+# debugprint "\033[1;33mStarted *setconfig* with args: ${args}\033[0m"
 
 	### Parse arguments into associative array
 	declare -A arguments_arr
@@ -217,7 +261,7 @@ setconfig() {
 		readarray -t lines_arr <<< "$argument_conf"
 		for line in "${lines_arr[@]}"; do
 			# only process the line if it contains '='
-			if [[ "$line" = *'='* ]]; then
+			if [[ "$line" == *'='* ]]; then
 		   		key_conf="$(cut -f1 -d= <<< "$line")"
 		   		key_length=${#key_conf}
 		   		value_conf="${line:$key_length+1}"
@@ -249,9 +293,8 @@ setconfig() {
 		# remove corresponding config line if it exists
 		config_var="$(awk "!/$key_conf/" <<< "$config_var")"
 
-		# add updated config line - new line is here on purpose!
-		config_var="$key_conf=$value_conf
-$config_var"
+		# add updated config line
+		config_var="$key_conf=${value_conf}"$'\n'"$config_var"
 	done
 
 	# write modified config file
@@ -329,11 +372,14 @@ subtract_list_a_from_b() {
 # removes all space-delimited fields found in string $1 from string $2, outputs the result as a string
 	local list1=""; local list2=""
 
-	list1="$1"; list2="$2"
-	while read -r field_str; do
-		list2="${list2//$field_str/}"
-	done < <(printf "%s\n" "${list1// /$'\n'}")
-	printf "%s" "$(trim_spaces "$list2")"
+	# convert space-separated lists to newline-separated sorted lists
+	list1="$(printf "%s\n" "${1// /$'\n'}" | sort -u)"
+	list2="$(printf "%s\n" "${2// /$'\n'}" | sort -u)"
+
+	# can't pipe into comm so using the "<()" constructions
+	# result is space separated difference list
+	diff_list="$(comm -13 <(printf "%s\n" "$list1") <(printf "%s\n" "$list2"))"
+	printf "%s" "$(trim_spaces "$diff_list")"
 }
 
 merge_lists() {
@@ -515,6 +561,9 @@ check_cron() {
 
 # check for common deps
 missing_deps="$(check_deps tr cut sort wc awk sed grep comm logger bc)" || die "Error: missing dependencies: $missing_deps."
+
+# test grep for Perl regex capability
+grep -P 1 <<< "1" &>/dev/null || die "Error: your grep doesn't support Perl regular expressions or you are missing the PCRE library."
 
 # check for curl
 command -v "curl" &> /dev/null && curl_exists="true"
