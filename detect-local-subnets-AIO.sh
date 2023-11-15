@@ -33,7 +33,7 @@ set -- "$args"
 ## Functions
 
 # converts given ip address into hex number
-ip_to_hex() (
+ip_to_hex() {
 	ip="$1"
 	family="$2"
 	[ -z "$ip" ] && { echo "ip_to_hex(): Error: received an empty ip address." >&2; return 1; }
@@ -47,20 +47,16 @@ ip_to_hex() (
 			done
 		;;
 		inet6 )
-			expanded_ip="$(expand_ipv6 "$ip")"
-			# expanded ipv6 address should be represented in 32 characters
-			[ ${#expanded_ip} -ne 32 ] && \
-				{ echo "ip_to_hex(): Error: failed to expand ip '$ip'. Resulting address '$expanded_ip' has invalid length." >&2; return 1; }
-			printf "%s" "$expanded_ip"
+			expand_ipv6 "$ip"
 		;;
 		* ) echo "ip_to_hex(): Error: invalid family '$family'" >&2; return 1 ;;
 	esac
-)
+}
 
 # expands given ipv6 address into hex number
-expand_ipv6() (
+expand_ipv6() {
 	addr="$1"
-	[ -z "$addr" ] && { echo "expand_ipv6(): Error: received an empty ip address." >&2; return 1; }
+	[ -z "$addr" ] && { echo "expand_ipv6(): Error: received an empty string." >&2; return 1; }
 
 	# prepend 0 if we start with :
 	printf "%s" "$addr" | grep "^:" >/dev/null 2>/dev/null && addr="0${addr}"
@@ -83,11 +79,11 @@ expand_ipv6() (
 		printf "%04x" "0x$quad" || \
 					{ echo "expand_ipv6(): Error: failed to convert quad '0x$quad'." >&2; return 1; }
 	done
-)
+}
 
 # returns a compressed ipv6 address in the format recommended by RFC5952
 # expects a fully expanded and merged ipv6 address as input (no colons)
-compress_ipv6 () (
+compress_ipv6 () {
 	ip=""
 	# add leading colon
 	quads_merged="${1}"
@@ -120,10 +116,10 @@ compress_ipv6 () (
 		:*) ip="${ip#:}"
 	esac
 	printf "%s" "$ip"
-)
+}
 
 # formats merged hex number as an ipv4 or ipv6 address
-format_ip() (
+format_ip() {
 	ip_hex="$1"
 	family="$2"
 	[ -z "$ip_hex" ] && { echo "format_ip(): Error: received empty value instead of ip_hex." >&2; return 1; }
@@ -150,35 +146,56 @@ format_ip() (
 		;;
 		* ) echo "format_ip(): Error: invalid family '$family'" >&2; return 1
 	esac
-)
+}
 
 # generates a mask represented as a hex number
-generate_mask() (
+generate_mask()
+{
+	# CIDR bits
 	maskbits="$1"
+
+	# address length (32 bits for ipv4, 128 bits for ipv6)
 	mask_len="$2"
-	ip_bytes=$((mask_len/8))
 
 	[ -z "$maskbits" ] && { echo "generate_mask(): Error: received empty value instead of mask bits." >&2; return 1; }
+	[ -z "$mask_len" ] && { echo "generate_mask(): Error: received empty value instead of mask length." >&2; return 1; }
 
-	for i in $(seq 0 $((ip_bytes-1)) ); do
-		b=0
-		j=$(( maskbits - 8 * i))
-		if [ $j -ge 8 ]; then
-			b=255
-		elif [ $j -gt 0 ]; then
-			b=$(( (255 << (8-j)) & 255 ))
-		else
-			b=0
-		fi
-		# convert to hex
-		printf '%02x' "$b"
+	mask_bytes=$((mask_len/8))
+
+	mask="" bytes_done=0 i=0 sum=0 cur=128
+	octets='' frac=''
+
+	octets=$((maskbits / 8))
+	frac=$((maskbits % 8))
+	while [ ${octets} -gt 0 ]; do
+		mask="${mask}ff"
+		octets=$((octets - 1))
+		bytes_done=$((bytes_done + 1))
 	done
-)
+
+	if [ $bytes_done -lt $mask_bytes ]; then
+		while [ $i -lt $frac ]; do
+			sum=$((sum + cur))
+			cur=$((cur / 2))
+			i=$((i + 1))
+		done
+		mask="$mask$(printf "%02x" $sum)"
+		bytes_done=$((bytes_done + 1))
+
+		while [ $bytes_done -lt $mask_bytes ]; do
+			mask="${mask}00"
+			bytes_done=$((bytes_done + 1))
+		done
+	fi
+
+	printf "%s\n" "$mask"
+}
+
 
 # validates an ipv4 or ipv6 address
 # if 'ip route get' command is working correctly, validates the address through it
 # then performs regex validation
-validate_ip () (
+validate_ip () {
 	addr="$1"; addr_regex="$2"
 	[ -z "$addr" ] && { echo "validate_ip(): Error:- received an empty ip address." >&2; return 1; }
 	[ -z "$addr_regex" ] && { echo "validate_ip: Error: address regex has not been specified." >&2; return 1; }
@@ -197,7 +214,7 @@ validate_ip () (
 	printf "%s\n" "$addr" | tr ' ' "\n" | grep -E "^$addr_regex$" > /dev/null || \
 		{ echo "validate_ip(): Error: failed to validate addresses '$addr' with regex." >&2; return 1; }
 	return 0
-)
+}
 
 # tests whether 'ip route get' command works for ip validation
 test_ip_route_get() {
@@ -234,7 +251,7 @@ test_ip_route_get() {
 
 # performs bitwise AND on the ip address and the mask
 # after optimizations, mostly just copies bits or generates 0's
-bitwise_and() (
+bitwise_and() {
 	ip_hex="$1"; mask_hex="$2"; maskbits="$3"; mask_len="$4"
 
 	# chunk length in bits
@@ -274,10 +291,10 @@ bitwise_and() (
 			break
 		fi
 	done
-)
+}
 
 
-aggregate_subnets() (
+aggregate_subnets() {
 	family="$1"; input_subnets="$2"
 	# chunk length in bits
 	chunk_len=32
@@ -288,7 +305,7 @@ aggregate_subnets() (
 	# remove duplicates from input, convert to lower case
 	input_subnets="$(printf "%s" "$input_subnets" | tr ' ' '\n' | sort -u | tr '\n' ' ' | awk '{print tolower($0)}')"
 
-	validate_ip "$(printf "%s" "$input_subnets" | awk -F/ '{print $1}')" "$addr_regex" || return 1
+	validate_ip "${input_subnets%/*}" "$addr_regex" || return 1
 
 	for subnet in $input_subnets; do
 		# get mask bits
@@ -296,16 +313,16 @@ aggregate_subnets() (
 		[ -z "$maskbits" ] && { echo "$me: Error: input '$subnet' has no mask bits." >&2; return 1; }
 
 		# chop off mask bits
-		input_addr="$(printf "%s" "$subnet" | awk -F/ '{print $1}')"
+		input_addr="${subnet%/*}"
 
 		# shellcheck disable=SC2086
 		# validate mask bits
 		if [ "$maskbits" -lt 8 ] || [ "$maskbits" -gt $mask_len ]; then echo "$me: Error: invalid $family mask bits '$maskbits'." >&2; return 1; fi
 
-		# convert ip address to hex. ip_to_hex() is in the sourced script
+		# convert ip address to hex
 		subnet_hex="$(ip_to_hex "$input_addr" "$family")" || return 1
 		# prepend mask bits
-		subnets_hex="$(printf "%s/%s\n%s" "$maskbits" "$subnet_hex" "$subnets_hex")"
+		subnets_hex="$(printf "%s\n%s" "$maskbits/$subnet_hex" "$subnets_hex")"
 	done
 
 	# sort by mask bits, remove empty lines if any
@@ -320,10 +337,9 @@ aggregate_subnets() (
 		[ "$debug" ] && echo "processing subnet: $subnet1" >&2
 
 		# get mask bits
-		maskbits="$(printf "%s" "$subnet1" | awk -F/ '{print $1}')"
-
+		maskbits="${subnet1%/*}"
 		# chop off mask bits
-		ip="$(printf "%s" "$subnet1" | cut -d/ -f2)"
+		ip="${subnet1#*/}"
 
 		# shellcheck disable=SC2086
 		# generate mask
@@ -343,7 +359,7 @@ aggregate_subnets() (
 
 			if [ -n "$subnet2_hex" ]; then
 				# chop off mask bits
-				ip2="$(printf "%s" "$subnet2_hex" | cut -d/ -f2)"
+				ip2="${subnet2_hex#*/}"
 
 				ip2_differs=""; bytes_diff=0; bits_processed=0
 
@@ -401,10 +417,10 @@ aggregate_subnets() (
 	done
 
 	printf "%s\n" "$res_subnets"
-)
+}
 
 
-get_local_subnets() (
+get_local_subnets() {
 # attempts to find local subnets, requires family in 1st arg
 
 	family="$1"
@@ -458,7 +474,7 @@ get_local_subnets() (
 	[ -z "$subnets_only" ] && echo
 
 	return $rv1
-)
+}
 
 
 ## Constants
