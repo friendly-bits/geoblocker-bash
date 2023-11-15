@@ -5,6 +5,7 @@
 # Provides an interface to configure geoblocking.
 
 #### Initial setup
+LC_ALL=C
 
 me=$(basename "$0")
 
