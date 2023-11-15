@@ -1,3 +1,5 @@
+# THIS IS A WORK-IN-PROGRESS BRANCH AND IT'S NOT FUNCTIONAL YET.
+
 # geoblocker-bash
 Geoip blocker for Linux focusing on reliability, compatibility, efficiency and ease of use. Suite of Bash scripts which utilizes the 'iptables' firewall management utility (nftables support will get implemented eventually).
 
