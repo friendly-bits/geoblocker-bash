@@ -149,6 +149,9 @@ list_type="${list_type:-$(getconfig "ListType")}" || die "Error: Couldn't read v
 
 export list_type
 
+# convert to lower case
+families_arg="${families_arg,,}"
+
 #convert to lower case
 action_run="${action_run,,}"
 
