@@ -9,11 +9,11 @@
 # by default, outputs all found local ip addresses, and aggregated subnets
 # to output only aggregated subnets (and no other text), run with the '-s' argument
 # to only check a specific family (inet or inet6), run with the '-f <family>' argument
+# use '-d' argument for debug
 
 
 #### Initial setup
 
-#debug=true
 export LC_ALL=C
 me=$(basename "$0")
 
@@ -21,11 +21,13 @@ me=$(basename "$0")
 args=""
 for arg in "$@"; do
 	if [ "$arg" = "-s" ]; then subnets_only="true"
+	elif [ "$arg" = "-d" ]; then debugmode="true"
 	elif [ "$arg" = "-f" ]; then family_arg="check"
 	elif [ "$family_arg" = "check" ]; then family_arg="$arg"
 	else args="$args $arg"
 	fi
 done
+[ "$family_arg" = "check" ] && { echo "Specify family with '-f'."; exit 1; }
 
 set -- "$args"
 
@@ -51,6 +53,7 @@ ip_to_hex() {
 		;;
 		* ) echo "ip_to_hex(): Error: invalid family '$family'" >&2; return 1 ;;
 	esac
+
 }
 
 # expands given ipv6 address into hex number
@@ -286,20 +289,20 @@ bitwise_and() {
 		ip_chunk=$(printf "%0${char_num}x" $(( 0x$ip_chunk & 0x$mask_chunk )) ) || \
 			{ echo "bitwise_and(): Error: failed to calculate '0x$ip_chunk & 0x$mask_chunk'."; return 1; }
 		printf "%s" "$ip_chunk"
-		[ "$debug" ] && echo "calculated ip chunk: '$ip_chunk'" >&2
+		[ "$debugmode" ] && echo "calculated ip chunk: '$ip_chunk'" >&2
 		bits_processed=$((bits_processed + chunk_len))
 	fi
 
 	bytes_missing=$(( (addr_len - bits_processed)/8 ))
 	# repeat 00 for every missing byte
-	[ "$debug" ] && echo "bytes missing: '$bytes_missing'" >&2
+	[ "$debugmode" ] && echo "bytes missing: '$bytes_missing'" >&2
 	# shellcheck disable=SC2086,SC2034
 	[ $bytes_missing -gt 0 ] && for b in $(seq 1 $bytes_missing); do printf "%s" '00'; done
 	return 0
 }
 
 aggregate_subnets() {
-	family="$1"; input_subnets="$2"
+	family="$1"; input_subnets="$2"; subnets_hex=""; res_subnets=""
 
 	case "$family" in
 		inet ) addr_len=32; chunk_len=16; addr_regex="$ipv4_regex" ;;
@@ -340,8 +343,8 @@ aggregate_subnets() {
 
 		# get the subnet
 		subnet1="$(printf "%s" "$sorted_subnets_hex" | head -n 1)"
-		[ "$debug" ] && echo >&2
-		[ "$debug" ] && echo "processing subnet: $subnet1" >&2
+		[ "$debugmode" ] && echo >&2
+		[ "$debugmode" ] && echo "processing subnet: $subnet1" >&2
 
 		# get mask bits
 		maskbits="${subnet1%/*}"
@@ -356,7 +359,7 @@ aggregate_subnets() {
 		# shellcheck disable=SC2086
 		# calculate ip & mask
 		ip1="$(bitwise_and "$ip" "$mask" "$maskbits" $addr_len $chunk_len)" || return 1
-		[ "$debug" ] && echo "calculated '$ip' & '$mask' = '$ip1'" >&2
+		[ "$debugmode" ] && echo "calculated '$ip' & '$mask' = '$ip1'" >&2
 
 		# remove current subnet from the list
 		sorted_subnets_hex="$(printf "%s" "$sorted_subnets_hex" | tail -n +2)"
@@ -365,7 +368,7 @@ aggregate_subnets() {
 		# iterate over all remaining subnets
 		while [ -n "$remaining_subnets_hex" ]; do
 			subnet2_hex=$(printf "%s" "$remaining_subnets_hex" | head -n 1)
-			[ "$debug" ] && echo "comparing to subnet: '$subnet2_hex'" >&2
+			[ "$debugmode" ] && echo "comparing to subnet: '$subnet2_hex'" >&2
 
 			if [ -n "$subnet2_hex" ]; then
 				# chop off mask bits
@@ -383,13 +386,13 @@ aggregate_subnets() {
 					ip1_chunk="$(printf "%s" "$ip1" | cut -c${chunk_start}-${chunk_end} )"
 					ip2_chunk="$(printf "%s" "$ip2" | cut -c${chunk_start}-${chunk_end} )"
 
-					[ "$debug" ] && echo "comparing chunks '$ip1_chunk' - '$ip2_chunk'" >&2
+					[ "$debugmode" ] && echo "comparing chunks '$ip1_chunk' - '$ip2_chunk'" >&2
 
 					bytes_diff=$((0x$ip1_chunk - 0x$ip2_chunk)) || \
 								{ echo "aggregate_subnets(): Error: failed to calculate '0x$ip1_chunk - 0x$ip2_chunk'." >&2; return 1; }
 					# if there is any difference, no need to calculate further
 					if [ $bytes_diff -ne 0 ]; then
-						[ "$debug" ] && echo "difference found" >&2
+						[ "$debugmode" ] && echo "difference found" >&2
 						ip2_differs=true; break
 					fi
 
@@ -400,7 +403,7 @@ aggregate_subnets() {
 				# shellcheck disable=SC2086
 				# if needed, calculate the next ip2 chunk and compare to ip1 chunk
 				if [ $bits_processed -ne $maskbits ] && [ -z  "$ip2_differs" ]; then
-					[ "$debug" ] && echo "calculating last chunk..." >&2
+					[ "$debugmode" ] && echo "calculating last chunk..." >&2
 					chunk_start=$((char_offset + 1))
 					chunk_end=$((char_offset + char_num))
 
@@ -412,19 +415,19 @@ aggregate_subnets() {
 					ip2_chunk=$(printf "%0${char_num}x" $(( 0x$ip2_chunk & 0x$mask_chunk )) ) || \
 						{ echo "aggregate_subnets(): Error: failed to calculate '0x$ip2_chunk & 0x$mask_chunk'."; return 1; }
 
-					[ "$debug" ] && echo "comparing chunks '$ip1_chunk' - '$ip2_chunk'" >&2
+					[ "$debugmode" ] && echo "comparing chunks '$ip1_chunk' - '$ip2_chunk'" >&2
 
 					bytes_diff=$((0x$ip1_chunk - 0x$ip2_chunk)) || \
 								{ echo "aggregate_subnets(): Error: failed to calculate '0x$ip1_chunk - 0x$ip2_chunk'." >&2; return 1; }
 					if [ $bytes_diff -ne 0 ]; then
-						[ "$debug" ] && echo "difference found" >&2
+						[ "$debugmode" ] && echo "difference found" >&2
 						ip2_differs=true
 					fi
 				fi
 
 				# if no differences found, subnet2 is encapsulated in subnet1 - remove subnet2 from the list
 				if [ -z "$ip2_differs" ]; then
-					[ "$debug" ] && echo "No difference found" >&2
+					[ "$debugmode" ] && echo "No difference found" >&2
 					sorted_subnets_hex="$(printf "%s\n" "$sorted_subnets_hex" | grep -vx "$subnet2_hex")"
 				fi
 			fi
@@ -443,7 +446,7 @@ aggregate_subnets() {
 		fi
 	done
 
-	printf "%s\n" "$res_subnets"
+	printf "%s" "$res_subnets"
 }
 
 
