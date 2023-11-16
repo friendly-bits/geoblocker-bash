@@ -249,8 +249,11 @@ test_ip_route_get() {
 	unset legal_addr illegal_addr legal_exp_addr illegal_exp_addr rv_legal rv_illegal rv_legal_exp rv_illegal_exp
 }
 
-# performs bitwise AND on the ip address and the mask
+# performs bitwise ip address & the mask, both formatted as hex humbers
 # after optimizations, mostly just copies bits or generates 0's
+# args: ip_hex - ip formatted as a hex number, mask_hex - mask formatted as a hex number, maskbits - CIDR value,
+# addr_len - address length in bits (32 for ipv4, 128 for ipv6),
+# chunk_len - chunk size in bits used for calculation. seems to perform best with 16 bits for ipv4, 32 bits for ipv6
 bitwise_and() {
 	ip_hex="$1"; mask_hex="$2"; maskbits="$3"; addr_len="$4"; chunk_len="$5"
 
