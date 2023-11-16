@@ -43,11 +43,11 @@ ip_to_hex() {
 		inet )
 			split_ip="$(printf "%s" "$ip" | tr '.' ' ')"
 			for ip in $split_ip; do
-				printf "%02x" "$ip"
+				printf "%02x" "$ip" || { echo "ip_to_hex(): Error: failed to convert ip '$ip' to hex." >&2; return 1; }
 			done
 		;;
 		inet6 )
-			expand_ipv6 "$ip"
+			expand_ipv6 "$ip" || { echo "ip_to_hex(): Error: failed to expand ip '$ip'." >&2; return 1; }
 		;;
 		* ) echo "ip_to_hex(): Error: invalid family '$family'" >&2; return 1 ;;
 	esac
