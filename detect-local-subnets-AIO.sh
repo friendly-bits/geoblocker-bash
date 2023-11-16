@@ -317,14 +317,14 @@ aggregate_subnets() {
 		maskbits="$(printf "%s" "$subnet" | awk -F/ '{print $2}')"
 		case "$maskbits" in ''|*[!0-9]*) echo "aggregate_subnets(): Error: input '$subnet' has no mask bits or it's not a number." >&2; return 1;;esac
 		# chop off mask bits
-		input_addr="${subnet%/*}"
+		subnet="${subnet%/*}"
 
 		# shellcheck disable=SC2086
 		# validate mask bits
 		if [ "$maskbits" -lt 8 ] || [ "$maskbits" -gt $addr_len ]; then echo "aggregate_subnets(): Error: invalid $family mask bits '$maskbits'." >&2; return 1; fi
 
 		# convert ip address to hex
-		subnet_hex="$(ip_to_hex "$input_addr" "$family")" || return 1
+		subnet_hex="$(ip_to_hex "$subnet" "$family")" || return 1
 		# prepend mask bits
 		subnets_hex="$(printf "%s\n%s" "$maskbits/$subnet_hex" "$subnets_hex")"
 	done
