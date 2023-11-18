@@ -449,8 +449,6 @@ get_local_subnets() {
 
 	family="$1"
 
-	test_ip_route_get "$family" || return 1
-
 	case "$family" in
 		inet )
 			# get local interface names. filters by "scope link" because this should filter out WAN interfaces
@@ -536,6 +534,7 @@ esac
 
 rv_global=0
 for family in $families; do
+	test_ip_route_get "$family" || return 1
 	get_local_subnets "$family"; rv_global=$((rv_global + $?))
 done
 
