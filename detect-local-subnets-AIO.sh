@@ -444,7 +444,6 @@ aggregate_subnets() {
 	return 0
 }
 
-
 # attempts to find local subnets, requires family in 1st arg
 get_local_subnets() {
 
@@ -486,9 +485,6 @@ get_local_subnets() {
 	}
 
 	local_subnets="$(aggregate_subnets "$family" "$local_addresses")"; rv1=$?
-
-	# removes extra whitespaces, converts to newline-delimited list
-	local_subnets="$(printf "%s" "$local_subnets" | awk '{$1=$1};1' | tr ' ' '\n')"
 
 	if [ $rv1 -eq 0 ]; then
 		[ -z "$subnets_only" ] && echo "Local $family subnets (aggregated):"
