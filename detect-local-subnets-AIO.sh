@@ -43,8 +43,8 @@ ip_to_hex() {
 	case "$family" in
 		inet )
 			split_ip="$(printf "%s" "$ip" | tr '.' ' ')"
-			for ip in $split_ip; do
-				printf "%02x" "$ip" || { echo "ip_to_hex(): Error: failed to convert ip '$ip' to hex." >&2; return 1; }
+			for octet in $split_ip; do
+				printf "%02x" "$octet" || { echo "ip_to_hex(): Error: failed to convert octet '$octet' to hex." >&2; return 1; }
 			done
 		;;
 		inet6 )
@@ -193,13 +193,13 @@ generate_mask()
 }
 
 
-# validates an ipv4 or ipv6 address
-# if 'ip route get' command is working correctly, validates the address through it
+# validates an ipv4 or ipv6 address or multiple addresses
+# if 'ip route get' command is working correctly, validates the addresses through it
 # then performs regex validation
 validate_ip () {
 	addr="$1"; addr_regex="$2"
 	[ -z "$addr" ] && { echo "validate_ip(): Error:- received an empty ip address." >&2; return 1; }
-	[ -z "$addr_regex" ] && { echo "validate_ip: Error: address regex has not been specified." >&2; return 1; }
+	[ -z "$addr_regex" ] && { echo "validate_ip(): Error: address regex has not been specified." >&2; return 1; }
 
 	if [ -z "$ip_route_get_disable" ]; then
 		# using the 'ip route get' command to put the address through kernel's validation
@@ -211,9 +211,10 @@ validate_ip () {
 		done
 	fi
 
-	# regex validation
-	printf "%s\n" "$addr" | tr ' ' "\n" | grep -E "^$addr_regex$" > /dev/null || \
-		{ echo "validate_ip(): Error: failed to validate addresses '$addr' with regex." >&2; return 1; }
+	## regex validation
+	# -v inverts grep output to get non-matching lines
+	printf "%s\n" "$addr" | grep -vE "^$addr_regex$" > /dev/null; rv=$?
+	[ $rv -ne 1 ] && { echo "validate_ip(): Error: one or more addresses failed regex validation: '$addr'." >&2; return 1; }
 	return 0
 }
 
@@ -305,14 +306,16 @@ aggregate_subnets() {
 	# characters representing each chunk
 	char_num=$((chunk_len / 4))
 
-	# remove duplicates from input, convert to lower case
-	input_subnets="$(printf "%s" "$input_subnets" | tr ' ' '\n' | sort -u | tr '\n' ' ' | awk '{print tolower($0)}')"
-
-	validate_ip "${input_subnets%/*}" "$addr_regex" || return 1
+	# convert to newline-delimited list, remove duplicates from input, convert to lower case
+	input_subnets="$(printf "%s" "$input_subnets" | tr ' ' '\n' | sort -u | awk '{print tolower($0)}')"
+	input_ips="$(printf '%s' "$input_subnets" | cut -s -d/ -f1)"
+	validate_ip "$input_ips" "$addr_regex" || \
+				{ echo "aggregate_subnets(): Error: failed to validate one or more of input addresses."; return 1; }
+	unset input_ips
 
 	for subnet in $input_subnets; do
 		# get mask bits
-		maskbits="$(printf "%s" "$subnet" | awk -F/ '{print $2}')"
+		maskbits="$(printf "%s" "$subnet" | cut -s -d/ -f2 )"
 		case "$maskbits" in ''|*[!0-9]*) echo "aggregate_subnets(): Error: input '$subnet' has no mask bits or it's not a number." >&2; return 1;;esac
 		# chop off mask bits
 		subnet="${subnet%/*}"
@@ -321,7 +324,7 @@ aggregate_subnets() {
 		# validate mask bits
 		if [ "$maskbits" -lt 8 ] || [ "$maskbits" -gt $addr_len ]; then echo "aggregate_subnets(): Error: invalid $family mask bits '$maskbits'." >&2; return 1; fi
 
-		# convert ip address to hex
+		# convert ip address to hex number
 		subnet_hex="$(ip_to_hex "$subnet" "$family")" || return 1
 		# prepend mask bits
 		subnets_hex="$(printf "%s\n%s" "$maskbits/$subnet_hex" "$subnets_hex")"
@@ -333,7 +336,7 @@ aggregate_subnets() {
 	while [ -n "$sorted_subnets_hex" ]; do
 		## trim the 1st (largest) subnet on the list to its mask bits
 
-		# get the subnet
+		# get first subnet from the list
 		subnet1="$(printf "%s" "$sorted_subnets_hex" | head -n 1)"
 		[ "$debugmode" ] && echo >&2
 		[ "$debugmode" ] && echo "processing subnet: $subnet1" >&2
@@ -428,17 +431,17 @@ aggregate_subnets() {
 
 		# format from hex number back to ip
 		ip1="$(hex_to_ip "$ip1" "$family")" || return 1
-		if validate_ip "$ip1" "$addr_regex"; then
-			# append mask bits
-			subnet1="$ip1/$maskbits"
-			# add current subnet to resulting list
-			res_subnets="${subnet1}${newline}${res_subnets}"
-		else
-			return 1
-		fi
+		# append mask bits
+		subnet1="$ip1/$maskbits"
+		# add current subnet to resulting list
+		res_subnets="${subnet1}${newline}${res_subnets}"
 	done
 
+	output_ips="$(printf '%s' "$res_subnets" | cut -s -d/ -f1)"
+	validate_ip "$output_ips" "$addr_regex" || \
+		{ echo "aggregate_subnets(): Error: failed to validate one or more of output addresses."; return 1; }
 	printf "%s" "$res_subnets"
+	return 0
 }
 
 
