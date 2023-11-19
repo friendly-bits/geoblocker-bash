@@ -21,12 +21,12 @@ args=""
 for arg in "$@"; do
 	if [ "$arg" = "-s" ]; then subnets_only="true"
 	elif [ "$arg" = "-d" ]; then debugmode="true"
-	elif [ "$arg" = "-f" ]; then family_arg="check"
-	elif [ "$family_arg" = "check" ]; then family_arg="$arg"
+	elif [ "$arg" = "-f" ]; then families_arg="check"
+	elif [ "$families_arg" = "check" ]; then families_arg="$arg"
 	else args="$args $arg"
 	fi
 done
-[ "$family_arg" = "check" ] && { echo "Specify family with '-f'."; exit 1; }
+[ "$families_arg" = "check" ] && { echo "Specify family with '-f'."; exit 1; }
 
 set -- "$args"
 
@@ -528,11 +528,13 @@ unset rv rv1 rv2
 
 ## Main
 
-[ -n "$family_arg" ] && family_arg="$(printf '%s' "$family_arg" | awk '{print tolower($0)}')"
-case "$family_arg" in
-	inet|inet6 ) families="$family_arg" ;;
-	'' ) families="inet inet6" ;;
-	* ) echo "$me: Error: invalid family '$family_arg'." >&2; exit 1 ;;
+[ -n "$families_arg" ] && families_arg="$(printf '%s' "$families_arg" | awk '{print tolower($0)}')"
+case "$families_arg" in
+	inet|inet6|'inet inet6'|'inet6 inet' ) families="$families_arg" ;;
+	''|'ipv4 ipv6'|'ipv6 ipv4' ) families="inet inet6" ;;
+	ipv4 ) families="inet" ;;
+	ipv6 ) families="inet6" ;;
+	* ) echo "$me: Error: invalid family '$families_arg'." >&2; exit 1 ;;
 esac
 
 rv_global=0
