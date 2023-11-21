@@ -2,7 +2,7 @@
 
 # geoblocker-bash-apply
 
-# Creates or removes ipsets and iptables rules for specified country codes.
+# Creates or removes ipsets and firewall rules for specified lists.
 
 # Requires the 'ipset' utility. To install it on Debian or derivatives, use the command:
 ## apt install ipset
@@ -11,6 +11,8 @@
 
 
 #### Initial setup
+export LC_ALL=C
+printf '%s\n' "$PATH" | grep '/usr/local/bin' &>/dev/null || export PATH="$PATH:/usr/local/bin"
 
 me=$(basename "$0")
 
@@ -46,18 +48,18 @@ usage() {
     cat <<EOF
 
 $me
-    Loads or removes ipsets and iptables rules for specified country codes.
+    Loads or removes ipsets and iptables rules for specified lists.
 	If 'NoDrop' option is set to "true" in the config file (set up during installation): will perform the action,
         except setting default iptables policies to DROP, which for a whitelist effectively leaves geoblocking *disabled*.
         (NoDrop does not affect blacklist functionality)
 
-Usage: $me <action> -c <"country_codes"> [-d] [-t] [-h]
+Usage: $me <action> -l <"list_ids"> [-d] [-t] [-h]
 
 Actions:
-    add|remove                 : Add or remove ipsets and iptables rules for country codes specified with the '-c' option
+    add|remove                 : Add or remove ipsets and iptables rules for lists specified with the '-l' option
 
 Options:
-    -c <"country_codes">       :  (ISO 3166-1 alpha-2) country codes (if specifying multiple country codes, put them in double quotes)
+    -l <"list_ids">            :  list id's in the format <country_code>_<family> (if specifying multiple list id's, put them in double quotes)
 
     -d                         : Debug
     -t                         : Simulate fault and test recovery
@@ -81,9 +83,9 @@ case "$action" in
 esac
 
 # process the rest of the arguments
-while getopts ":c:dht" opt; do
+while getopts ":l:dht" opt; do
 	case $opt in
-		c) ccodes=$OPTARG;;
+		l) list_ids=$OPTARG;;
 		d) debugmode_args="true";;
 		h) usage; exit 0;;
 		t) test=true;;
@@ -95,7 +97,7 @@ shift $((OPTIND -1))
 [[ -n "$*" ]] && {
 	usage
 	err1="Error in arguments. First unrecognized argument: '$1'."
-	err2="Note: If specifying multiple country codes, put them in double quotation marks."
+	err2="Note: If specifying multiple list id's, put them in double quotes."
 	die "$err1" "$err2"
 }
 
@@ -111,78 +113,49 @@ debugentermsg
 
 #### FUNCTIONS
 
-round_up_to_power2() {
-# rounds the input number up to the next high power of 2
-	echo "\
-		if($1==0) x=0 else \
-			x=l($1)/l(2); \
-		scale=0; \
-		y=2^((x+1)/1); \
-		if($1==y/2 && $1!=1) \
-			print $1 \
-		else \
-			print y"\
-	 | bc -l
-}
-
 destroy_temp_ipsets() {
-	curr_temp_ipsets="$(ipset list -n | grep "$suite_name" | grep "temp" | tr '\n' ' ' | awk '{$1=$1};1')"
+	curr_temp_ipsets="$(ipset list -n | grep "$suite_name" | grep "temp" | tr '\n' ' ')"
 	for temp_ipset in $curr_temp_ipsets; do
 		ipset destroy "$temp_ipset" &> /dev/null
 	done
 }
 
-getlocalsubnet_ipv4() {
-# attempts to find local subnet for the main network interface
 
-	# regex patterns used for ipv4 validation
-	# using Perl regex syntax because grep is faster with it than with native grep syntax
-	# regex compiled from 2 suggestions found here:
-	# https://stackoverflow.com/questions/5284147/validating-ipv4-addresses-with-regexp
-	ip_regex='^((25[0-5]|(2[0-4]|1\d|[1-9]|)\d)\.?\b){4}'
-	mask_regex='(/([01]?\d\d?|2[0-4]\d|25[0-5]))$'
-	subnet_regex="${ip_regex}${mask_regex}"
+#### Constants
 
-	# returns local ip with subnet mask
-	localip="$(ip addr | grep 'state UP' -A2 | grep 'inet ' | tail -n1 | awk '{print $2}')"
-
-	# Change last ipv4 octet to 0
-	lsubnet="$(printf "%s" "$localip" | sed 's|\([0-9]*\.[0-9]*\.[0-9]*\.\)[0-9]*|\10|')"
-
-	# Verifies that the argument is a valid ipv4 subnet
-	printf "%s" "$lsubnet" | grep -P "$subnet_regex" &>/dev/null; rv=$?
-
-	if [[ $rv -ne 0 ]]; then
-		# if validation fails, output empty string
-		printf "%s" ""
-	else
-		printf "%s" "$lsubnet"
-	fi
-	return $rv
-}
-
+# declare -A subnet_regex
+#
+# # ipv4 regex taken from here and modified for ERE matching:
+# # https://stackoverflow.com/questions/5284147/validating-ipv4-addresses-with-regexp
+# # the longer ("alternative") ipv4 regex from the top suggestion performs about 40x faster on a slow CPU with ERE grep than the shorter one
+# # ipv6 regex taken from the BanIP code and modified for ERE matching
+# # https://github.com/openwrt/packages/blob/master/net/banip/files/banip-functions.sh
+# ipv4_regex='((25[0-5]|(2[0-4]|1[0-9]|[1-9]|)[0-9])\.){3}(25[0-5]|(2[0-4]|1[0-9]|[1-9]|)[0-9])'
+# ipv6_regex='([0-9a-fA-F]{0,4}:){1,7}[0-9a-fA-F]{0,4}:?'
+# maskbits_regex_ipv6='(12[0-8]|((1[0-1]|[1-9])[0-9])|[8-9])'
+# maskbits_regex_ipv4='(3[0-2]|([1-2][0-9])|[8-9])'
+# subnet_regex[ipv4]="${ipv4_regex}/${maskbits_regex_ipv4}"
+# subnet_regex[ipv6]="${ipv6_regex}/${maskbits_regex_ipv6}"
+# unset ipv4_regex ipv6_regex maskbits_regex_ipv4 maskbits_regex_ipv6
 
 #### VARIABLES
 
-# get datadir from the config file
 datadir="$(getconfig "Datadir")" || die "Error: Couldn't read value for Datadir from the config file."
 
-# get list_type from the config file
 list_type="$(getconfig "ListType")" || die "Error: Couldn't read value for ListType from the config file."
 
-# set global variable
 export list_type="$list_type"
+
+families="$(getconfig "Families")" || die "Error: Couldn't read value for Families from the config file."
 
 nodrop="$(getconfig "NoDrop")" || die "Error: Couldn't read value for NoDrop from the config file."
 iplist_dir="${datadir}/ip_lists"
-iptables_comment_global="${suite_name}_global"
-family="inet"
+iptables_comment_aux="${suite_name}_aux"
 ipset_hashsizes=()
 ipset_maxelements=()
 
 # convert to lower case
 action="${action,,}"
-
 
 exitvalue="0"
 
@@ -194,8 +167,8 @@ missing_deps="$(check_deps iptables-save iptables-restore ipset)" || die "Error:
 # check that the config file exists
 [[ ! -f "$conf_file" ]] && die "Config file '$conf_file' doesn't exist! Run the installation script again."
 
-# check for ccodes
-[[ -z "$ccodes" ]] && { usage; die 254 "Specify country codes!"; }
+# check for list_ids
+[[ -z "$list_ids" ]] && { usage; die 254 "Specify list id's!"; }
 
 # check for datadir path
 [[ -z "$datadir" ]] && die 254 "Error: failed to read the 'datadir' variable from the config file."
@@ -208,9 +181,12 @@ missing_deps="$(check_deps iptables-save iptables-restore ipset)" || die "Error:
 if [[ "$action" = "add" ]]; then
 ### create temporary ipsets and load ip lists into them
 
-	for ccode in $ccodes; do
-		iplist_file="${iplist_dir}/ipv4_${ccode}"
-		temp_ipset="${suite_name}_${ccode}_temp"
+	for list_id in $list_ids; do
+		family="$(printf '%s' "$list_id" | cut -s -d_ -f2)"
+		[ -z "$family" ] && { destroy_temp_ipsets; die "Error determining the family of list '$list_id'."; }
+
+		iplist_file="${iplist_dir}/${list_id}"
+		temp_ipset="${suite_name}_${list_id}_temp"
 
 		# check that the iplist file exists
 		[[ ! -f "$iplist_file" ]] && die 254 "Error: Can not find the iplist file in path: '$iplist_file'."
@@ -226,27 +202,32 @@ if [[ "$action" = "add" ]]; then
 		ipset_maxelem=$(round_up_to_power2 "$ip_cnt")
 	#	debugprint "calculated maxelem for ipset: $ipset_maxelem"
 
+		case "$family" in
+			ipv4 ) hashsize_factor=1 ;;
+			ipv6 ) hashsize_factor=4
+		esac
+
 		# set hashsize to (512) or (ipset_maxelements / 4), whichever is larger
-		prelim_hashsize=$(echo "scale=0 ; $ipset_maxelem / 4" | bc)
-	#	debugprint "calculated hashsize: $prelim_hashsize"
-		if [[ "$prelim_hashsize" -lt 512 ]]; then
-			ipset_hash=512
+		prelim_hashsize=$(echo "scale=0 ; (${ipset_maxelem}*${hashsize_factor})/4" | bc)
+		debugprint "calculated hashsize: $prelim_hashsize"
+		if [[ "$prelim_hashsize" -lt $((512 * hashsize_factor)) ]]; then
+			ipset_hashsize=$((512 * hashsize_factor))
 		else
-			ipset_hash="$prelim_hashsize"
+			ipset_hashsize=$prelim_hashsize
 		fi
-	#	debugprint "final hashsize for the new ipset: $ipset_hashsizes"
+		debugprint "final hashsize for the new ipset: $ipset_hashsize"
 
 		# create new temporary ipset
 		debugprint "Creating new ipset '$temp_ipset'... "
-		ipset create "$temp_ipset" hash:net family "$family" hashsize "$ipset_hash" maxelem "$ipset_maxelem"; rv=$?
+		ipset create "$temp_ipset" hash:net family "$family" hashsize "$ipset_hashsize" maxelem "$ipset_maxelem"; rv=$?
 		if [[ $rv -ne 0 ]]; then
 			destroy_temp_ipsets
-			die "Error creating ipset '$temp_ipset' with hashsize '$ipset_hash' and maxelements '$ipset_maxelem'."
+			die "Error creating ipset '$temp_ipset' with hashsize '$ipset_hashsize' and maxelements '$ipset_maxelem'."
 		fi
 		debugprint "Ok."
 
 		# import the iplist into temporary ipset from file
-		echo -n "Importing the iplist for country '$ccode' into temporary ipset... "
+		echo -n "Importing the iplist '$list_id' into temporary ipset... "
 
 		# reads $iplist_file, transforms each line into 'ipset add' command and redirects the result into "ipset restore"
 		# this is about 50x faster than issuing discrete "ipset add" commands in a loop
@@ -254,7 +235,9 @@ if [[ "$action" = "add" ]]; then
 		#    is yet about 4x faster for a large iplist
 		# the '-exist' option prevents the restore command from getting stuck when encountering duplicates
 
+		set -o pipefail
 		awk -v P="add \"$temp_ipset\"" '{ print P " " $0 }' "$iplist_file" | ipset restore -exist; rv=$?
+		set +o pipefail
 
 		if [[ $rv -ne 0 ]]; then
 			destroy_temp_ipsets
@@ -266,8 +249,8 @@ if [[ "$action" = "add" ]]; then
 		[[ "$debugmode" ]] && ipset_lines_cnt="$(ipset save "$temp_ipset" | grep -c "add $temp_ipset")"
 		debugprint "subnets in the temporary ipset: $ipset_lines_cnt"
 
-		ipset_hashsizes["$ccode"]="$ipset_hash"
-		ipset_maxelements["$ccode"]="$ipset_maxelem"
+		ipset_hashsizes["${list_id}"]="$ipset_hashsize"
+		ipset_maxelements["${list_id}"]="$ipset_maxelem"
 	done
 	echo
 fi
@@ -277,51 +260,75 @@ fi
 
 if [[ "$list_type" = "whitelist" ]]; then
 	## Temporarily set the policy for the INPUT chain to ACCEPT, in order to prevent user lock out in case of an error
-	echo -n "Setting INPUT chain policy to ACCEPT... "
-	iptables -P INPUT ACCEPT; rv=$?
-	[[ $rv -ne 0 ]] && die "Error trying to change iptables policy with command 'iptables -P INPUT ACCEPT'."
-	echo "Ok."
+	for family in $families; do
+		case "$family" in
+			ipv4 ) iptables_command="iptables" ;;
+			ipv6 ) iptables_command="ip6tables"
+		esac
+
+		echo -n "Setting $family INPUT chain policy to ACCEPT... "
+		$iptables_command -P INPUT ACCEPT; rv=$?
+		[[ $rv -ne 0 ]] && die "Error trying to change iptables policy with command '$iptables_command -P INPUT ACCEPT'."
+		echo "Ok."
+	done
 	echo
 fi
 
 ## delete existing iptables rules matching comment "$iptables_comment"
-for ccode in $ccodes; do
-	iptables_comment="${suite_name}_${ccode}"
-	echo -n "Removing existing $list_type iptables rules for country '$ccode'... "
+for list_id in $list_ids; do
+	family="${list_id:3}"
+	iptables_comment="${suite_name}_${list_id}"
 
-	# sed implementation seems to not work on busybox limited version of sed but i don't want to implement some eval thing
-	# sed looks for rules with the comment which we use to stamp our rules
-	# sed executes iptables -D (delete) command on matching rules. execution is promtped by the switch /e (only available in GNU sed)
-	iptables-save | sed -r "/INPUT.*comment.*${iptables_comment}/s/-A/iptables -D/e" &>/dev/null; rv="${PIPESTATUS[0]}"
+	echo -n "Removing existing $list_type $family iptables rules for list '$list_id'... "
+	case "$family" in
+		ipv4 ) iptables_command="iptables"; iptables_save_command="iptables-save" ;;
+		ipv6 ) iptables_command="ip6tables"; iptables_save_command="ip6tables-save"
+	esac
+
+	set -o pipefail
+	# awk looks for rules with the comment which we use to stamp our rules
+	# gsub command replaces -A with 'iptables -D' to delete matching rules. system ($0) executes the command.
+	[ -n "$iptables_comment" ] && $iptables_save_command | \
+		awk -v c="$iptables_command" '$0 ~ /'"$iptables_comment"'/ {gsub(/^-A /, c" -D "); system ($0)}'; rv=$?
+	set +o pipefail
 
 	if [[ $rv -ne 0 ]]; then
 		echo "Failed."
 		destroy_temp_ipsets
-		die "Error removing existing rules with command: 'iptables-save | sed -r \"/INPUT.*comment.*$iptables_comment/s/-A/iptables -D/e\" '."
+		die "Error removing existing rules for list '$list_id'."
 	fi
 	echo "Ok."
 done
-
 echo
 
 
-## delete existing iptables rules matching comment "$iptables_comment_global"
-echo -n "Removing existing global iptables rules for '${suite_name}'... "
-iptables-save | sed -r "/INPUT.*comment.*${iptables_comment_global}/s/-A/iptables -D/e" &>/dev/null; rv="${PIPESTATUS[0]}"
-if [[ $rv -ne 0 ]]; then
-	echo "Failed."
-	destroy_temp_ipsets
-	die "Error removing existing rules with command: 'iptables-save | sed -r \"/INPUT.*comment.*${iptables_comment_global}/s/-A/iptables -D/e\" '."
-fi
-echo "Ok."
-echo
+## delete existing iptables rules matching comment "$iptables_comment_aux"
+for family in $families; do
+	echo -n "Removing existing auxiliary $family firewall rules for '${suite_name}'... "
+	case "$family" in
+		ipv4 ) iptables_command="iptables"; iptables_save_command="iptables-save" ;;
+		ipv6 ) iptables_command="ip6tables"; iptables_save_command="ip6tables-save"
+	esac
+
+	set -o pipefail
+	[ -n "$iptables_comment_aux" ] && $iptables_save_command | \
+		awk -v c="$iptables_command" '$0 ~ /'"$iptables_comment_aux"'/ {gsub(/^-A /, c" -D  "); system ($0)}'; rv=$?
+	set +o pipefail
+
+	if [[ $rv -ne 0 ]]; then
+		echo "Failed."
+		destroy_temp_ipsets
+		die "Error removing existing auxiliary rules for '$suite_name'."
+	fi
+	echo "Ok."
+done
 
 
 ### Apply the "remove" action
 
 if [[ "$action" = "remove" ]]; then
-	for ccode in $ccodes; do
-		perm_ipset="${suite_name}_${ccode}"
+	for list_id in $list_ids; do
+		perm_ipset="${suite_name}_${list_id}"
 
 		# Check if given ipset exists
 		matching_ipset="$(ipset list -n | grep "$perm_ipset")"
@@ -329,8 +336,7 @@ if [[ "$action" = "remove" ]]; then
 			echo "Warning: Can't remove ipset '$perm_ipset' because it doesn't appear to exist."
 			exitvalue="254"
 		else
-			echo -n "Destroying ipset for country '$ccode'... "
-			sleep 0.3
+			echo -n "Destroying ipset for list '$list_id'... "
 			ipset destroy "$perm_ipset"; rv=$?
 			if [[ $rv -ne 0 ]]; then
 				echo "Failed."
@@ -341,62 +347,91 @@ if [[ "$action" = "remove" ]]; then
 			fi
 		fi
 	done
-	echo
 fi
 
 # these are only useful for whitelists
 if [[ "$list_type" = "whitelist" ]]; then
 
-	### Set global iptables rules
+	### Set auxiliary iptables rules
 
-	# Add rule to allow connections from the local network
-	localsubnet_ipv4="$(getlocalsubnet_ipv4)"
-	if [[ -z "$localsubnet_ipv4" ]]; then
-		destroy_temp_ipsets
-		die "Error: couldn't determine local subnet."
-	else
-		echo "Found local subnet: '$localsubnet_ipv4'."
-		echo -n "Appending rule to allow all traffic from the local subnet... "
-		iptables -A INPUT -s "$localsubnet_ipv4" -j ACCEPT -m comment --comment "${iptables_comment_global}-localsubnet_ipv4"; rv=$?
+	for family in $families; do
+		# Add rules to allow connections from the local network
+		echo -e "\nDetecting local $family subnets..."
+		set -o pipefail
+		localsubnets="$(sh detect-local-subnets-AIO.sh -s -f "$family" | tr '\n' ' ')" || die "Error: failed to detect local $family subnets."
+		set +o pipefail
+
+		if [[ -z "$localsubnets" ]]; then
+			destroy_temp_ipsets
+			die "Error: failed to detect local $family subnets."
+		else
+			echo -e "Found local $family subnets:\n${localsubnets}\n"
+			for localsubnet in $localsubnets; do
+				echo -n "Appending rule to allow traffic from local subnet '$localsubnet'... "
+				case "$family" in
+					ipv4 ) iptables_command="iptables" ;;
+					ipv6 ) iptables_command="ip6tables"
+				esac
+				$iptables_command -A INPUT -s "$localsubnet" -j ACCEPT -m comment --comment "${iptables_comment_aux}-localsubnet"; rv=$?
+
+				if [[ $rv -ne 0 ]]; then
+					destroy_temp_ipsets
+					die "Failed to append rule with command '$iptables_command -A INPUT -s \"$localsubnet\" -j ACCEPT'."
+				fi
+				echo "Ok."
+			done
+		fi
+	done
+
+	# Add rule to allow connections from the loopback interface
+	for family in $families; do
+		case "$family" in
+			ipv4 ) iptables_command="iptables" ;;
+			ipv6 ) iptables_command="ip6tables"
+		esac
+		echo -n "Inserting rule to allow $family traffic from the loopback interface... "
+		$iptables_command -I INPUT -i lo -j ACCEPT -m comment --comment "${iptables_comment_aux}-loopback"; rv=$?
 
 		if [[ $rv -ne 0 ]]; then
 			destroy_temp_ipsets
-			die "Failed to append rule with command 'iptables -A INPUT -s \"$localsubnet_ipv4\" -j ACCEPT'."
+			die "Failed to insert rule with command '$iptables_command -I INPUT -i lo -j ACCEPT'."
 		fi
 		echo "Ok."
-	fi
-
-	# Add rule to allow connections from the loopback interface
-	echo -n "Inserting rule to allow all traffic from the loopback interface... "
-	iptables -I INPUT -i lo -j ACCEPT -m comment --comment "${iptables_comment_global}-loopback-interface"; rv=$?
-
-	if [[ $rv -ne 0 ]]; then
-		destroy_temp_ipsets
-		die "Failed to insert rule with command 'iptables -I INPUT -i lo -j ACCEPT'."
-	fi
-	echo "Ok."
-
+	done
 	echo
 fi
 
 # Add rule to allow established/related connections, regardless of the firewall mode (whitelist or blacklist)
-echo -n "Inserting rule to allow established/related connections... "
-iptables -I INPUT -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT -m comment --comment "${iptables_comment_global}-rel-est"; rv=$?
+for family in $families; do
+	echo -n "Inserting rule to allow $family established/related connections... "
+	case "$family" in
+		ipv4 ) iptables_command="iptables" ;;
+		ipv6 ) iptables_command="ip6tables"
+	esac
+	$iptables_command -I INPUT -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT -m comment --comment "${iptables_comment_aux}-rel-est"; rv=$?
 
-if [[ $rv -ne 0 ]]; then
-	destroy_temp_ipsets
-	die "Failed to insert rules with command 'iptables -I INPUT -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT'."
-fi
-echo "Ok."
+	if [[ $rv -ne 0 ]]; then
+		destroy_temp_ipsets
+		die "Failed to insert rules with command '$iptables_command -I INPUT -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT'."
+	fi
+	echo "Ok."
+done
 
 ### Create permanent ipsets if they don't exist, add iptables rules for them, then swap them with temp ipsets
 if [[ "$action" = "add" ]]; then
-	for ccode in $ccodes; do
-		perm_ipset="${suite_name}_${ccode}"
-		temp_ipset="${suite_name}_${ccode}_temp"
-		iptables_comment="${suite_name}_${ccode}"
-		ipset_maxelem="${ipset_maxelements[$ccode]}"
-		ipset_hash="${ipset_hashsizes[$ccode]}"
+	for list_id in $list_ids; do
+		family="$(printf '%s' "$list_id" | cut -s -d_ -f2)"
+		[ -z "$family" ] && { destroy_temp_ipsets; die "Error determining the family of list '$list_id'."; }
+		case "$family" in
+			ipv4 ) iptables_command="iptables" ;;
+			ipv6 ) iptables_command="ip6tables"
+		esac
+
+		perm_ipset="${suite_name}_${list_id}"
+		temp_ipset="${suite_name}_${list_id}_temp"
+		iptables_comment="${suite_name}_${list_id}"
+		ipset_maxelem="${ipset_maxelements[${list_id}]}"
+		ipset_hashsize="${ipset_hashsizes[${list_id}]}"
 
 		## check if permanent ipset already exists and is non-empty
 
@@ -412,8 +447,7 @@ if [[ "$action" = "add" ]]; then
 		if [[ "$ipset_length" -eq 0 ]]; then
 			debugprint "Ipset '$perm_ipset' doesn't exist yet."
 			# to avoid being dependent on ipset output staying constant down the road,
-			# still trying to destroy the ipset, just in case, but not checking the return value
-			sleep 0.3
+			# still trying to destroy the ipset, just in case
 			ipset destroy "$perm_ipset" &>/dev/null
 		fi
 
@@ -421,11 +455,11 @@ if [[ "$action" = "add" ]]; then
 		if [[ ! "$perm_ipset_exists" ]]; then
 			# create new permanent ipset
 			debugprint "Creating permanent ipset '$perm_ipset'... "
-			ipset create "$perm_ipset" hash:net family "$family" hashsize "$ipset_hash" maxelem "$ipset_maxelem"; rv=$?
+			ipset create "$perm_ipset" hash:net family "$family" hashsize "$ipset_hashsize" maxelem "$ipset_maxelem"; rv=$?
 			if [[ $rv -ne 0 ]]; then
 				echo "Failed."
-				iptables-save | sed -r "/INPUT.*comment.*${iptables_comment}/s/-A/iptables -D/e" &>/dev/null
-				sleep 0.3
+				[ -n "$iptables_comment" ] && iptables-save | awk '$0 ~ /'"$iptables_comment"'/ {gsub(/^-A /, "iptables -D "); system ($0)}'
+				[ -n "$iptables_comment" ] && ip6tables-save | awk '$0 ~ /'"$iptables_comment"'/ {gsub(/^-A /, "ip6tables -D "); system ($0)}'
 				ipset destroy "$perm_ipset"
 				destroy_temp_ipsets
 				die "Error when creating ipset '$perm_ipset'."
@@ -438,24 +472,24 @@ if [[ "$action" = "add" ]]; then
 
 		if [[ "$list_type" = "whitelist" ]]; then iptables_action="ACCEPT"; else iptables_action="DROP"; fi
 
-		echo -n "Appending $list_type rule for country '$ccode' to the INPUT chain... "
-		iptables -A INPUT -m set --match-set "$perm_ipset" src -j "$iptables_action" -m comment --comment "$iptables_comment"; rv=$?
+		echo -n "Appending $list_type rule for list '$list_id' to the INPUT chain... "
+		$iptables_command -A INPUT -m set --match-set "$perm_ipset" src -j "$iptables_action" -m comment --comment "$iptables_comment"; rv=$?
 
 		if [[ $rv -ne 0 ]]; then
-			iptables-save | sed -r "/INPUT.*comment.*${iptables_comment}/s/-A/iptables -D/e" &>/dev/null
-			sleep 0.3
+			[ -n "$iptables_comment" ] && iptables-save | awk '$0 ~ /'"$iptables_comment"'/ {gsub(/^-A /, "iptables -D "); system ($0)}'
+			[ -n "$iptables_comment" ] && ip6tables-save | awk '$0 ~ /'"$iptables_comment"'/ {gsub(/^-A /, "ip6tables -D "); system ($0)}'
 			ipset destroy "$perm_ipset" &>/dev/null
 			destroy_temp_ipsets
-			die "Failed to append ipset rules with command: iptables -I INPUT -m set --match-set \"$perm_ipset\" src -j \"$iptables_action\"."
+			die "Failed to append ipset rules with command: $iptables_command -I INPUT -m set --match-set \"$perm_ipset\" src -j \"$iptables_action\"."
 		fi
 		echo "Ok."
 
 		## swap the new (temporary) ipset with the old (permanent) ipset
-		echo -n "Making the new $list_type ipset for country '$ccode' permanent... "
+		echo -n "Making the new $list_type ipset for list '$list_id' permanent... "
 		ipset swap "$temp_ipset" "$perm_ipset"; rv=$?
 		if [[ $rv -ne 0 ]]; then
-			iptables-save | sed -r "/INPUT.*comment.*${iptables_comment}/s/-A/iptables -D/e" &>/dev/null
-			sleep 0.3
+			[ -n "$iptables_comment" ] && iptables-save | awk '$0 ~ /'"$iptables_comment"'/ {gsub(/^-A /, "iptables -D "); system ($0)}'
+			[ -n "$iptables_comment" ] && ip6tables-save | awk '$0 ~ /'"$iptables_comment"'/ {gsub(/^-A /, "ip6tables -D "); system ($0)}'
 			ipset destroy "$perm_ipset" &>/dev/null
 			destroy_temp_ipsets
 			die "Failed to swap temporary and permanent ipsets."
@@ -464,7 +498,7 @@ if [[ "$action" = "add" ]]; then
 		echo "Ok."
 
 		## destroy the old ipset (now it's called temporary)
-		debugprint "Destroying the temporary ipset for country '$ccode'... "
+		debugprint "Destroying the temporary ipset for list '$list_id'... "
 		ipset destroy "$temp_ipset"; rv=$?
 		[[ $rv -ne 0 ]] && die "Failed to destroy ipset '$temp_ipset'. Strange........."
 		debugprint "Ok."
@@ -479,22 +513,36 @@ echo
 if [[ "$list_type" = "whitelist" ]]; then
 	if [[ ! "$nodrop" ]]; then
 		# set policy on INPUT and FORWARD chains to DROP
-		echo -n "Setting default iptables policies for INPUT and FORWARD chains to DROP... "
-		iptables -P INPUT DROP; rv=$?
-		[[ $rv -ne 0 ]] && die "Failed to change iptables policy with command 'iptables -P INPUT DROP'."
+		for family in $families; do
+			case "$family" in
+				ipv4 ) iptables_command="iptables" ;;
+				ipv6 ) iptables_command="ip6tables"
+			esac
 
-		iptables -P FORWARD DROP; rv=$?
-		[[ $rv -ne 0 ]] && die "Failed to change iptables policy with command 'iptables -P FORWARD DROP'."
-		echo "Ok."
+			echo -n "Setting $family default iptables policies for INPUT and FORWARD chains to DROP... "
+			$iptables_command -P INPUT DROP; rv=$?
+			[[ $rv -ne 0 ]] && die "Failed to change iptables policy with command '$iptables_command -P INPUT DROP'."
+
+			$iptables_command -P FORWARD DROP; rv=$?
+			[[ $rv -ne 0 ]] && die "Failed to change iptables policy with command '$iptables_command -P FORWARD DROP'."
+			echo "Ok."
+		done
 	else
-		echo "WARNING: nodrop was requested. Leaving INPUT and FORWARD chains with ACCEPT policies (geoblocking is inactive)."
+		echo "WARNING: nodrop was requested. Leaving INPUT and FORWARD chains with pre-install policies."
 	fi
 else
 	# set policy on INPUT chain to ACCEPT
-	echo -n "Setting default iptables policy for INPUT chains to ACCEPT... "
-	iptables -P INPUT ACCEPT; rv=$?
-	[[ $rv -ne 0 ]] && die "Failed to change iptables policy with command 'iptables -P INPUT ACCEPT'."
+	for family in $families; do
+		case "$family" in
+			ipv4 ) iptables_command="iptables" ;;
+			ipv6 ) iptables_command="ip6tables"
+		esac
 
+		echo -n "Setting $family default iptables policy for INPUT chains to ACCEPT... "
+		$iptables_command -P INPUT ACCEPT; rv=$?
+		[[ $rv -ne 0 ]] && die "Failed to change iptables policy with command '$iptables_command -P INPUT ACCEPT'."
+
+	done
 fi
 
 # This line is to simulate a simple fault and test recovery from backup
