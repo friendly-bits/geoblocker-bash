@@ -14,6 +14,8 @@
 
 
 #### Initial setup
+export LC_ALL=C
+printf '%s\n' "$PATH" | grep '/usr/local/bin' &>/dev/null || export PATH="$PATH:/usr/local/bin"
 
 me=$(basename "$0")
 
@@ -52,20 +54,20 @@ usage() {
 $me
 Serves as a proxy to call the -fetch, -apply and -backup scripts with arguments required for each action.
 
-Usage: $me <action> [-c <"country_code [country_code] ... [country_code]">] [-d] [-h]
+Usage: $me <action> [-l <"list_id [list_id] ... [list_id]">] [-d] [-h]
 
 Actions:
-    add|remove                   : Add or remove country codes to/from geoblocking rules.
+    add|remove                   : Add or remove ip lists to/from geoblocking rules.
     update                       : Fetch ip lists and reactivate them via the *apply script.
     apply                        : Apply previously downloaded lists (skip fetching)
 
 Options:
-    -c <"country_codes">          : country codes (ISO 3166-1 alpha-2). if passing multiple country codes, use double quotes.
+    -l <"list_ids">              : List id's in the format <ccode>_<family>. if passing multiple list id's, use double quotes.
 
-    -o                            : No backup: don't create backup of current firewall state before the action.
+    -o                           : No backup: don't create backup of current firewall state before the action.
 
-    -d                            : Debug
-    -h                            : This help
+    -d                           : Debug
+    -h                           : This help
 
 EOF
 }
@@ -78,7 +80,7 @@ shift 1
 
 
 # check for valid action and translate *run action to *apply action
-# *apply does the same thing whether we want to update, apply(refresh) or to add a new ccode, which is why this translation is needed
+# *apply does the same thing whether we want to update, apply(refresh) or to add a new ip list, which is why this translation is needed
 
 case "$action_run" in
 	add) action_apply="add" ;;
@@ -92,7 +94,7 @@ esac
 # process the rest of the arguments
 while getopts ":c:odh" opt; do
 	case $opt in
-		c) arg_ccodes=$OPTARG;;
+		c) arg_lists=$OPTARG;;
 		o) nobackup="true";;
 		d) debugmode_args="true";;
 		h) usage; exit 0;;
@@ -104,7 +106,7 @@ shift $((OPTIND -1))
 [[ -n "$*" ]] && {
 	usage
 	err1 "Error in arguments. First unrecognized argument: '$1'."
-	err2="Note: If specifying multiple country codes, put them in double quotation marks."
+	err2="Note: If specifying multiple list ids, put them in double quotation marks."
 	die "$err1" "$err2"
 }
 
@@ -121,36 +123,34 @@ debugentermsg
 
 #### VARIABLES
 
-# Read current set of countries from the the config file, unless the variable is already set by a parent script
-config_ccodes="${config_ccodes:-$(getconfig "Countries")}" || die "Error: Couldn't read value for Countries from the config file."
+# Read current list id's from the the config file, unless the variable is already set by a parent script
+config_lists="${config_lists:-$(getconfig "Lists")}" || die "Error: Couldn't read value for Lists from the config file."
+export config_lists
 
 nobackup="${nobackup:-$(getconfig "NoBackup")}" || die "Error: Couldn't read value for NoBackup from the config file."
 
-export config_ccodes
+dl_source="$(getconfig "Source")" || die "Error: Couldn't read value for Source from the config file."
 
-# if no country codes were passed via arguments, and action is update or apply, get the codes from the config file
+# if no list id's were passed via arguments, and action is update or apply, get the lists from the config file
 # otherwise use the codes from arguments
-if [[ ( -z "$arg_ccodes" ) && ( "$action_run" =~ ^(update|apply)$ ) ]]; then
-	ccodes="$config_ccodes"
+if [[ ( -z "$arg_lists" ) && ( "$action_run" =~ ^(update|apply)$ ) ]]; then
+	lists="$config_lists"
 else
-	ccodes="$arg_ccodes"
+	lists="$arg_lists"
 fi
 
 # trim single-quotes if any
-ccodes="${ccodes//\'}"
+lists="${lists//\'}"
 
 # trim extra whitespaces
-ccodes="$(trim_spaces "$ccodes")"
+lists="$(trim_spaces "$lists")"
 
-ccodes_cnt=$(echo "$ccodes" | wc -w)
+lists_cnt=$(echo "$lists" | wc -w)
 
 # get list_type from the config file, unless the list_type variable is already set by a parent script
 list_type="${list_type:-$(getconfig "ListType")}" || die "Error: Couldn't read value for ListType from the config file."
 
 export list_type
-
-# convert to lower case
-families_arg="${families_arg,,}"
 
 #convert to lower case
 action_run="${action_run,,}"
@@ -163,13 +163,13 @@ iplist_dir="$datadir/ip_lists"
 
 status_file="$iplist_dir/status"
 
-failed_ccodes_cnt=0
+failed_lists_cnt=0
 
 
 #### CHECKS
 
-missing_deps="$(check_deps jq iptables-save iptables-restore ipset ${suite_name}-fetch ${suite_name}-apply ${suite_name}-backup)" \
-	|| die "Error: missing dependencies: $missing_deps."
+missing_deps="$(check_deps iptables-save iptables-restore ipset "$script_dir/${suite_name}-fetch" "$script_dir/${suite_name}-apply" \
+	"$script_dir/${suite_name}-backup")" || die "Error: missing dependencies: $missing_deps."
 
 # check that the config file exists
 [[ ! -f "$conf_file" ]] && die "Error: config file '$conf_file' doesn't exist! Run the installation script again."
@@ -178,8 +178,7 @@ missing_deps="$(check_deps jq iptables-save iptables-restore ipset ${suite_name}
 
 [[ -z "$iplist_dir" ]] && die "Error: iplist file path can not be empty!"
 
-# check for country ccodes
-[[ -z "$ccodes" ]] && { err="Error: no country codes were specified!"; usage; die "$err"; }
+[[ -z "$lists" ]] && { err="Error: no list id's were specified!"; usage; die "$err"; }
 
 [[ -z "$list_type" ]] && die "\$list_type variable should not be empty! Something is wrong!"
 
@@ -190,29 +189,29 @@ missing_deps="$(check_deps jq iptables-save iptables-restore ipset ${suite_name}
 
 if [[ "$action_run" =~ ^(update|add)$ ]]; then
 
-	# mark all ccodes as failed in the status file before launching *fetch. if *fetch completes successfully, it will reset this
-	setstatus "$status_file" "failed_ccodes=$ccodes" || die "Error: Failed to write to status file '$status_file'."
+	# mark all lists as failed in the status file before launching *fetch. if *fetch completes successfully, it will reset this
+	setstatus "$status_file" "failed_lists=$lists" || die "Error: Failed to write to status file '$status_file'."
 
-	call_script "${suite_name}-fetch" -c "$ccodes" -p "$iplist_dir" -s "$status_file"
+	call_script "${suite_name}-fetch" -l "$lists" -p "$iplist_dir" -s "$status_file" -u "$dl_source"
 
 	# read *fetch results from the status file
-	ccodes_to_update="$(getstatus "$status_file" "ccodes_to_update")" || { die "Error: Couldn't read value for 'ccodes_to_update' from status file '$status_file'."; }
-	failed_ccodes="$(getstatus "$status_file" "failed_ccodes")" || { die "Error: Couldn't read value for 'failed_ccodes' from status file '$status_file'."; }
+	fetched_lists="$(getstatus "$status_file" "FetchedLists")" || { die "Error: Couldn't read value for 'Fetched_Lists' from status file '$status_file'."; }
+	failed_lists="$(getstatus "$status_file" "FailedLists")" || { die "Error: Couldn't read value for 'FailedLists' from status file '$status_file'."; }
 
-	[[ -n "$failed_ccodes" ]] && echolog -err "Failed to fetch and validate subnet lists for countries '$failed_ccodes'."
+	[[ -n "$failed_lists" ]] && echolog -err "Failed to fetch and validate subnet lists for lists '$failed_lists'."
 
-	failed_ccodes_cnt=$(echo "$failed_ccodes" | wc -w)
+	failed_lists_cnt=$(echo "$failed_lists" | wc -w)
 
-	[[ "$failed_ccodes_cnt" -ge "$ccodes_cnt" ]] && die 254 "All fetch attempts failed."
+	[[ "$failed_lists_cnt" -ge "$lists_cnt" ]] && die 254 "All fetch attempts failed."
 
 else
-	ccodes_to_update="$ccodes"
+	fetched_lists="$lists"
 fi
 
 
 ### Apply ip lists
 
-if [[ -z "$ccodes_to_update" ]]; then
+if [[ -z "$fetched_lists" ]]; then
 	echolog "Firewall reconfiguration isn't required."
 else
 	if [[ -z "$nobackup" ]]; then
@@ -220,7 +219,7 @@ else
 
 		# check config coherency vs active ipsets and firewall rules before creating backup
 		# skip if in manualmode (launched by -manage) because -manage checks coherency anyway
-		[[ ! "$manualmode" ]] && { check_ccodes_coherency; rv=$?; }
+		[[ ! "$manualmode" ]] && { check_lists_coherency; rv=$?; }
 		if [[ $rv -eq 0 ]]; then
 			# call the backup script to create a known-good backup of ipsets and iptables state
 			call_script "${suite_name}-backup" create-backup
@@ -228,15 +227,15 @@ else
 			echolog -err "Warning: actual $list_type firewall config differs from the config file!"
 			echolog -err "Please run the *manage script to restore config coherency!"
 			echolog -err "If it's a recurring issue, please consider filing a bug report!"
-			[[ -n "$unexpected_ccodes" ]] && echolog -err "Unexpected country codes in the firewall: '$unexpected_ccodes'"
-			[[ -n "$missing_ccodes" ]] && echolog -err "Missing country codes in the firewall: '$missing_ccodes'"
+			[[ -n "$unexpected_lists" ]] && echolog -err "Unexpected ip lists in the firewall: '$unexpected_lists'"
+			[[ -n "$missing_lists" ]] && echolog -err "Missing ip lists in the firewall: '$missing_lists'"
 			echo
 		fi
 	else
 		debugprint "Skipping backup of current firewall state."
 	fi
 
-	call_script "${suite_name}-apply" "$action_apply" -c "$ccodes_to_update"; rv=$?
+	call_script "${suite_name}-apply" "$action_apply" -l "$fetched_lists"; rv=$?
 
 #	[[ "$testmode" ]] && rv=1
 
@@ -249,18 +248,16 @@ else
 		echo
 		die "$rv"
 	else
-		echolog "Successfully executed action '$action_run' for countries '$ccodes_to_update'."
+		echolog "Successfully executed action '$action_run' for lists '$fetched_lists'."
 	fi
 fi
 
-if [[ "$failed_ccodes_cnt" -ne 0 ]]; then
-	debugprint "failed_ccodes_cnt: $failed_ccodes_cnt"
+if [[ "$failed_lists_cnt" -ne 0 ]]; then
+	debugprint "failed_lists_cnt: $failed_lists_cnt"
 	rv=254
 else
 	rv=0
 fi
 
-
-unset debugmode list_type config_ccodes
-
+debugprint "Exiting with status '$rv'"
 exit "$rv"
