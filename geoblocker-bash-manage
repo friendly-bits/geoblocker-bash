@@ -5,7 +5,8 @@
 # Provides an interface to configure geoblocking.
 
 #### Initial setup
-LC_ALL=C
+export LC_ALL=C
+printf '%s\n' "$PATH" | grep '/usr/local/bin' &>/dev/null || export PATH="$PATH:/usr/local/bin"
 
 me=$(basename "$0")
 
@@ -51,11 +52,11 @@ Options:
     -c <"country_codes">          : country codes (ISO 3166-1 alpha-2). if passing multiple country codes, use double quotes.
     -s <"sch_expression"|disable> : schedule expression for the periodic cron job implementing auto-updates of the ip lists,
                                             must be inside double quotes.
-                                            default schedule is "0 4 * * *" (at 4:00 [am] every day)
+                                            default schedule is "15 4 * * *" (at 4:15 [am] every day)
                                         disable: *skip* creating the cron job which is required for automatic updates of the ip list
 
     -f                            : Force the action even if it doesn't make sense or may cause remote server lockout.
-    -t                            : Test mode: inject unexpected ccode and verify fault recovery
+    -t                            : Test mode: inject unexpected country code and verify fault recovery
     -d                            : Debug
     -h                            : This help
 
@@ -125,83 +126,97 @@ report_status() {
 
 	# read iptables state and ipsets list into variables to avoid querying iptables and ipset multiple times
 	# these values are also re-used in some functions in the *common script
-	iptables_output="$(iptables -vL)"
-	[[ -z $iptables_output ]] && die "Error: failed to get iptables state."
-	ipset_list="$(ipset list -n)"
+	declare -A iptables_output
+	for family in $families; do
+		case "$family" in
+			ipv4 ) iptables_command="iptables" ;;
+			ipv6 ) iptables_command="ip6tables"
+		esac
+		iptables_output[$family]="$($iptables_command -vL)" || die "Error: failed to get $family iptables state."
+	done
 
-	echo -e "\n${yellow}Geoblocking status report:${no_color}"
+	echo -e "\n${purple}Geoblocking status report:${no_color}"
 
-	echo -e "\nGeoblocking mode: ${yellow}${list_type}${no_color}."
+	echo -e "\nGeoblocking mode: ${purple}${list_type}${no_color}."
 
-	# report default chain policies
-	input_policy="$(awk '$0 ~ "INPUT" {-F"policy| "; print $4}' <<< "$iptables_output")"
-	forward_policy="$(awk '$0 ~ "FORWARD" {-F"policy| "; print $4}' <<< "$iptables_output")"
-
-	if [[ -z "$input_policy" || -z "$forward_policy" ]]; then
-		die "Error: failed to determine current policies for INPUT and FORWARD chains."
-	fi
+	# check default chain policies
+	declare -A input_policy
+	declare -A forward_policy
+	for family in $families; do
+		input_policy[$family]="$(awk '$0 ~ "INPUT" {-F"policy| "; print $4}' <<< "${iptables_output[$family]}")"
+		forward_policy[$family]="$(awk '$0 ~ "FORWARD" {-F"policy| "; print $4}' <<< "${iptables_output[$family]}")"
+		if [[ -z "${input_policy[$family]}" || -z "${forward_policy[$family]}" ]]; then
+			die "Error: failed to determine current policies for INPUT and FORWARD chains."
+		fi
+	done
 
 	# check ipsets and iptables rules for active ccodes
 	# shellcheck disable=SC2119
-	active_ccodes="$(find_active_ccodes)"; rv=$?
-	if [[ -z "$active_ccodes" ]]; then
-		echo -e "\n${red}Warning${no_color}: no firewall rules found for any country codes!\n"
+	active_lists="$(find_active_lists)"; rv=$?
+	if [[ -z "$active_lists" ]]; then
+		echo -e "\n${red}Warning${no_color}: no geoblocking firewall rules found!\n"
 	else
-		echo -e "$list_type is configured for country codes: '${yellow}$active_ccodes${no_color}'."
+		echo -e "Active ip lists: '${yellow}$active_lists${no_color}'."
 	fi
 
 	# shellcheck disable=SC2015
-	[[ -n "$config_coherent" ]] && rv=0 || { check_ccodes_coherency; rv=$?; }
+	[[ -n "$config_coherent" ]] && rv=0 || { check_lists_coherency; rv=$?; }
 	if [[ "$rv" -ne 0 ]]; then
 		echo -e "\n${red}Error${no_color}: discrepancy detected between the config file and iptables rules!\n" >&2
 		[[ "$ipsets_incoherent" ]] && \
 			echo -e "\n${purple}Warning:${no_color} discrepancy detected between existing geoblocking ipsets and geoblocking firewall rules!\n" >&2
-	else
-		echo -e "Country codes in the firewall rules ${green}match the config${no_color}.\n"
 	fi
 
 	# report INPUT and FORWARD chain policies
-	[[ "$input_policy" = "$expected_policy" ]] && input_policy_colored="${green}${input_policy}${no_color}" || \
-		input_policy_colored="${red}${input_policy}${no_color}"
-	[[ "$forward_policy" = "$expected_policy" || "$forward_policy" = "DROP" ]] && forward_policy_colored="${green}${forward_policy}${no_color}" || \
-		forward_policy_colored="${red}${forward_policy}${no_color}"
-	echo -e "${yellow}Active iptables policies${no_color}: \nINPUT chain: $input_policy_colored, FORWARD chain: $forward_policy_colored\n"
+	declare -A input_policy_colored
+	declare -A forward_policy_colored
+	echo -e "\n${yellow}Active firewall policies${no_color}:"
+	for family in $families; do
+		[[ "${input_policy[$family]}" = "$expected_policy" ]] && input_policy_colored[$family]="${green}✔ ${purple}${input_policy[$family]}${no_color}" || \
+			input_policy_colored[$family]="${red}✘ ${purple}${input_policy[$family]}${no_color}"
+		[[ "${forward_policy[$family]}" = "$expected_policy" || "${forward_policy[$family]}" = "DROP" ]] && \
+		forward_policy_colored[$family]="${green}✔ ${purple}${forward_policy[$family]}${no_color}" || \
+			forward_policy_colored[$family]="${red}✘ ${purple}${forward_policy[$family]}${no_color}"
 
-	# check INPUT chain default policy compatibility with list_type
-	[[ "$input_policy" != "$expected_policy" ]] && {
-				echo -e "${purple}WARNING${no_color}: $list_type functionality requires INPUT chain policy to be '$expected_policy' but it is '$input_policy'."
-				echo -e "${red}$list_type is not functioning${no_color}.";
-				} || echo -e "INPUT chain policy ${green}is compatible${no_color} with $list_type."
+		echo -e "$family - INPUT chain: ${input_policy_colored[$family]}, FORWARD chain: ${forward_policy_colored[$family]}"
+	done
+	echo
 
-	# check FORWARD chain default policy compatibility with list_type
-	[[ "$forward_policy" != "$expected_policy" && "$forward_policy" != "DROP" ]] && {
-				echo -e "${purple}WARNING${no_color}: $list_type functionality recommends FORWARD chain policy to be '$expected_policy' but it is '$forward_policy'."
-				} || echo -e "FORWARD chain policy ${green}is compatible${no_color} with $list_type."
+	# check INPUT and FORWARD chains default policy compatibility with list_type
+	for family in $families; do
+		[[ "${input_policy[$family]}" != "$expected_policy" ]] && {
+					echo -e "${purple}WARNING${no_color}: $list_type functionality requires INPUT chain policy to be '$expected_policy' but it is '${input_policy[$family]}' for family $family."
+					echo -e "${red}$list_type is not functioning correctly${no_color}.";
+					}
+		[[ "${forward_policy[$family]}" != "$expected_policy" && "${forward_policy[$family]}" != "DROP" ]] && {
+					echo -e "${purple}WARNING${no_color}: $list_type functionality recommends FORWARD chain policy to be '$expected_policy' but it is '${forward_policy[$family]}' for family $family."
+					}
+	done
 
+	for family in $families; do
+		iptables_rules_header="$(grep -m1 "prot opt" <<< "${iptables_output[$family]}" | cut -b12-150)"
+		# report geoblocking firewall rules
+		echo -e "${yellow}${list_type^} geoblocking firewall rules ($family)${no_color}:"
+		echo "------------------------------------------------------------------------------------------------------------------------"
+		echo -e "$iptables_rules_header"
+		echo "------------------------------------------------------------------------------------------------------------------------"
+		geoblocking_rules="$(grep "match-set ${suite_name}" <<< "${iptables_output[$family]}" | grep "$expected_rule_type" | cut -b12-170)"
+		if [[ -z "$geoblocking_rules" ]]; then echo -e "${red}None.${no_color}"
+		else
+			 echo -e "$geoblocking_rules"
+		fi
 
-	# report global iptables rules
-	iptables_rules_header="$(grep -m1 "prot opt" <<< "$iptables_output" | cut -b12-150)"
-
-	echo -e "\n${yellow}Global iptables rules${no_color} for $suite_name:"
-	echo "------------------------------------------------------------------------------------------------------------------------"
-	echo -e "$iptables_rules_header"
-	echo "------------------------------------------------------------------------------------------------------------------------"
-	global_rules="$(grep "${suite_name}_global" <<< "$iptables_output" |cut -b12-170)"
-	if [[ -z "$global_rules" ]]; then echo -e "${red}None.${no_color}\n"
-	else
-		 echo -e "$global_rules\n"
-	fi
-
-	# report specific rules for the active geoblocking mode
-	echo -e "\n${yellow}$list_type iptables rules${no_color} for $suite_name:"
-	echo "------------------------------------------------------------------------------------------------------------------------"
-	echo -e "$iptables_rules_header"
-	echo "------------------------------------------------------------------------------------------------------------------------"
-	geoblocking_rules="$(grep "match-set ${suite_name}" <<< "$iptables_output" | grep "$expected_rule_type" | cut -b12-170)"
-	if [[ -z "$geoblocking_rules" ]]; then echo -e "${red}None.${no_color}\n"
-	else
-		 echo -e "$geoblocking_rules\n"
-	fi
+		# report auxiliary firewall rules
+		echo -e "\n${yellow}Auxiliary geoblocking firewall rules ($family)${no_color}:"
+		echo "------------------------------------------------------------------------------------------------------------------------"
+		echo -e "$iptables_rules_header"
+		echo "------------------------------------------------------------------------------------------------------------------------"
+		aux_rules="$(grep "${suite_name}_aux" <<< "${iptables_output[$family]}" |cut -b12-170)"
+		if [[ -z "$aux_rules" ]]; then echo -e "${red}None.${no_color}\n"
+		else
+			 echo -e "${aux_rules}\n"
+		fi
+	done
 
 	# check if cron service is enabled
 	check_cron || crondisabled="true"
@@ -239,21 +254,14 @@ report_status() {
 	fi
 }
 
-reset_state_vars(){
-# unsets iptables_output and ipset_lists variables
-# these vars are used in functions of the sourced *common script to avoid querying the firewall multiple times when its state should not have changed
-# once we expect the state to have changed ( = after calling the -run script), we reset the vars in order to avoid using irrelevant data
-	unset iptables_output ipset_lists
-}
-
 restore_from_config() {
 # restore ccodes from the config file
 
 	echo -e "\nWarning: Config incoherence detected between the firewall current status and the config file."
-	[[ -n "$unexpected_ccodes" ]] && echo "Unexpected ccodes in the firewall: '$unexpected_ccodes'" >&2
-	[[ -n "$missing_ccodes" ]] && echo "Missing ccodes in the firewall: '$missing_ccodes'" >&2
+	[[ -n "$unexpected_lists" ]] && echo "Unexpected ip lists in the firewall: '$unexpected_lists'" >&2
+	[[ -n "$missing_lists" ]] && echo "Missing ip lists in the firewall: '$missing_lists'" >&2
 	echo "Would you like to re-apply the rules from the config file to fix this?"
-	echo -e "\n'Y' to re-apply the config rules. 'N' to exit the script. 'S' to show country codes in the config file.\n"
+	echo -e "\n'Y' to re-apply the config rules. 'N' to exit the script. 'S' to show configured ip lists.\n"
 
 	while true; do
 		read -p "(Y/N/S) " -n 1 -r
@@ -261,36 +269,34 @@ restore_from_config() {
 		if [[ "$REPLY" =~ ^[Yy]$ ]]; then echo; break
 		elif [[ "$REPLY" =~ ^[Nn]$ ]]; then echo -e "\nExiting."; exit 1
 		elif [[ "$REPLY" =~ ^[Ss]$ ]]; then
-			echo -e "\n\n\n\n$list_type country codes in the config file: '$config_ccodes'\n"
+			echo -e "\n\n\n\n$list_type ip lists in the config file: '$config_lists'\n"
 		else echo -e "\nPlease press 'y/n/s'.\n"
 		fi
 	done
 
-	echo "Restoring $list_type countries set '$config_ccodes' from the config file... "
-	ccodes_to_remove="$(merge_lists "$config_ccodes" "$unexpected_ccodes" "$ccodes_to_change")"
-	call_script "$run_command" remove -o -c "$ccodes_to_remove"
-	[[ -n "$config_ccodes" ]] && $run_command add -o -c "$config_ccodes"
+	echo "Restoring $list_type lists '$config_lists' from the config file... "
+	lists_to_remove="$(merge_lists "$config_lists" "$unexpected_lists" "$lists_to_change")"
+	call_script "$run_command" remove -o -c "$lists_to_remove"
+	[[ -n "$config_lists" ]] && $run_command add -o -c "$config_lists"
 
-	reset_state_vars
-	check_ccodes_coherency; rv=$?
+	check_lists_coherency; rv=$?
 	if [[ $rv -eq 0 ]]; then
-		echo "Successfully re-applied previous $list_type countries set."
+		echo "Successfully re-applied previous $list_type ip lists."
 	else
-		echo "Failed to re-apply previous $list_type countries set." >&2
-		[[ -n "$unexpected_ccodes" ]] && echo "Unexpected $list_type ccodes in the firewall: '$unexpected_ccodes'" >&2
-		[[ -n "$missing_ccodes" ]] && echo "Missing $list_type ccodes in the firewall: '$missing_ccodes'" >&2
+		echo "Failed to re-apply previous $list_type ip lists." >&2
+		[[ -n "$unexpected_lists" ]] && echo "Unexpected $list_type ip lists in the firewall: '$unexpected_lists'" >&2
+		[[ -n "$missing_lists" ]] && echo "Missing $list_type ip lists in the firewall: '$missing_lists'" >&2
 		[[ "$ipsets_incoherent" ]] && echo "Warning: discrepancy detected between existing geoblocking ipsets and geoblocking firewall rules!" >&2
 		# call the *backup script to initiate recovery from fault
 		call_script "${suite_name}-backup" restore; rv=$?
 
-		reset_state_vars
-		check_ccodes_coherency; rv1=$?; rv=$(( rv + rv1 ))
+		check_lists_coherency; rv1=$?; rv=$(( rv + rv1 ))
 		if [[ $rv -eq 0 ]]; then
-			echo "Successfully re-applied previous $list_type countries set."
+			echo "Successfully re-applied previous $list_type lists."
 		else
-			echo "Failed to re-apply previous $list_type countries set." >&2
-			[[ -n "$unexpected_ccodes" ]] && echo "Unexpected $list_type ccodes in the firewall: '$unexpected_ccodes'" >&2
-			[[ -n "$missing_ccodes" ]] && echo "Missing $list_type ccodes in the firewall: '$missing_ccodes'" >&2
+			echo "Failed to re-apply previous $list_type lists." >&2
+			[[ -n "$unexpected_lists" ]] && echo "Unexpected $list_type ip lists in the firewall: '$unexpected_lists'" >&2
+			[[ -n "$missing_lists" ]] && echo "Missing $list_type ip lists in the firewall: '$missing_lists'" >&2
 			[[ "$ipsets_incoherent" ]] && echo "Warning: discrepancy detected between existing geoblocking ipsets and geoblocking firewall rules!" >&2
 			die "$rv" "Something is not working as it should. Consider fixing your firewall or your system. If it's a bug then please report it."
 		fi
@@ -300,11 +306,11 @@ restore_from_config() {
 check_for_lockout() {
 # tries to prevent the user from locking themselves out
 
-# if we are currently installing, checks local country code vs $planned_ccodes list
+# if we are currently installing, checks local country code vs $planned_lists list
 # if not, checks it vs $ccodes_to_change list
 
 # the reason for this distinction is in case the user decides to ignore the warning and proceed,
-# if we continue to check vs $planned_ccodes then they will have to see the warning every time and reply to it every time,
+# if we continue to check vs $planned_lists then they will have to see the warning every time and reply to it every time,
 # even for actions unrelated to their ccode
 # on the other hand, if we check vs $ccodes_to_change during installation, we may miss the fact that their $ccode is not included in the whitelist
 
@@ -320,13 +326,15 @@ check_for_lockout() {
 	# otherwise it would be very annoying for the user
 	[[ -z "$user_ccode" ]] && return 0
 
+	planned_ccodes="$(printf '%s' "$planned_lists" | tr ' ' '\n' | cut -s -d_ -f1 | sort -u | tr '\n' ' ')"; rv=$?
+
 	if [[ "$in_install" ]]; then
 		filtered_ccode="$(find_lists_intersection "$user_ccode" "$planned_ccodes")"
 
 		case "$list_type" in
 			whitelist)
 				if [[ -z "$filtered_ccode" ]]; then
-					msg1="Your country code '$user_ccode' is not included in the planned final whitelist '$planned_ccodes'.\n"
+					msg1="Your country code '$user_ccode' is not included in the planned whitelist '$planned_ccodes'.\n"
 					msg2="Make sure you do not lock yourself out."
 					echo -e "$msg1$msg2"
 				fi
@@ -345,6 +353,7 @@ check_for_lockout() {
 		esac
 
 	else
+		ccodes_to_change="$(printf '%s' "$lists_to_change" | tr ' ' '\n' | cut -s -d_ -f1 | sort -u | tr '\n' ' ')"
 		filtered_ccode="$(find_lists_intersection "$user_ccode" "$ccodes_to_change")"
 
 		# if user is not doing anything related to their own country code, skip further checks
@@ -385,11 +394,11 @@ export nolog="true"
 # set environment variable "manualmode" to signal to daughter scripts that user interaction is possible
 export manualmode="true"
 
-# get install_dir from the config file
 install_dir="$(getconfig "Installdir")" || die "Error: Couldn't read value for Installdir from the config file."
 
-# get list_type from the config file
 list_type="$(getconfig "ListType")" || die "Error: Couldn't read value for ListType from the config file."
+
+families="$(getconfig "Families")" || die "Error: Couldn't read value for Families from the config file."
 
 [[ "$list_type" != "whitelist" && "$list_type" != "blacklist" ]] &&  die "Error: Unrecognized list type '$list_type'!"
 
@@ -399,8 +408,7 @@ ccodes_arg="${ccodes_arg^^}"
 # remove duplicates etc
 ccodes_arg="$(sanitize_string "$ccodes_arg")"
 
-### Read current set of countries from the the config file into config_ccodes
-config_ccodes="$(getconfig "Countries")" || die "Error: Couldn't read value for Countries from the config file."
+config_lists="$(getconfig "Lists")" || die "Error: Couldn't read value for Lists from the config file."
 
 # convert the string to lower case
 action="${action,,}"
@@ -410,7 +418,7 @@ run_command="${install_dir}/${suite_name}-run"
 
 #### CHECKS
 
-missing_deps="$(check_deps jq iptables-save iptables-restore ipset)" || die "Error: missing dependencies: $missing_deps."
+missing_deps="$(check_deps iptables-save iptables-restore ipset)" || die "Error: missing dependencies: $missing_deps."
 
 
 # check that the config file exists
@@ -461,7 +469,7 @@ fi
 # check config coherency vs active ipsets and firewall rules before performing any action
 unset config_coherent
 # shellcheck disable=SC2015
-check_ccodes_coherency && config_coherent="true" || restore_from_config
+check_lists_coherency && config_coherent="true" || restore_from_config
 
 if [[ "$action" = "status" ]]; then
 	report_status
@@ -469,43 +477,47 @@ if [[ "$action" = "status" ]]; then
 	exit 0
 fi
 
+for ccode in $ccodes_arg; do
+	for family in $families; do
+		lists_arg+="${ccode}_${family} "
+	done
+done
+lists_arg="${lists_arg/% }"
 
 case "$action" in
-
 	add)
-		requested_planned_ccodes="$(merge_lists "$config_ccodes" "$ccodes_arg")"
-#		debugprint "requested resulting ccodes: '$requested_planned_ccodes'"
+		requested_lists="$(merge_lists "$config_lists" "$lists_arg")"
+#		debugprint "requested resulting lists: '$requested_lists'"
 
 		if [[ -z "$force_action" ]]; then
-			# remove any entries already present in config_ccodes from ccodes_arg and assign to ccodes_to_change
-			ccodes_to_change="$(find_lists_difference "$config_ccodes" "$requested_planned_ccodes")"
+			# remove any entries already present in config_lists from lists_arg and assign to lists_to_change
+			lists_to_change="$(find_lists_difference "$config_lists" "$requested_lists")"
 
-			# find which ccodes were specified for addition but already exist
-			wrong_ccodes="$(find_lists_intersection "$ccodes_arg" "$config_ccodes")"
+			# find which lists were specified for addition but already exist
+			wrong_lists="$(find_lists_intersection "$lists_arg" "$config_lists")"
 
-			[[ -n "$wrong_ccodes" ]] && echo "NOTE: countries '$wrong_ccodes' have already been added to the $list_type." >&2
+			[[ -n "$wrong_lists" ]] && echo "NOTE: ip lists '$wrong_lists' have already been added to the $list_type." >&2
 		else
-			ccodes_to_change="$ccodes_arg"
+			lists_to_change="$lists_arg"
 		fi
-		planned_ccodes="$(merge_lists "$config_ccodes" "$ccodes_to_change")"
-#		debugprint "action: add, ccodes_to_change: '$ccodes_to_change'"
+		planned_lists="$(merge_lists "$config_lists" "$lists_to_change")"
+#		debugprint "action: add, lists_to_change: '$lists_to_change'"
 	;;
 
 	remove)
-#		debugprint "requested ccodes to remove: '$ccodes_arg'"
+#		debugprint "requested lists to remove: '$lists_arg'"
 		if [[ -z "$force_action" ]]; then
-			# find duplicate-free intersection between config_ccodes and ccodes_arg
-			ccodes_to_change="$(find_lists_intersection "$config_ccodes" "$ccodes_arg")"
-			# find which ccodes were specified for removal but don't exist
-			good_ccodes="$(find_lists_intersection "$ccodes_to_change" "$ccodes_arg")"
-			wrong_ccodes="$(find_lists_difference "$ccodes_arg" "$good_ccodes")"
-			[[ -n "$wrong_ccodes" ]] && echo "NOTE: countries '$wrong_ccodes' have not been added to the $list_type, so can not remove." >&2
-
+			# find duplicate-free intersection between config_lists and lists_arg
+			lists_to_change="$(find_lists_intersection "$config_lists" "$lists_arg")"
+			# find which lists were specified for removal but don't exist
+			good_lists="$(find_lists_intersection "$lists_to_change" "$lists_arg")"
+			wrong_lists="$(find_lists_difference "$lists_arg" "$good_lists")"
+			[[ -n "$wrong_lists" ]] && echo "NOTE: ip lists '$wrong_lists' have not been added to the $list_type, so can not remove." >&2
 		else
-			ccodes_to_change="$ccodes_arg"
+			lists_to_change="$lists_arg"
 		fi
-		# remove any entries found in ccodes_to_change from config_ccodes and assign to planned_ccodes
-		planned_ccodes="$(subtract_list_a_from_b "$ccodes_to_change" "$config_ccodes")"
+		# remove any entries found in lists_to_change from config_lists and assign to planned_lists
+		planned_lists="$(subtract_list_a_from_b "$lists_to_change" "$config_lists")"
 	;;
 esac
 
@@ -513,18 +525,18 @@ esac
 if [[ "$action" != "add" && "$action" != "remove" ]]; then
 	debugprint "Skipping the *run script call because specified action was '$action'."
 else
+	if [[ -z "$lists_to_change" && -z "$force_action" ]]; then
+		config_lists="$(getconfig "Lists")" || die "Error: Couldn't read value for Lists from the config file."
 
-	if [[ -z "$ccodes_to_change" && -z "$force_action" ]]; then
-		config_ccodes="$(getconfig "Countries")" || die "Error: Couldn't read value for Countries from the config file."
-		echo -e "\nCountries in the final $list_type: '${yellow}$config_ccodes${no_color}'."
+		echo -e "\nLists in the final $list_type: '${yellow}$config_lists${no_color}'."
 		die 254 "Nothing to do, exiting."
 	fi
 
-	debugprint "planned ccodes after '$action': '$planned_ccodes'"
+	debugprint "planned lists after '$action': '$planned_lists'"
 
-	# if planned_ccodes list is empty
-	if [[ -z "$planned_ccodes" && -z "$force_action" && "$list_type" = "whitelist" ]]; then
-		die "Planned final countries whitelist is empty! Disallowing this to prevent accidental lockout of a remote server."
+	# if planned_lists list is empty
+	if [[ -z "$planned_lists" && -z "$force_action" && "$list_type" = "whitelist" ]]; then
+		die "Planned whitelist is empty! Disallowing this to prevent accidental lockout of a remote server."
 	fi
 
 	# try to prevent possible user lock-out
@@ -537,9 +549,9 @@ else
 				read -p "(Y/N) " -n 1 -r
 				if [[ "$REPLY" =~ ^[Yy]$ ]]; then echo -e "\n\nProceeding..."; break
 				elif [[ "$REPLY" =~ ^[Nn]$ ]]; then
-						[[ ! "$in_install" ]] && echo -e "\n\nCountries in the final $list_type: '${yellow}$config_ccodes${no_color}'."
+						[[ ! "$in_install" ]] && echo -e "\n\nIp lists in the final $list_type: '${yellow}$config_lists${no_color}'."
 						echo
-						die "Aborted action '$action' for countries '$ccodes_to_change'."
+						die "Aborted action '$action' for ip lists '$lists_to_change'."
 				else echo -e "\nPlease press 'y/n'.\n"
 				fi
 			done
@@ -548,48 +560,46 @@ else
 
 	### Call the *run script
 
-	call_script "$run_command" "$action" -c "$ccodes_to_change"; rv=$?
+	call_script "$run_command" "$action" -c "$lists_to_change"; rv=$?
 
 	# positive return code means apply failure or another permanent error, except for 254
 	if [[ $rv -gt 0 && $rv -ne 254 ]]; then
-		echo "Error performing action '$action' for countries '$ccodes_to_change'." >&2
+		echo "Error performing action '$action' for lists '$lists_to_change'." >&2
 
-		if [[ -z "$config_ccodes" ]]; then
-			die "Can not restore previous countries set for the $list_type because it is not found in the config file."
+		if [[ -z "$config_lists" ]]; then
+			die "Can not restore previous ip lists for the $list_type because it is not found in the config file."
 		fi
 		restore_from_config
 	fi
 
-	reset_state_vars
 	# shellcheck disable=SC2119
-	new_verified_ccodes="$(find_active_ccodes)"
-	failed_ccodes="$(find_lists_difference "$new_verified_ccodes" "$planned_ccodes")"
+	new_verified_lists="$(find_active_lists)"
+	failed_lists="$(subtract_list_a_from_b "$new_verified_lists" "$planned_lists")"
 
-	if [[ -n "$failed_ccodes" ]]; then
-		debugprint "planned_ccodes: '$planned_ccodes', new_verified_ccodes: '$new_verified_ccodes', failed_ccodes: '$failed_ccodes'."
-		echo "Warning: failed to apply new $list_type rules for countries: $failed_ccodes." >&2
+	if [[ -n "$failed_lists" ]]; then
+		debugprint "planned_lists: '$planned_lists', new_verified_lists: '$new_verified_lists', failed_lists: '$failed_lists'."
+		echo "Warning: failed to apply new $list_type rules for ip lists: $failed_lists." >&2
 		# if the error encountered during installation, exit with error in order to fail the installation
 		[[ "$in_install" ]] && die
 	fi
 
 	# if all 'add' actions failed
-	if [[ -z "$(find_lists_difference "$ccodes_to_change" "$failed_ccodes")" ]]; then
+	if [[ -z "$(find_lists_difference "$lists_to_change" "$failed_lists")" ]]; then
 		die "All actions failed."
 	fi
 
-	debugprint "Writing new config to file: 'Countries=$new_verified_ccodes'"
-	setconfig "Countries=$new_verified_ccodes" || die "Failed to write updated country codes '$new_verified_ccodes' to the config file"
+	debugprint "Writing new config to file: 'Lists=$new_verified_lists'"
+	setconfig "Lists=$new_verified_lists" || die "Failed to write updated lists '$new_verified_lists' to the config file"
 
 ####### Fault recovery test: inject unrequested ccode
 #[ "$testmode" ] &&	$run_command add -o -c "ge"; rv=$?
 #######
 
 
-	# double-check coherency after applying new ccodes
-	reset_state_vars
-	check_ccodes_coherency || { ccodes_to_change=""; restore_from_config; }
+	# double-check coherency after applying new lists
+	check_lists_coherency || { lists_to_change=""; restore_from_config; }
 
-	echo -e "\nCountries in the final $list_type: '${yellow}$config_ccodes${no_color}'."
+	echo -e "\nIp lists in the final $list_type: '${yellow}$config_lists${no_color}'."
 	echo
 	[[ ! "$in_install" ]] && echo -e "View current geoblocking status with '${yellow}${suite_name} status${no_color}' (may require 'sudo').\n"
 fi
