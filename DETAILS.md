@@ -4,7 +4,7 @@
 - If you understand some shell code and would like to learn more about some of the scripts, you are most welcome to read the code. It has a lot of comments and I hope that it's fairly easily readable.
 
 ## **Overview**
-The suite currently includes 12 scripts:
+The suite currently includes 13 scripts:
 1. geoblocker-bash-install
 2. geoblocker-bash-uninstall
 3. geoblocker-bash-manage
@@ -17,6 +17,7 @@ The suite currently includes 12 scripts:
 10. geoblocker-bash-reset
 11. validate-cron-schedule.sh
 12. check-ip-in-registry.sh
+13. detect-local-subnets.sh
 
 The scripts intended as user interface are **-install**, **-uninstall**, **-manage** and **check-ip-in-registry.sh**. All the other scripts are intended as a back-end, although they can be run by the user as well (I don't recommend that). If you just want to install and move on, you only need to run the -install script, specify mode with the -m option and specify country codes with the "-c" option. Provided you are not missing any pre-requisites, it should be as easy as that.
 After installation, the user interface is provided by simply running "geoblocker-bash", which is a symlink to the -manage script.
@@ -29,12 +30,15 @@ The **-backup** script can be used individually. By default, it is launched by t
 - Creates system folder structure for scripts, config and data.
 - Scripts are then copied to ```/usr/local/bin```. Config goes in ```/etc/geoblocker-bash```. Data goes in ```/var/lib/geoblocker-bash```.
 - Creates backup of pre-install policies for INPUT and FORWARD chains (the backup is used by the -uninstall script to restore the policies).
-- Calls geoblocker-bash-manage to set up geoblocker. The -manage script, in turn, calls the -run script, which calls -backup, -fetch and -apply scripts to perform the requested actions. (there is a reason for this chain of execution: each script has its own purpose)
+- Calls geoblocker-bash-manage to set up geoblocker. The -manage script, in turn, calls the -run script, which calls -backup, -fetch and -apply scripts to perform the requested actions.
 - If an error occurs during the installation, it is propagated back through the execution chain and eventually the -install script calls the -uninstall script to revert any changes made to the system.
 - Required arguments are ```-c <"country_codes">``` and ```-m <whitelist|blacklist>```
-- Accepts optional custom cron schedule expression for autoupdates as an argument with the '-s' option. Default cron schedule is "0 4 * * *" - at 4:00 [am] every day. 'disable' instead of the schedule will disable autoupdate.
+- Accepts optional custom cron schedule expression for autoupdate schedule with the '-s' option. Default cron schedule is "15 4 * * *" - at 4:15 [am] every day. 'disable' instead of the schedule will disable autoupdates.
+- Accepts the '-u' option to specify source for fetching ip lists. Currently supports 'ripe' and 'ipdeny', defaults to ripe.
+- Accepts the '-f' option to specify the ip protocol family (ipv4 or ipv6). Defaults to both.
 - Accepts the '-n' option to disable persistence (reboot cron job won't be created so after system reboot, there will be no more geoblocking - although if you have an autoupdate cron job then it will eventually kick in and re-activate geoblocking)
-- Acepts the '-o' option to disable automatic backups of the firewall state, ipsets and config before an action is executed (actions include those launched by the cron jobs to implement autoupdate and persistence, as well as any action launched manually which requires making changes to the firewall)
+- Accepts the '-o' option to disable automatic backups of the firewall state, ipsets and config before an action is executed (actions include those launched by the cron jobs to implement autoupdate and persistence, as well as any action launched manually and which requires making changes to the firewall)
+- Accepts the '-p' option to skip setting the default firewall policies to DROP. This can be used if installing in the whitelist mode to check everything before commiting to actually blocking. Note that with this option, whitelist geoblocking will not be functional and to make it work, you'll need to re-install without it. This option does not affect the blacklist mode since in that mode, the default policies are not changed during installation.
 
 **The -uninstall script**
 - Doesn't require any arguments
@@ -60,31 +64,37 @@ The **-backup** script can be used individually. By default, it is launched by t
 
 **The -run script**: Serves as a proxy to call the -fetch, -apply and -backup scripts with arguments required for each action. Executes the requested actions, depending on the config set by the -install and -manage scripts, and the command line options. If persistence or autoupdates are enabled, the cron jobs call this script with the necessary options.
 
-```geoblocker-bash-run add -c <"country_codes">``` : Fetches iplists and loads ipsets and iptables rules for specified countries.
+```geoblocker-bash-run add -l <"list_id [list_id] ... [list_id]">``` : Fetches iplists and loads ipsets and iptables rules for specified list id's.
+List id has the format of <country_code>_<family>. For example, ```US_ipv4``` and ```GB_ipv6``` are valid list id's.
 
-```geoblocker-bash-run remove -c <"country_codes">``` : Removes iplists, ipsets and iptables rules for specified countries.
+```geoblocker-bash-run remove -l <"list_ids">``` : Removes iplists, ipsets and iptables rules for specified list id's.
 
-```geoblocker-bash-run update``` : Updates the ipsets for all country codes that had been previously configured. Intended for triggering from periodic cron jobs.
+```geoblocker-bash-run update``` : Updates the ipsets for list id's that had been previously configured. Intended for triggering from periodic cron jobs.
 
 ```geoblocker-bash-run apply``` : Skips the fetch script, calls the *apply script to restore ipsets and firewall rules as configured. Used by the reboot cron job to implement persistence.
 
 **The -fetch script**
-- Fetches ipv4 subnets lists for given country codes from the regional internet registry (automatically selected based on the country).
-- Parses, validates, compiles the downloaded lists, and saves each list to a separate file.
+- Fetches ip lists for given list id's from RIPE or from ipdeny. The source is selected during installation. If you want to change the default which is RIPE, install with the ```-u ipdeny``` option.
+- Parses, validates, compiles the downloaded lists, and saves each one to a separate file.
 - Implements extensive sanity checks at each stage (fetching, parsing, validating and saving) and handles errors if they occur.
-- If a "soft" error is encountered (mostly a temporary network error), retries the download again.
+
+(for specific information on how to use the script, run it with the -h option)
 
 **The -apply script**:  directly interfaces with the firewall. Creates or removes ipsets and iptables rules for specified country codes.
 
-```geoblocker-bash-apply add -c <"country_codes">``` :
-- Loads ip list files for specified countries into ipsets and sets iptables rules to only allow connections from the local subnet and from subnets included in the ipsets.
+```geoblocker-bash-apply add -l <"list_ids">``` :
+- Loads ip list files for specified list id's into ipsets and sets iptables rules required to implement geoblocking.
 
-```geoblocker-bash-apply remove -c <"country_codes">``` :
-- removes ipsets and associated iptables rules for specified countries.
+List id has the format of <country_code>_<family>. For example, ```US_ipv4``` and ```GB_ipv6``` are valid list id's.
+
+```geoblocker-bash-apply remove -l <"list_ids">``` :
+- removes ipsets and associated iptables rules for specified list id's.
 
 **The -cronsetup script** manages all the cron-related logic and actions. Called by the -manage script. Cron jobs are created based on the settings stored in the config file.
 
-**The -backup script**: Creates a backup of the current iptables state, current geoblocking config and geoblocker-associated ipsets, or restores them from backup. By default (if you didn't run the installation with the '-o' option), backup will be created before every action you apply to the firewall and also before automatic list updates are applied. Normally backups should not take much space, maybe a few megabytes if you have many ip lists. The -backup script also compresses them, so they take even less space. (and automatically extracts when restoring). When creating a new backup, it overwrites the previous one, so only one backup copy is kept.
+(for specific information on how to use the script, run it with the -h option)
+
+**The -backup script**: Creates a backup of the current iptables state, current geoblocking config and geoblocker-associated ipsets, or restores them from backup. By default (if you didn't run the installation with the '-o' option), backup will be created before every action you apply to the firewall and before automatic list updates are applied. Normally backups should not take much space, maybe a few megabytes if you have many ip lists. The -backup script also compresses them, so they take even less space. (and automatically extracts them when restoring). When creating a new backup, it overwrites the previous one, so only one backup copy is kept.
 
 ```geoblocker-bash-backup create-backup``` : Creates a backup of the current iptables state, geoblocking config and geoblocker-associated ipsets.
 
@@ -99,3 +109,5 @@ The **-backup** script can be used individually. By default, it is launched by t
 
 **The check-ip-in-registry.sh script** can be used to verify that a certain ip address belongs to a subnet found in regional registry's records for a given country. It is intended for manual use and is not called from other scripts. It does depend on the *fetch script, and on the *common script (they just need to be in the same directory), and in addition, it requires the grepcidr utility installed in your system.
 
+**The detect-local-subnets-AIO.sh script** is the latest addition to the suite. It is a side project which I developed for the suite but, contrary to all other scripts in the suite, it doesn't require Bash, is portable and should work on most Unix-like machines.
+This script is called by the -apply script when the suite is installed in whitelist mode. The reason for its existence is that in whitelist mode, all incoming connection are blocked, except what is explicitly allowed. Since this project doesn't aim to isolate your machine from your local network, but rather to block incoming connections from countries of your choosing, in whitelist mode it detects your local area networks and adds them to the firewall rules so they don't get blocked.
