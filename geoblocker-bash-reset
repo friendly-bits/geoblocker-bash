@@ -6,6 +6,8 @@
 
 
 #### Initial setup
+export LC_ALL=C
+printf '%s\n' "$PATH" | grep '/usr/local/bin' &>/dev/null || export PATH="$PATH:/usr/local/bin"
 
 me=$(basename "$0")
 
@@ -39,6 +41,7 @@ $me
     1) Deletes associated cron jobs
     2) Restores pre-install state of default policies for INPUT and FORWARD chains
     3) Deletes associated iptables rules and removes associated ipsets
+	4) Deletes the status file
 
 Usage: $me [-d] [-h]
 
@@ -87,6 +90,8 @@ preinstall_policies_file="$datadir/preinstall_policies.bak"
 
 iptables_comment="${suite_name}"
 
+status_file="${datadir}/ip_lists/status"
+
 
 #### CHECKS
 
@@ -94,6 +99,9 @@ missing_deps="$(check_deps iptables-save ipset)" || die "Error: missing dependen
 
 
 #### MAIN
+
+### Delete the status file
+rm "$status_file" &>/dev/null
 
 ### Delete associated cron jobs
 debugprint "Deleting cron jobs for ${suite_name}..."
@@ -115,13 +123,13 @@ fi
 ### Delete associated iptables rules
 
 debugprint "Removing all existing iptables rules for $suite_name... "
-iptables-save | sed -r "/INPUT.*comment.*${iptables_comment}/s/-A/iptables -D/e" &>/dev/null
+iptables-save | awk '$0 ~ /'"$iptables_comment"'/ {gsub(/^-A /, "iptables -D "); system ($0)}' &>/dev/null
+ip6tables-save | awk '$0 ~ /'"$iptables_comment"'/ {gsub(/^-A /, "ip6tables -D "); system ($0)}' &>/dev/null
 
 
 ### Destroy associated ipsets
 debugprint "Destroying ipsets for ${suite_name}..."
-sleep 0.3
- for ipset_name in $(ipset list -n | grep "${suite_name}"); do
+for ipset_name in $(ipset list -n | grep "${suite_name}"); do
 	debugprint "Found ipset \"$ipset_name\", destroying..."
 	ipset destroy "$ipset_name"
 done
