@@ -26,14 +26,14 @@ for arg in "$@"; do
 	else args="$args $arg"
 	fi
 done
-[ "$families_arg" = "check" ] && { echo "Specify family with '-f'."; exit 1; }
+[ "$families_arg" = "check" ] && { echo "Specify family with '-f'." >&2; exit 1; }
 
 set -- "$args"
 
 
 ## Functions
 
-# converts given ip address into hex number
+# converts given ip address into a hex number
 ip_to_hex() {
 	ip="$1"
 	family="$2"
@@ -52,7 +52,6 @@ ip_to_hex() {
 		;;
 		* ) echo "ip_to_hex(): Error: invalid family '$family'" >&2; return 1 ;;
 	esac
-
 }
 
 # expands given ipv6 address and converts it into a hex number
@@ -85,28 +84,28 @@ expand_ipv6() {
 
 # returns a compressed ipv6 address in the format recommended by RFC5952
 # for input, expects a fully expanded ipv6 address represented as a hex number (no colons)
-compress_ipv6 () {
+compress_ipv6() {
 	ip=""
 	quads_merged="${1}"
 	[ -z "$quads_merged" ] && { echo "compress_ipv6(): Error: received an empty string." >&2; return 1; }
 
 	# split into whitespace-separated quads
-	quads="$(printf "%s" "$quads_merged" | sed 's/.\{4\}/& /g')"
+	quads="$(printf "%s" "$quads_merged" | sed 's/.\{4\}/& /g')" || { echo "compress_ipv6(): Error: failed to process input '$quads_merged'." >&2; return 1; }
 	# remove extra leading 0's in each quad, remove whitespaces, add colons
 	for quad in $quads; do
-		ip="${ip}$(printf "%x:" "0x$quad")" || \
-					{ echo "compress_ipv6(): Error: failed to convert quad '0x$quad'." >&2; return 1; }
+		ip="${ip}$(printf "%x:" "0x$quad")" || { echo "compress_ipv6(): Error: failed to convert quad '0x$quad'." >&2; return 1; }
 	done
 
 	# remove trailing colon, add leading colon
-	ip=":${ip%?}"
+	ip=":${ip%:}"
 
 	# compress 0's across neighbor chunks
 	for zero_chain in ":0:0:0:0:0:0:0:0" ":0:0:0:0:0:0:0" ":0:0:0:0:0:0" ":0:0:0:0:0" ":0:0:0:0" ":0:0:0" ":0:0"
 	do
 		case "$ip" in
 			*$zero_chain* )
-				ip="$(printf "%s" "$ip" | sed -e "s/$zero_chain/::/" -e 's/:::/::/')"
+				ip="$(printf "%s" "$ip" | sed -e "s/$zero_chain/::/" -e 's/:::/::/')" || \
+					{ echo "compress_ipv6(): Error: failed to process input '$quads_merged'." >&2; return 1; }
 				break
 		esac
 	done
@@ -128,14 +127,14 @@ hex_to_ip() {
 	case "$family" in
 		inet )
 			# split into 4 octets
-			octets="$(printf "%s" "$ip_hex" | sed 's/.\{2\}/&\ /g')"
+			octets="$(printf "%s" "$ip_hex" | sed 's/.\{2\}/&\ /g')" || { echo "hex_to_ip(): Error: failed to process input '$ip_hex'." >&2; return 1; }
 			# convert from hex to dec, remove spaces, add delimiting '.'
 			ip=""
 			for octet in $octets; do
 				ip="${ip}$(printf "%d." 0x"$octet")" || { echo "hex_to_ip(): Error: failed to convert octet '0x$octet' to decimal." >&2; return 1; }
 			done
 			# remove trailing '.'
-			ip="${ip%?}"
+			ip="${ip%\.}"
 			printf "%s" "$ip"
 			return 0
 		;;
@@ -180,7 +179,7 @@ generate_mask()
 			cur=$((cur / 2))
 			i=$((i + 1))
 		done
-		mask="$mask$(printf "%02x" $sum)"
+		mask="$mask$(printf "%02x" $sum)" || { echo "generate_mask(): Error: to convert byte '$sum' to hex." >&2; return 1; }
 		bytes_done=$((bytes_done + 1))
 
 		while [ $bytes_done -lt $mask_bytes ]; do
@@ -281,7 +280,7 @@ bitwise_and() {
 		mask_chunk="$(printf "%s" "$mask_hex" | cut -c${chunk_start}-${chunk_end} )"
 		ip_chunk="$(printf "%s" "$ip_hex" | cut -c${chunk_start}-${chunk_end} )"
 		ip_chunk=$(printf "%0${char_num}x" $(( 0x$ip_chunk & 0x$mask_chunk )) ) || \
-			{ echo "bitwise_and(): Error: failed to calculate '0x$ip_chunk & 0x$mask_chunk'."; return 1; }
+			{ echo "bitwise_and(): Error: failed to calculate '0x$ip_chunk & 0x$mask_chunk'." >&2; return 1; }
 		out_ip="$out_ip$ip_chunk"
 		[ "$debugmode" ] && echo "calculated ip chunk: '$ip_chunk'" >&2
 		bits_processed=$((bits_processed + chunk_len))
@@ -310,21 +309,24 @@ aggregate_subnets() {
 
 	# convert to newline-delimited list, remove duplicates from input, convert to lower case
 	input_subnets="$(printf "%s" "$input_subnets" | tr ' ' '\n' | sort -u | awk '{print tolower($0)}')"
-	input_ips="$(printf '%s' "$input_subnets" | cut -s -d/ -f1)"
+	input_ips="$(printf '%s' "$input_subnets" | cut -s -d/ -f1)" || \
+			{ echo "aggregate_subnets(): Error: failed to process input '$input_subnets'." >&2; return 1; }
 	validate_ip "$input_ips" "$addr_regex" || \
-				{ echo "aggregate_subnets(): Error: failed to validate one or more of input addresses."; return 1; }
+				{ echo "aggregate_subnets(): Error: failed to validate one or more of input addresses." >&2; return 1; }
 	unset input_ips
 
 	for subnet in $input_subnets; do
 		# get mask bits
-		maskbits="$(printf "%s" "$subnet" | cut -s -d/ -f2 )"
-		case "$maskbits" in ''|*[!0-9]*) echo "aggregate_subnets(): Error: input '$subnet' has no mask bits or it's not a number." >&2; return 1;;esac
+		maskbits="$(printf "%s" "$subnet" | cut -s -d/ -f2 )" || \
+				{ echo "aggregate_subnets(): Error: failed to process subnet '$subnet'." >&2; return 1; }
+		case "$maskbits" in ''|*[!0-9]*) echo "aggregate_subnets(): Error: input '$subnet' has no mask bits or it's not a number." >&2; return 1;; esac
 		# chop off mask bits
 		subnet="${subnet%/*}"
 
 		# shellcheck disable=SC2086
 		# validate mask bits
-		if [ "$maskbits" -lt 8 ] || [ "$maskbits" -gt $addr_len ]; then echo "aggregate_subnets(): Error: invalid $family mask bits '$maskbits'." >&2; return 1; fi
+		if [ "$maskbits" -lt 8 ] || [ "$maskbits" -gt $addr_len ]; then
+			echo "aggregate_subnets(): Error: invalid $family mask bits '$maskbits'." >&2; return 1; fi
 
 		# convert ip address to hex number
 		subnet_hex="$(ip_to_hex "$subnet" "$family")" || return 1
@@ -414,7 +416,7 @@ aggregate_subnets() {
 
 					# bitwise $ip2_chunk & $mask_chunk
 					ip2_chunk=$(printf "%0${char_num}x" $(( 0x$ip2_chunk & 0x$mask_chunk )) ) || \
-						{ echo "aggregate_subnets(): Error: failed to calculate '0x$ip2_chunk & 0x$mask_chunk'."; return 1; }
+						{ echo "aggregate_subnets(): Error: failed to calculate '0x$ip2_chunk & 0x$mask_chunk'." >&2; return 1; }
 
 					[ "$debugmode" ] && echo "comparing chunks '$ip1_chunk' - '$ip2_chunk'" >&2
 
@@ -429,7 +431,8 @@ aggregate_subnets() {
 				# if no differences found, subnet2 is encapsulated in subnet1 - remove subnet2 from the list
 				if [ -z "$ip2_differs" ]; then
 					[ "$debugmode" ] && echo "No difference found" >&2
-					sorted_subnets_hex="$(printf "%s\n" "$sorted_subnets_hex" | grep -vx "$subnet2_hex")"
+					sorted_subnets_hex="$(printf "%s\n" "$sorted_subnets_hex" | grep -vx "$subnet2_hex")" || \
+					{ [ -n "$sorted_subnets_hex" ] && { echo "aggregate_subnets(): Error: failed to remove '$subnet2_hex' from the list." >&2; return 1; }; }
 				fi
 			fi
 		done
@@ -442,7 +445,7 @@ aggregate_subnets() {
 
 	output_ips="$(printf '%s' "$res_subnets" | cut -s -d/ -f1)"
 	validate_ip "$output_ips" "$addr_regex" || \
-		{ echo "aggregate_subnets(): Error: failed to validate one or more of output addresses."; return 1; }
+		{ echo "aggregate_subnets(): Error: failed to validate one or more of output addresses." >&2; return 1; }
 	printf "%s" "$res_subnets"
 	return 0
 }
@@ -457,6 +460,7 @@ get_local_subnets() {
 			# get local interface names. filters by "scope link" because this should filter out WAN interfaces
 			local_ifaces_ipv4="$(ip -f inet route show table local scope link | grep -i -v ' lo ' | \
 				awk '{for(i=1; i<=NF; i++) if($i~/^dev$/) print $(i+1)}' | sort -u)"
+			[ -z "$local_ifaces_ipv4" ] && { echo "get_local_subnets(): Error detecting LAN network interfaces for ipv4." >&2; return 1; }
 
 			# get ipv4 addresses with mask bits, corresponding to local interfaces
 			# awk prints the next string after 'inet'
@@ -478,6 +482,8 @@ get_local_subnets() {
 		;;
 		* ) echo "get_local_subnets(): invalid family '$family'." >&2; return 1 ;;
 	esac
+
+	[ -z "$local_addresses" ] && { echo "get_local_subnets(): Error detecting local addresses for family $family." >&2; return 1; }
 
 	[ -z "$subnets_only" ] && {
 		echo "Local $family addresses:"
