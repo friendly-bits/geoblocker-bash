@@ -562,7 +562,7 @@ set_script_names
 ### Checks
 
 # check for common deps
-missing_deps="$(check_deps tr cut sort wc awk sed grep comm logger bc)" || die "Error: missing dependencies: $missing_deps."
+missing_deps="$(check_deps bash tr cut sort wc awk sed grep comm logger bc)" || die "Error: missing dependencies: $missing_deps."
 
 # check for curl
 command -v "curl" &> /dev/null && curl_exists="true"
