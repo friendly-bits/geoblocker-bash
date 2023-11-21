@@ -1,5 +1,5 @@
 # geoblocker-bash
-Geoip blocker for Linux focusing on reliability, compatibility and ease of use. Suite of Bash scripts which utilizes the 'iptables' firewall management utility (nftables support will get implemented eventually).
+Geoip blocker for Linux focusing on reliability, compatibility and ease of use. Utilizes the 'iptables' firewall management utility. nftables support will get implemented eventually.
 
 Should work on every modern'ish desktop/server Linux distribution, doesn't matter which hardware. Works on embedded, as long as it has the pre-requisites. For OpenWRT and similar distributions, read the [OPENWRT.md](/OPENWRT.md) file.
 
