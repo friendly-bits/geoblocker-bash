@@ -179,7 +179,7 @@ generate_mask()
 			cur=$((cur / 2))
 			i=$((i + 1))
 		done
-		mask="$mask$(printf "%02x" $sum)" || { echo "generate_mask(): Error: to convert byte '$sum' to hex." >&2; return 1; }
+		mask="$mask$(printf "%02x" $sum)" || { echo "generate_mask(): Error: failed to convert byte '$sum' to hex." >&2; return 1; }
 		bytes_done=$((bytes_done + 1))
 
 		while [ $bytes_done -lt $mask_bytes ]; do
