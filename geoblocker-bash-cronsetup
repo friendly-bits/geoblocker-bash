@@ -6,6 +6,8 @@
 
 
 #### Initial setup
+export LC_ALL=C
+printf '%s\n' "$PATH" | grep '/usr/local/bin' &>/dev/null || export PATH="$PATH:/usr/local/bin"
 
 me=$(basename "$0")
 
@@ -78,9 +80,9 @@ create_cron_job() {
 	job_type="$1"
 
 	# check that countries list in config is not empty
-	config_ccodes="$(getconfig "Countries")" || { die -nolog "Error: Couldn't read value for Countries from the config file."; }
+	config_lists="$(getconfig "Lists")" || { die -nolog "Error: Couldn't read value for Lists from the config file."; }
 
-	if [[ -z "$config_ccodes" ]]; then
+	if [[ -z "$config_lists" ]]; then
 		die -nolog "Error: Countries list in the config file is empty! No point in creating autoupdate job."
 	fi
 
@@ -120,8 +122,9 @@ create_cron_job() {
 
 	#### Create new cron job
 
-	echo -e "$(crontab -u root -l 2>/dev/null)\n$cron_command" | crontab -u root -
-	rv=$?
+	set -o pipefail
+	echo -e "$(crontab -u root -l 2>/dev/null)\n$cron_command" | crontab -u root -; rv=$?
+	set +o pipefail
 
 	if [[ $rv -ne 0 ]]; then
 		die -nolog "Error creating $job_type cron job!"
@@ -145,8 +148,9 @@ remove_cron_job() {
 
 		debugprint "Removing $job_type cron job for ${suite_name}... "
 		# read crontab -> filter out jobs by the comment ($suite_name-$job_type) -> write resulting lines back to crontab
-		crontab -u root -l 2>/dev/null | grep -v "${suite_name}-${job_type}" | crontab -u root -
-		rv=$?
+		set -o pipefail
+		crontab -u root -l 2>/dev/null | grep -v "${suite_name}-${job_type}" | crontab -u root -; rv=$?
+		set +o pipefail
 
 		if [[ $rv -ne 0 ]]; then
 			die -nolog "Error: failed to remove $job_type cron job."
