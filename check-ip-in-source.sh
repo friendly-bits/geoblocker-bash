@@ -3,8 +3,8 @@
 # check-ip-in-source.sh
 
 #### Initial setup
-LC_ALL=C
-export PATH="/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/bin:"
+export LC_ALL=C
+printf '%s\n' "$PATH" | grep '/usr/local/bin' &>/dev/null || export PATH="$PATH:/usr/local/bin"
 
 me=$(basename "$0")
 
@@ -217,10 +217,10 @@ for family in $families; do
 
 	list_file="/tmp/iplist-$list_id.tmp"
 
-	bash "$fetch_script" -c "$ccode" -o "$list_file" -s "$status_file" -a "$family" -u "$dl_source"
+	bash "$fetch_script" -l "$list_id" -o "$list_file" -s "$status_file" -u "$dl_source"
 
 	# read *fetch results from the status file
-	failed_lists="$(getstatus "$status_file" "failed_lists")"; rv=$?
+	failed_lists="$(getstatus "$status_file" "FailedLists")"; rv=$?
 	rm "$status_file" &>/dev/null
 
 	[[ "$rv" -ne 0 ]] && die "Error: Couldn't read value for 'failed_lists' from status file '$status_file'."
@@ -267,10 +267,11 @@ non_matching_ipv4s="$(trim_spaces "$non_matching_ipv4s")"
 non_matching_ipv6s="$(trim_spaces "$non_matching_ipv6s")"
 
 echo -e "\nResults:"
-[[ -n "$matching_ipv4s" ]] && echo -e "ip's $matching_ipv4s ${green}*BELONG*${no_color} to a subnet in source list for country '$ccode'."
-[[ -n "$matching_ipv6s" ]] && echo -e "ip's $matching_ipv6s ${green}*BELONG*${no_color} to a subnet in source list for country '$ccode'."
-[[ -n "$non_matching_ipv4s" ]] && echo -e "ip's $non_matching_ipv4s ${red}*DO NOT BELONG*${no_color} to a subnet in source list for country '$ccode'."
-[[ -n "$non_matching_ipv6s" ]] && echo -e "ip's $non_matching_ipv6s ${red}*DO NOT BELONG*${no_color} to a subnet in source list for country '$ccode'."
+[[ -n "$matching_ipv4s" ]] && echo -e "ip's $matching_ipv4s ${green}*BELONG*${no_color} to a subnet in ${dl_source^^}'s list for country '$ccode'."
+[[ -n "$matching_ipv6s" ]] && echo -e "ip's $matching_ipv6s ${green}*BELONG*${no_color} to a subnet in ${dl_source^^}'s list for country '$ccode'."
+echo
+[[ -n "$non_matching_ipv4s" ]] && echo -e "ip's $non_matching_ipv4s ${red}*DO NOT BELONG*${no_color} to a subnet in ${dl_source^^}'s list for country '$ccode'."
+[[ -n "$non_matching_ipv6s" ]] && echo -e "ip's $non_matching_ipv6s ${red}*DO NOT BELONG*${no_color} to a subnet in ${dl_source^^}'s list for country '$ccode'."
 
 if [[ -n "$invalid_ips" ]]; then
 	echo -e "\n${red}Invalid${no_color} ip addresses:\n${invalid_ips}"
