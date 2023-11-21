@@ -12,6 +12,8 @@
 
 
 #### Initial setup
+export LC_ALL=C
+printf '%s\n' "$PATH" | grep '/usr/local/bin' &>/dev/null || export PATH="$PATH:/usr/local/bin"
 
 me=$(basename "$0")
 
@@ -122,49 +124,91 @@ restoreknowngood() {
 	set_extract_command "$restorefile"
 
 	# extract the backup archive into $firewall_backup_var
-	firewall_backup_var="$($extract_command "$restorefile")" || restore_failed "Error when reading '$restorefile'."
+	firewall_backup_var="$($extract_command "$restorefile")" || restore_failed "Error when reading '$restorefile'."; rv=$?
 	[[ -z "$firewall_backup_var" ]] && restore_failed "Error: backup file '$restorefile' is empty."
+	[[ $rv -ne 0 ]] && { unset firewall_backup_var; restore_failed "Error: failed to extract backup file '$restorefile'."; }
 
 	echo -e "Successfully read backup file: '$restorefile'.\n"
 
-	for restoretarget in iptables ipset; do
-		echo -n "Checking the $restoretarget portion of the backup file... "
+	echo -n "Checking the iptables portion of the backup file... "
 
-		# count lines in the corresponding portion of the backup file
-		case "$restoretarget" in
-			iptables) line_cnt=$(sed -e '/\[IPSET\].*/Q' <<< "$firewall_backup_var" | wc -l) ;;
-			ipset) line_cnt=$(sed -n "/create ${suite_name}/,\$p" <<< "$firewall_backup_var" | grep -c "add ${suite_name}") ;;
+	# count lines in the iptables portion of the backup file
+	for family in $families; do
+		line_cnt=0
+		case "$family" in
+			ipv4 ) iptables_restore_command="iptables-restore" ;;
+			ipv6 ) iptables_restore_command="ip6tables-restore"
 		esac
-		debugprint "$restoretarget lines number in backup: $line_cnt"
+
+		set -o pipefail
+		line_cnt=$(sed -n -e /"\[${suite_name}_IPTABLES_$family\]"/\{:1 -e n\;/\\[${suite_name}_IP/q\;p\;b1 -e \} <<< "$firewall_backup_var" 2>&1 | wc -l)
+		rv=$?
+		set +o pipefail
+		debugprint "Firewall $family lines number in backup: $line_cnt"
+
 		[[ "line_cnt" -eq 0 ]] && {
-			unset fireall_backup_var
-			restore_failed "Error: $restoretarget backup appears to be empty or non-existing."
+			unset firewall_backup_var
+			restore_failed "Error: firewall $family backup appears to be empty or non-existing."
 		}
-		echo "Ok."
+		[[ $rv -ne 0 ]] && {
+			unset firewall_backup_var
+			restore_failed "Error: Failed to parse firewall backup file."
+		}
 	done
+	echo "Ok."
 
+	echo -n "Checking the ipset portion of the backup file... "
+	# count lines in the ipset portion of the backup file
+	set -o pipefail
+	line_cnt=$(sed -n "/create ${suite_name}/,\$p" <<< "$firewall_backup_var" | grep -c "add ${suite_name}"); rv=$?
+	set +o pipefail
+	debugprint "ipset lines number in backup: $line_cnt"
+	[[ "line_cnt" -eq 0 ]] && {
+		unset firewall_backup_var
+		restore_failed "Error: ipset backup appears to be empty or non-existing."
+	}
+	[[ $rv -ne 0 ]] && {
+		unset firewall_backup_var
+		restore_failed "Error: Failed to parse the ipset portion of the backup file."
+	}
+	echo -e "Ok.\n"
 
-	echo -e "\n"
 	echo "Removing iptables rules for ${suite_name}."
 
-	echo "Setting INPUT chain policy to ACCEPT... "
-	iptables -P INPUT ACCEPT || restore_failed "Error when issuing command 'iptables -P INPUT ACCEPT'." "reset"
+	for family in $families; do
+		echo "Setting $family INPUT chain policy to ACCEPT... "
+		case "$family" in
+			ipv4 ) iptables_command="iptables" ;;
+			ipv6 ) iptables_command="ip6tables"
+		esac
+
+		$iptables_command -P INPUT ACCEPT || restore_failed "Error when issuing command '$iptables_command -P INPUT ACCEPT'." "reset"
+	done
 
 	echo -n "Deleting firewall rules for $suite_name... "
-	# sed looks for rules with the comment which we use to stamp our rules
-	# sed executes iptables -D (delete) command on matching rules. execution is promtped by the switch /e (only available in GNU sed)
-	iptables-save | sed -r "/INPUT.*comment.*${iptables_comment}/s/-A/iptables -D/e" &>/dev/null; rv=$?
-	if [[ $rv -ne 0 ]]; then
+	set -o pipefail
+	iptables-save | awk '$0 ~ /'"$iptables_comment"'/ {gsub(/^-A /, "iptables -D "); system ($0)}' &>/dev/null; rv1=$?
+	ip6tables-save | awk '$0 ~ /'"$iptables_comment"'/ {gsub(/^-A /, "ip6tables -D "); system ($0)}' &>/dev/null; rv2=$?
+	set +o pipefail
+	if [[ $rv1 -ne 0 || $rv2 -ne 0 ]]; then
 		echo "Failed."
-		err1="Error removing existing iptables rules with command: 'iptables-save | sed -r \"/INPUT.*comment.*$iptables_comment/s/-A/iptables -D/e\" '."
-		restore_failed "$err1" "reset"
+		exit 0
+		restore_failed "Error removing existing iptables rules." "reset"
 	else
 		echo "Ok."
 	fi
 
 	# Destroy ipsets
-	sleep 0.3
-	for curr_ipset in $(ipset list -n | grep "$ipset_tag"); do
+	set -o pipefail
+	curr_ipsets="$(ipset list -n | grep "$ipset_tag")"; rv=$?
+	set +o pipefail
+	if [[ $rv -ne 0 ]]; then
+		restore_failed "Error listing geoblocking ipsets with command 'ipset list -n | grep \"$ipset_tag\"'." "reset"
+	else
+		echo "Ok."
+	fi
+
+	for curr_ipset in $curr_ipsets; do
 		echo -n "Destroying ipset '$curr_ipset'... "
 		ipset destroy "$curr_ipset"
 		if [[ $rv -ne 0 ]]; then
@@ -173,30 +217,42 @@ restoreknowngood() {
 			echo "Ok."
 		fi
 	done
+	echo
 
 	# ipset needs to be restored before iptables
 	for restoretarget in ipset iptables; do
-		echo -n "Restoring $restoretarget state from backup... "
-
+		echo -n "Restoring $restoretarget state... "
+		set -o pipefail
 		case "$restoretarget" in
-			# reads <$restorefile> from beginning to [IPSET] and pipes the result into iptables-restore
-			iptables) sed -e '/\[IPSET\]/Q' <<< "$firewall_backup_var" 2>&1 | iptables-restore; rv="${PIPESTATUS[1]}" ;;
-
 			# reads <$restorefile> from "create ${suite_name}" to EOF and pipes the result into "ipset restore"
-			ipset) sed -n "/create ${suite_name}/,\$p" <<< "$firewall_backup_var" 2>&1 | ipset restore; rv="${PIPESTATUS[1]}" ;;
+			ipset)
+				sed -n "/create ${suite_name}/,\$p" <<< "$firewall_backup_var" 2>&1 | ipset restore; rv=$? ;;
+
+			# reads relevant lines from <$restorefile> and pipes the result into iptables-restore
+			iptables)
+				rv=0
+				for family in $families; do
+					case "$family" in
+						ipv4 ) iptables_restore_command="iptables-restore" ;;
+						ipv6 ) iptables_restore_command="ip6tables-restore"
+					esac
+
+					sed -n -e /"\[${suite_name}_IPTABLES_$family\]"/\{:1 -e n\;/\\[${suite_name}_IP/q\;p\;b1 -e \} <<< "$firewall_backup_var" 2>&1 | \
+						$iptables_restore_command; rv=$((rv+$?))
+				done ;;
 		esac
+		set +o pipefail
 
 		if [[ $rv -eq 0 ]]; then
 			echo "Ok."
 		else
 			echo "Failed." >&2
-			unset fireall_backup_var
+			unset firewall_backup_var
 			restore_failed "Failed to restore $restoretarget known-good state from backup." "reset"
 		fi
 	done
 
 	unset firewall_backup_var
-	echo -e "\n"
 	return 0
 }
 
@@ -222,21 +278,29 @@ create_backup() {
 
 	echo -n "Creating backup of current iptables state... "
 
-	# save iptables state to $firewall_backup_var
-	firewall_backup_var="$(iptables-save)"; rv=$?
-	backup_length="$(wc -l <<< "$firewall_backup_var")"
-	[[ "$rv" -ne 0 || -z "$firewall_backup_var" ]] && {
-		unset firewall_backup_var
-		die "Error when reading iptables state."
-	}
+	rv=0
+	for family in $families; do
+		case "$family" in
+			ipv4 ) iptables_save_command="iptables-save" ;;
+			ipv6 ) iptables_save_command="ip6tables-save"
+		esac
+
+		firewall_backup_var+=$'\n'"[${suite_name}_IPTABLES_$family]"
+		# save iptables state to $firewall_backup_var
+		firewall_backup_var+=$'\n'"$($iptables_save_command)"; rv=$((rv+$?))
+
+		backup_length="$(wc -l <<< "$firewall_backup_var")"
+		[[ "$rv" -ne 0 || -z "$firewall_backup_var" ]] && {
+			unset firewall_backup_var
+			die "Error when reading iptables state."
+		}
+	done
 	echo "Ok."
 
-	# we use the same file for iptables and ipset backup
-	# the "[IPSET]" line separates portions of the file
-	firewall_backup_var+=$'\n'"[IPSET]"
+	firewall_backup_var+=$'\n'"[${suite_name}_IPSET]"
 
-	for curr_ccode in $config_ccodes; do
-		curr_ipset_name="${suite_name}_${curr_ccode}"
+	for list_id in $config_lists; do
+		curr_ipset_name="${suite_name}_${list_id}"
 		echo -n "Creating backup of ipset '$curr_ipset_name'... "
 
 		# append current ipset content to $firewall_backup_var
@@ -317,11 +381,11 @@ archive_command=""
 archive_ext=""
 firewall_backup_var=""
 
-# get datadir from the config file
+families="$(getconfig "Families")" || die "Error: Couldn't read value for Families from the config file."
 datadir="$(getconfig "Datadir")" || die "Error: Couldn't read value for Datadir from the config file."
 
-# get ccodes from the config file
-config_ccodes="$(getconfig "Countries")" || die "Error: Couldn't read value for Countries from the config file."
+# get lists from the config file
+config_lists="$(getconfig "Lists")" || die "Error: Couldn't read value for Lists from the config file."
 
 conf_file_backup="$datadir/${suite_name}.conf.bak"
 
@@ -355,12 +419,11 @@ fi
 if [[ "$action" = "restore" ]]; then
 ### Restore iptables and ipsets to known-good state from backup file
 	restoreknowngood "$backup_file"
-	echo
 	echo -n "Restoring the config file from backup... "
 	cp "$conf_file_backup" "$conf_file"; rv=$?
 	[[ "$rv" -ne 0 ]] && die "Error." || echo -e "Ok.\n"
 	echolog "Successfully restored known-good ipset and iptables state from backup."
-	echo -e "\n View current geoblocking status with '${yellow}${suite_name} status${no_color}' (may require 'sudo').\n"
+	echo -e "\nView current geoblocking status with '${yellow}${suite_name} status${no_color}' (may require 'sudo').\n"
 fi
 
 
