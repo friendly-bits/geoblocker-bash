@@ -185,7 +185,7 @@ restoreknowngood() {
 		$iptables_command -P INPUT ACCEPT || restore_failed "Error when issuing command '$iptables_command -P INPUT ACCEPT'." "reset"
 	done
 
-	echo -n "Deleting firewall rules for $suite_name... "
+	echo -n "Deleting geoblocking firewall rules... "
 	set -o pipefail
 	iptables-save | awk '$0 ~ /'"$iptables_comment"'/ {gsub(/^-A /, "iptables -D "); system ($0)}' &>/dev/null; rv1=$?
 	ip6tables-save | awk '$0 ~ /'"$iptables_comment"'/ {gsub(/^-A /, "ip6tables -D "); system ($0)}' &>/dev/null; rv2=$?
@@ -204,8 +204,6 @@ restoreknowngood() {
 	set +o pipefail
 	if [[ $rv -ne 0 ]]; then
 		restore_failed "Error listing geoblocking ipsets with command 'ipset list -n | grep \"$ipset_tag\"'." "reset"
-	else
-		echo "Ok."
 	fi
 
 	for curr_ipset in $curr_ipsets; do
