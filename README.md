@@ -8,7 +8,7 @@ Supports ipv4 and ipv6.
 ## Features
 _(for installation instructions, skip to the [**Installation**](#Installation) section)_
 
-* Basic functionality is automatic download of ip lists for user-specified countries, then using these lists to create either a whitelist or a blacklist (selected during installation) in the firewall. Besides the basics, there are additional useful features (continue reading to find out more).
+* Core functionality is automatic download of ip lists for user-specified countries, then using these lists to create either a whitelist or a blacklist (selected during installation) in the firewall.
 
 * ip lists are fetched either from RIPE (regional Internet registry for Europe, the Middle East and parts of Central Asia) or from ipdeny. Both sources provide updated ip lists for all regions.
 
