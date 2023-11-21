@@ -14,6 +14,8 @@
 
 #### Initial setup
 
+export LC_ALL=C
+
 me=$(basename "$0")
 suite_name="geoblocker-bash"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -47,7 +49,7 @@ Usage: $me -x "<schedule_expression>" [-h] [-d]
 
 Options:
     -x "<sch_expression>"  : crontab schedule expression ***in double quotes***
-                                 example: "0 4 * * 6"
+                                 example: "15 4 * * 6"
                                  format: minute hour day-of-month month day-of-week
 
     -d                     : debug
@@ -233,7 +235,7 @@ read -r min hour dom mon dow extra <<< "$sourceline"
 if [[ -n "$extra" ]]; then
 	echo -e "\n\n$me: Error: Too many fields in schedule expression. I don't know what to do with '$extra'." >&2
 	echo "You entered: '$sourceline'." >&2
-	echo "Valid example: '0 4 * * 6'." >&2
+	echo "Valid example: '15 4 * * 6'." >&2
 	echo "Use double quotes around your expression." >&2
 	die
 fi
@@ -243,7 +245,7 @@ if [[ -z "$min" || -z "$hour" || -z "$dom" || -z "$mon" || -z "$dow" ]]; then
 	echo -e "\n\n$me: Error: Not enough fields in schedule expression." >&2
 	echo "Crontab expression format: 'minute hour day-of-month month day-of-week'." >&2
 	echo "You entered: '$sourceline'." >&2
-	echo "Valid example: '0 4 * * 6'." >&2
+	echo "Valid example: '15 4 * * 6'." >&2
 	echo "Use double quotes around your cron schedule expression." >&2
 	die
 fi
@@ -273,7 +275,7 @@ if [[ "$errors" -gt 0 ]] ; then
 	echo -e "\n\n$me: Errors in cron expression:\n$errors_str\n" >&2
 	echo "Crontab expression format: 'minute hour day-of-month month day-of-week'." >&2
 	echo "You entered: '$sourceline'" >&2
-	echo "Valid example: '0 4 * * 6'" >&2
+	echo "Valid example: '15 4 * * 6'" >&2
 	echo "Use double quotes around your cron schedule expression." >&2
 else
 	exitstatus=0
