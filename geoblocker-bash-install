@@ -12,6 +12,8 @@
 
 
 #### Initial setup
+export LC_ALL=C
+printf '%s\n' "$PATH" | grep '/usr/local/bin' &>/dev/null || export PATH="$PATH:/usr/local/bin"
 
 me=$(basename "$0")
 
@@ -52,15 +54,15 @@ Must be run as root.
 This script:
 1) Requires to specify countries codes (ISO 3166-1 alpha-2) to include in the whitelist/blacklist
 2) Requires to specify whitelist or blacklist mode for installation with the '-m' option
-3) Accepts a custom cron schedule expression as an argument. Default cron schedule is "0 4 * * *" - at 4:00 [am] every day.
+3) Accepts a custom cron schedule expression as an argument. Default cron schedule is "15 4 * * *" - at 4:15 [am] every day.
 4) Creates system folder structure for scripts, config and data.
 5) Copies all scripts included in the suite to /usr/local/bin.
 6) Creates backup of pre-install policies for INPUT and FORWARD iptables chains.
 7) Calls the *manage script to set up geoblocker and then call the -fetch and -apply scripts.
 8) If an error occurs during installation, calls the uninstall script to revert any changes made to the system.
 
-Usage: $me -c <"country_code [country_code] ... [country_code]"> -m <whitelist|blacklist> [-s <"sch_expression"|disable>] [-r <ripe|ipdeny>]
-            [-o] [-n] [-p] [-d] [-h]
+Usage: $me -c <"country_code [country_code] ... [country_code]"> -m <whitelist|blacklist> [-s <"sch_expression"|disable>] [ -f <families> ]
+            [-r <ripe|ipdeny>] [-o] [-n] [-p] [-d] [-h]
 
 Core Options:
     -c <"country_codes">            : 2-letter country codes (ISO 3166-1 alpha-2) to fetch and apply the iplists for.
@@ -69,12 +71,12 @@ Core Options:
                                             (to change mode after installation, run the *install script again)
     [-s <"sch_expression"|disable>] : schedule expression for the periodic cron job implementing auto-updates of the ip lists,
                                             must be inside double quotes
-                                            default is "0 4 * * *" (at 4:00 [am] every day)
+                                            default is "15 4 * * *" (at 4:15 [am] every day)
                                       "disable" will *skip* creating the autoupdate cron job so there will be no automatic updates of the ip lists
-    [-a <ipv4|ipv6|both>]           : families (defaults to both)
+    [-f <ipv4|ipv6|"ipv4 ipv6">]    : families (defaults to 'ipv4 ipv6'). if specifying multiple families, use double quotes.
 
-    [-r <ripe|ipdeny>]         : Force using this source for download. Currently supported sources: ripe, ipdeny. Defaults to ripe.
-                                             (Note that ARIN only provides data for ARIN countries)
+    [-u <ripe|ipdeny>]              : Force using this source for download. Currently supported sources: ripe, ipdeny. Defaults to ripe.
+
 Extra Options:
     [-o]                            : No backup. Will not create a backup of previous firewall state (and geoblocking ipsets) before applying changes.
                                          (doesn't affect backup of chains policies)
@@ -91,13 +93,13 @@ EOF
 
 #### PARSE ARGUMENTS
 
-while getopts ":c:m:s:a:r:onpdh" opt; do
+while getopts ":c:m:s:f:u:onpdh" opt; do
 	case $opt in
 		c) ccodes=$OPTARG;;
 		m) list_type=$OPTARG;;
 		s) cron_schedule=$OPTARG;;
-		a) families_arg=$OPTARG;;
-		r) source_arg=$OPTARG;;
+		f) families_arg=$OPTARG;;
+		u) source_arg=$OPTARG;;
 
 		o) nobackup="true";;
 		n) no_persistence="true";;
@@ -198,8 +200,7 @@ install_dir="/usr/local/bin"
 datadir="/var/lib/${suite_name}"
 preinstall_policies_file="${datadir}/preinstall_policies.bak"
 iplist_dir="${datadir}/ip_lists"
-default_schedule="0 4 * * *"
-families_default="ipv4 ipv6"
+default_schedule="15 4 * * *"
 
 # set environment variable "nolog" to avoid daughter scripts writing errors
 #	to syslog when encountering incorrect arguments from the user
@@ -210,22 +211,28 @@ export manualmode="true"
 
 export in_install="true"
 
-export datadir=""
+export datadir
 
 
 #### VARIABLES
 
-source_default="ARIN RIPE"
-source_arg=${source_arg^^}
-[[ "$source_arg" = "AUTO" ]] && source_arg="ARIN RIPE"
+source_default="ripe"
+[[ -n "$source_arg" && ! "${source_arg,,}" =~ ^(ripe|ipdeny)$ ]] && { usage; die "Unsupported source: '$source_arg'."; }
+source_arg="${source_arg,,}"
 source="${source_arg:-$source_default}"
+
+families_default="ipv4 ipv6"
+[ -n "$families_arg" ] && families_arg="${families_arg,,}"
+case "$families_arg" in
+	inet|inet6|'inet inet6'|'inet6 inet' ) families="$families_arg" ;;
+	''|'ipv4 ipv6'|'ipv6 ipv4' ) families="$families_default" ;;
+	ipv4 ) families="inet" ;;
+	ipv6 ) families="inet6" ;;
+	* ) echo "$me: Error: invalid family '$families_arg'." >&2; exit 1 ;;
+esac
 
 # convert input country codes to upper case
 ccodes="${ccodes^^}"
-
-# preference order: families_arg->families_default
-families="${families_arg:-$families_default}"
-[[ "$families" = "both" ]] && families="ipv4 ipv6"
 
 cron_schedule="${cron_schedule:-$default_schedule}"
 sleeptime="30"
@@ -241,7 +248,7 @@ fi
 
 #### CHECKS
 
-missing_deps="$(check_deps jq iptables-save iptables-restore ipset)" || die "Error: missing dependencies: $missing_deps."
+missing_deps="$(check_deps iptables-save iptables-restore ipset)" || die "Error: missing dependencies: $missing_deps."
 
 # Check for valid country codes
 if [[ -z "$ccodes" ]]; then
@@ -271,11 +278,10 @@ fi
 [[ "$list_type" != "whitelist" && "$list_type" != "blacklist" ]] &&  die "Error: Unrecognized list type '$list_type'! Use either 'whitelist' or 'blacklist'!"
 
 [[ -z "$families" ]] && die "Error: \$families variable should not be empty!"
-[[ ! "$families" =~ ^(ipv4|ipv6|'ipv4 ipv6')$ ]] && { usage; die "Invalid family: '$families'."; }
 
-missing_files="$(check_files_exist "${suite_name}-fetch" "${suite_name}-common" "${suite_name}-apply" \
-	"${suite_name}-run" "${suite_name}-manage" "${suite_name}-cronsetup" "${suite_name}-backup" \
-	"${suite_name}-uninstall" "${suite_name}-reset" "validate-cron-schedule.sh" "check-ip-in-source.sh" "cca2.list" "cidr_lookup_table.list")" || \
+missing_files="$(check_files_exist "${suite_name}-fetch" "${suite_name}-common" "${suite_name}-apply" "${suite_name}-run" \
+	"${suite_name}-manage" "${suite_name}-cronsetup" "${suite_name}-backup" "${suite_name}-uninstall" "${suite_name}-reset" \
+	"validate-cron-schedule.sh" "check-ip-in-source.sh" "detect-local-subnets-AIO.sh" "cca2.list")" || \
 	install_failed "Error: missing files: $missing_files."
 
 if ! [[ "$cron_schedule" = "disable" && "$no_persistence" ]]; then
@@ -288,17 +294,6 @@ if ! [[ "$cron_schedule" = "disable" && "$no_persistence" ]]; then
 	}
 fi
 
-# convert to lower case
-families_arg="${families_arg,,}"
-[[ "$families_arg" = "both" ]] && families="ipv4 ipv6"
-[[ ! "$families_arg" =~ ^(ipv4|ipv6|'ipv4 ipv6'|'ipv6 ipv4')$ ]] && { usage; die "Invalid family: '$families'."; }
-
-[[ ! "${source_arg^^}" =~ ^(RIPE|IPDENY)$ ]] && { usage; die "Unsupported source: '$source_arg'."; }
-
-families="$families_arg"
-# convert to upper case
-source="${source_arg^^}"
-
 
 #### MAIN
 
@@ -310,7 +305,7 @@ mkdir -p "$conf_dir"
 # write initial config to the config file
 echo -n "Setting initial config... "
 
-setconfig "UserCcode=$user_ccode" "Countries=" "ListType=$list_type" "Installdir=$install_dir" "Datadir=$datadir" \
+setconfig "UserCcode=$user_ccode" "Lists=" "ListType=$list_type" "Installdir=$install_dir" "Datadir=$datadir" \
 	"Source=$source" "Families=$families" "FamiliesDefault=$families_default" \
 	"CronSchedule=$cron_schedule"  "DefaultSchedule=$default_schedule" \
 	"RebootSleep=$sleeptime" "NoBackup=$nobackup" "NoPersistence=$no_persistence" "NoDrop=$nodrop"; rv="$?"
@@ -331,8 +326,8 @@ call_script ${suite_name}-reset
 ## Copy scripts to $install_dir
 
 echo -n "Copying scripts to $install_dir... "
-copyscripts "${suite_name}-common" "${suite_name}-fetch" "${suite_name}-apply" "${suite_name}-run" "${suite_name}-manage" \
-	"${suite_name}-cronsetup" "${suite_name}-backup" "${suite_name}-uninstall" "${suite_name}-reset" "validate-cron-schedule.sh" "check-ip-in-source.sh"
+copyscripts "${suite_name}-common" "${suite_name}-fetch" "${suite_name}-apply" "${suite_name}-run" "${suite_name}-manage" "${suite_name}-cronsetup" \
+	"${suite_name}-backup" "${suite_name}-uninstall" "${suite_name}-reset" "validate-cron-schedule.sh" "check-ip-in-source.sh" "detect-local-subnets-AIO.sh"
 echo -e "Ok.\n"
 
 ## Create a symlink from ${suite_name}-manage to ${suite_name}
@@ -342,8 +337,6 @@ ln -s "${install_dir}/${suite_name}-manage" "${install_dir}/${suite_name}" ||
 
 # copy cca2.list
 cp "cca2.list" "$conf_dir" || install_failed "Error copying file 'cca2.list' to '$conf_dir'."
-# copy cidr_lookup_table.list
-cp "cidr_lookup_table.list" "$conf_dir" || install_failed "Error copying file 'cidr_lookup_table.list' to '$conf_dir'."
 
 ### Back up pre-install policies for INPUT and FORWARD chains
 
@@ -389,7 +382,7 @@ if [[ $rv -ne 0 && $rv -ne 254 ]]; then
 	install_failed "Failed to create and apply the iplist."
 fi
 
-if [[ ! "$no_persistence" && "$cron_schedule" != "disable" ]]; then
+if ! [[ "$no_persistence" && "$cron_schedule" = "disable" ]]; then
 	### Set up cron jobs
 	call_script ${suite_name}-manage schedule -s "$cron_schedule"; rv="$?"
 
