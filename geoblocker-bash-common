@@ -27,8 +27,10 @@ get_file_size() {
 # outputs file size in bytes for a given file
 # works regardless (?) of how 'ls' is implemented
 
+set -o pipefail
 # shellcheck disable=SC2015,SC2012
 [ -f "$1" ] && ls -dnL -- "$1" | awk '{print $5;exit}' || { echo ""; return 1; }
+set +0 pipefail
 
 # previous implementation, also works. but the above looks nicer and probably slightly faster
 	# # this is very touchy! so don't touch it.
@@ -390,7 +392,7 @@ merge_lists() {
 }
 
 
-check_ccodes_coherency() {
+check_lists_coherency() {
 # checks whether current ipsets and iptables rules match ones in the config file
 
 	debugprint "Verifying config coherency..."
@@ -400,19 +402,19 @@ check_ccodes_coherency() {
 	[[ "$list_type" != "whitelist" && "$list_type" != "blacklist" ]] &&  die "Error: Unrecognized list type '$list_type'!"
 
 	# initialize variables
-	unexpected_ccodes=""; missing_ccodes=""
-	config_ccodes="$(getconfig "Countries")" || die "Error: Couldn't read value for Countries from the config file."
+	unexpected_lists=""; missing_lists=""
+	config_lists="$(getconfig "Lists")" || die "Error: Couldn't read value for Lists from the config file."
 	# shellcheck disable=SC2119
-	active_ccodes="$(find_active_ccodes)" || return 1
-#	debugprint "active_ccodes: '$active_ccodes'"
-#	debugprint "config_ccodes: '$config_ccodes'"
+	active_lists="$(find_active_lists)" || return 1
+#	debugprint "active_lists: '$active_lists'"
+#	debugprint "config_lists: '$config_lists'"
 
-	# reflect discrepancies in global variables $unexpected_ccodes and $missing_ccodes
-	unexpected_ccodes="$(subtract_list_a_from_b "$config_ccodes" "$active_ccodes")"
-	missing_ccodes="$(subtract_list_a_from_b "$active_ccodes" "$config_ccodes")"
-	ccodes_difference="$(find_lists_difference "$active_ccodes" "$config_ccodes")"
+	# reflect discrepancies in global variables $unexpected_lists and $missing_lists
+	unexpected_lists="$(subtract_list_a_from_b "$config_lists" "$active_lists")"
+	missing_lists="$(subtract_list_a_from_b "$active_lists" "$config_lists")"
+	lists_difference="$(find_lists_difference "$active_lists" "$config_lists")"
 
-	if [[ -z "$ccodes_difference" ]]; then
+	if [[ -z "$lists_difference" ]]; then
 		debugprint "Successfully verified config coherency."
 		return 0
 	else
@@ -422,10 +424,11 @@ check_ccodes_coherency() {
 }
 
 # shellcheck disable=SC2120
-find_active_ccodes() {
+find_active_lists() {
 # checks current ipsets and iptables rules for geoblocker
-# returns a list of active ccodes (country codes)
-# if $1 is "all" then returns all ccodes even when there is a difference between ipset ccodes and iptables rules ccodes
+# returns a list of active ip lists
+# if $1 is "all" then returns all lists even when there is a difference between ipset lists and iptables rules lists
+local ipset_lists ipv4rules_lists ipv6rules_lists iprules_lists lists_intersection lists_difference lists_merged rule_type
 
 	case "$list_type" in
 		whitelist) rule_type="ACCEPT" ;;
@@ -433,27 +436,25 @@ find_active_ccodes() {
 		*) die "Error: unexpected list type '$list_type'!"
 	esac
 
-	# read iptables state and ipsets list into env variables to avoid querying iptables and ipset every time
-	# check existing variable first and only query if value not set yet
-	iptables_output="${iptables_output:-$(iptables -vL)}"
-	[[ -z "$iptables_output" ]] && die "Error: failed to get iptables state."
-	ipset_list="${ipset_list:-$(ipset list -n)}"
+	ipset_lists="$(ipset list -n | grep "$suite_name" | grep -o '.......$' | tr '\n' ' ' | awk '{$1=$1};1')"
+	ipv4rules_lists="$(iptables -vL | awk -v s="${suite_name}_" -v p="$rule_type" '($0!~s||$0!~p) {next} {gsub (s,"")} \
+		$0~p {for(i=1; i<=NF; i++) if($(i-1)~/^match-set$/) print $i}' | awk -v RS= '{gsub (/'"$\n"'/," ")} 1')"
+	ipv6rules_lists="$(ip6tables -vL | awk -v s="${suite_name}_" -v p="$rule_type" '($0!~s||$0!~p) {next} {gsub (s,"")} \
+		$0~p {for(i=1; i<=NF; i++) if($(i-1)~/^match-set$/) print $i}' | awk -v RS= '{gsub (/'"$\n"'/," ")} 1')"
+	iprules_lists="$(merge_lists "$ipv4rules_lists" "$ipv6rules_lists")"
 
-	current_ipset_ccodes="$(grep "$suite_name" <<< "$ipset_list" | grep -o '..$' | tr '\n' ' ' | awk '{$1=$1};1')"
-	current_iprules_ccodes="$(grep "$rule_type" <<< "$iptables_output" | grep -oP "(?<=src /\* ${suite_name}\_).*?(?= \*/)" | tr '\n' ' ' | awk '{$1=$1};1')"
-
-	ccodes_intersection="$(find_lists_intersection "$current_ipset_ccodes" "$current_iprules_ccodes")"
-	ccodes_difference="$(find_lists_difference "$current_ipset_ccodes" "$current_iprules_ccodes")"
-	ccodes_merged="$(merge_lists "$current_ipset_ccodes" "$current_iprules_ccodes")"
+	lists_intersection="$(find_lists_intersection "$ipset_lists" "$iprules_lists")"
+	lists_difference="$(find_lists_difference "$ipset_lists" "$iprules_lists")"
+	lists_merged="$(merge_lists "$ipset_lists" "$iprules_lists")"
 
 	if [[ "$1" = "all" ]]; then
-		printf "%s" "$ccodes_merged"
+		printf "%s" "$lists_merged"
 	else
-		printf "%s" "$ccodes_intersection"
+		printf "%s" "$lists_intersection"
 	fi
 
 	# shellcheck disable=SC2015
-	[[ -z "$ccodes_difference" ]] && return 0 || { ipsets_incoherent="true"; return 1; }
+	[[ -z "$lists_difference" ]] && return 0 || { ipsets_incoherent="true"; return 1; }
 }
 
 
@@ -549,21 +550,19 @@ check_cron() {
 			# check if cron service is enabled
 			(systemctl is-enabled cron.service) &>/dev/null; rv=$? ;;
 		* )
-			# check for cron or crond in running processes (filtering out the the grep process itself as it has the word cron in it)
-			# shellcheck disable=SC2009
-			ps aux | grep -i '/crond$\|/cron$\|/crond \|cron ' | grep -v "grep" &>/dev/null; rv=$? ;;
+			# check for cron or crond in running processes
+			if ! pidof cron &>/dev/null && ! pidof crond &>/dev/null; then rv=1; else rv=0; fi ;;
 	esac
 	return "$rv"
 }
 
 
+set_script_names
+
 ### Checks
 
 # check for common deps
 missing_deps="$(check_deps tr cut sort wc awk sed grep comm logger bc)" || die "Error: missing dependencies: $missing_deps."
-
-# test grep for Perl regex capability
-grep -P 1 <<< "1" &>/dev/null || die "Error: your grep doesn't support Perl regular expressions or you are missing the PCRE library."
 
 # check for curl
 command -v "curl" &> /dev/null && curl_exists="true"
@@ -586,13 +585,12 @@ no_color='\033[0m'
 conf_dir="/etc/${suite_name}"
 conf_file="${conf_dir}/${suite_name}.conf"
 
-# global variables to get coherency check results from check_ccodes_coherency()
-unexpected_ccodes=""
-missing_ccodes=""
+# global variables to get coherency check results from check_lists_coherency()
+unexpected_lists=""
+missing_lists=""
 ipsets_incoherent=""
 
 ### Main
-set_script_names
 
 arguments=("$@")
 
