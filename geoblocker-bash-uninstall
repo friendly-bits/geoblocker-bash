@@ -6,6 +6,8 @@
 
 
 #### Initial setup
+export LC_ALL=C
+printf '%s\n' "$PATH" | grep '/usr/local/bin' &>/dev/null || export PATH="$PATH:/usr/local/bin"
 
 me=$(basename "$0")
 
@@ -110,17 +112,14 @@ fi
 
 ### Delete associated iptables rules
 
-# iptables-save command just dumps the table, then we pipe the contents into sed
-# sed executes iptables -D (delete) command on matching rules. execution is promtped by the switch /e
-
 echo "Deleting associated iptables rules..."
-iptables-save | sed -r "/INPUT.*comment.*$iptables_comment/s/-A/iptables -D/e" &>/dev/null
+iptables-save | awk '$0 ~ /'"$iptables_comment"'/ {gsub(/^-A /, "iptables -D "); system ($0)}' &>/dev/null
+ip6tables-save | awk '$0 ~ /'"$iptables_comment"'/ {gsub(/^-A /, "ip6tables -D "); system ($0)}' &>/dev/null
 
 
 
 ### Destroy associated ipsets
 echo "Destroying ipsets for ${suite_name}..."
-sleep 0.3
 for ipset_name in $(ipset list -n | grep "${suite_name}"); do
 	echo "Found ipset \"$ipset_name\", destroying..."
 	ipset destroy "$ipset_name"
@@ -131,7 +130,7 @@ done
 	rm -rf "$datadir"
 
 ### remove symlink
-unlink "${install_dir}/${suite_name}"
+rm "${install_dir}/${suite_name}"
 
 ### Delete scripts
 echo "Deleting scripts from $install_dir..."
@@ -141,11 +140,12 @@ rm "$install_dir/${suite_name}-manage"
 rm "$install_dir/${suite_name}-cronsetup"
 rm "$install_dir/${suite_name}-run"
 rm "$install_dir/${suite_name}-common"
-rm "$install_dir/validate-cron-schedule.sh"
-rm "$install_dir/check-ip-in-registry.sh"
 rm "$install_dir/${suite_name}-reset"
 rm "$install_dir/${suite_name}-uninstall"
 rm "$install_dir/${suite_name}-backup"
+rm "$install_dir/validate-cron-schedule.sh"
+rm "$install_dir/check-ip-in-source.sh"
+rm "$install_dir/detect-local-subnets-AIO.sh"
 
 ### Delete the config dir
 echo "Deleting config..."
