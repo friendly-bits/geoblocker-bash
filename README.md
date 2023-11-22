@@ -186,4 +186,5 @@ For compatibility with OpenWRT, read [OPENWRT.md](/OPENWRT.md).
 ## **Last but not least**
 
 - If you use and like this project, please consider giving it a star on Github.
-- I would appreciate a report of whether it works or doesn't work on your system (please specify which), or if you find a bug. If you have an interesting idea or suggestion for improvement, you are welcome to suggest as well. You can use the "Discussions" and "Issues" tabs for that.
+- I would appreciate a report of whether it works or doesn't work on your system (please specify which). It is really important for me to know that there are people who are using this project, and it will motivate me to continue the development.
+- If you find a bug then please let me know. If you have an interesting idea or suggestion for improvement, you are welcome to suggest as well. You can use the "Discussions" and "Issues" tabs for that.
