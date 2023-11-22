@@ -35,7 +35,7 @@ _(for installation instructions, skip to the [**Installation**](#Installation) s
 - When creating new ipsets, calculates optimized ipset parameters in order to maximize performance and minimize memory consumption.
 - Creating new ipsets is done efficiently, so normally it takes less than a second for a very large list (depending on the CPU of course).
 - Only performs necessary actions. For example, if a list is up-to-date and already active in the firewall, it won't be re-validated and re-applied to the firewall until the source data timestamp changes.
-- List parsing and validation are implemented through efficient regex processing whichi is very quick even on slow embedded CPU's.
+- List parsing and validation are implemented through efficient regex processing which is very quick even on slow embedded CPU's.
 - Scripts are only active for a short time when invoked either directly by the user or by a cron job (once after a reboot and then periodically for an auto-update - both cron jobs are optional and enabled by default).
 
 </details>
