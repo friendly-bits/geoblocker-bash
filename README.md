@@ -136,6 +136,10 @@ _<details><summary>Examples:</summary>_
 
 **To switch mode (from whitelist to blacklist or the opposite):** simply re-install
 
+For additional notes and recommendations for using the suite, check out the [NOTES.md](/NOTES.md) file.
+
+For specifics about each script, read the [DETAILS.md](/DETAILS.md) file.
+
 ## **Pre-requisites**:
 (if a pre-requisite is missing, the -install script will tell you which)
 - bash v4.0 or higher (should be included with any relatively modern linux distribution)
