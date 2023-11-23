@@ -19,7 +19,7 @@ The suite currently includes 13 scripts:
 12. check-ip-in-registry.sh
 13. detect-local-subnets.sh
 
-The scripts intended as user interface are **-install**, **-uninstall**, **-manage** and **check-ip-in-registry.sh**. All the other scripts are intended as a back-end, although they can be run by the user as well (I don't recommend that). If you just want to install and move on, you only need to run the -install script, specify mode with the -m option and specify country codes with the "-c" option. Provided you are not missing any pre-requisites, it should be as easy as that.
+The scripts intended as user interface are **-install**, **-uninstall**, **-manage** and **check-ip-in-source.sh**. All the other scripts are intended as a back-end, although they can be run by the user as well (I don't recommend that). If you just want to install and move on, you only need to run the -install script, specify mode with the -m option and specify country codes with the "-c" option. Provided you are not missing any pre-requisites, it should be as easy as that.
 After installation, the user interface is provided by simply running "geoblocker-bash", which is a symlink to the -manage script.
 
 The **-backup** script can be used individually. By default, it is launched by the -run script to create a backup of the firewall state and the geoblocking ipsets before every action you apply to the firewall. If you encounter issues, you can use the -backup script with the 'restore' command to restore the firewall to its previous state. It also restores the previous config.
@@ -105,9 +105,27 @@ List id has the format of <country_code>_<family>. For example, ```US_ipv4``` an
 
 **The -common script** : Stores common functions and variables for the geoblocker-bash suite. Does nothing if called directly. Most other scripts won't work without it.
 
-**The validate-cron-schedule.sh script** is used by the -cronsetup script. It accepts a cron schedule expression and attempts to make sure that it conforms to the crontab format. Technically, it can be used outside the suite as it doesn't depend on the -common script. This is a heavily modified and improved version of a prior 'verifycron' script I found circulating on the internets (not sure who wrote it so can't give them credit).
+**The validate-cron-schedule.sh script** is used by the -cronsetup script. It accepts a cron schedule expression and attempts to make sure that it conforms to the crontab format. It can be used outside the suite as it doesn't depend on the -common script. This is a heavily modified and improved version of a prior 'verifycron' script I found circulating on the internets (not sure who wrote it so can't give them credit).
 
-**The check-ip-in-registry.sh script** can be used to verify that a certain ip address belongs to a subnet found in regional registry's records for a given country. It is intended for manual use and is not called from other scripts. It does depend on the *fetch script, and on the *common script (they just need to be in the same directory), and in addition, it requires the grepcidr utility installed in your system.
+**The check-ip-in-source.sh script** can be used to verify that a certain ip address belongs to a subnet found in source records for a given country. It is intended for manual use and is not called from other scripts. It does depend on the *fetch script, and on the *common script (they just need to be in the same directory), and in addition, it requires the grepcidr utility installed in your system.
 
-**The detect-local-subnets-AIO.sh script** is the latest addition to the suite. It is a side project which I developed for the suite but, contrary to all other scripts in the suite, it doesn't require Bash, is portable and should work on most Unix-like machines.
-This script is called by the -apply script when the suite is installed in whitelist mode. The reason for its existence is that in whitelist mode, all incoming connection are blocked, except what is explicitly allowed. Since this project doesn't aim to isolate your machine from your local network, but rather to block incoming connections from countries of your choosing, in whitelist mode it detects your local area networks and adds them to the firewall rules so they don't get blocked.
+```bash check-ip-in-source.sh -c <country_code> -i <"ip [ip] [ip] ... [ip]"> [-u <source>]```
+
+- Supported sources are 'ripe' and 'ipdeny'.
+- Any combination of ipv4 and ipv6 addresses is supported.
+- If passing multiple ip addresses, use double quotes around them.
+
+**The detect-local-subnets-AIO.sh script** is the latest addition to the suite. It is a side project which I developed for the suite but, contrary to all other scripts in the suite, it doesn't require Bash, is portable and should work on most Unix-like machines, as long as they have the `ip` utility. By default, it outpus all found local ip addresses, both ipv4 (inet) and ipv6 (inet6), and then all subnets these ip addresses belong to.
+
+```sh detect-local-subnets-AIO.sh [-f <inet|inet6>] [-s] [-d]```
+
+Optional arguments:
+- `-f <inet|inet6|"inet inet6">`: only detect subnets for the specified family. Also accepts the other notation for the same thing: `-f <ipv4|ipv6|"ipv4 ipv6">`
+- `-s`: only output the subnets (doesn't output the ip addresses and the other text)
+- `-d`: debug
+
+This script is called by the -apply script when the suite is installed in whitelist mode. The reason for its existence is that in whitelist mode, all incoming connections are blocked, except what is explicitly allowed. Since this project doesn't aim to isolate your machine from your local network, but rather to block incoming connections from countries of your choosing, in whitelist mode it detects your local area networks and creates whitelist firewall rules for them, so they don't get blocked. If installed in blacklist mode, this script will not be called because whitelisting local networks is not required in that mode.
+
+The script name has "AIO" suffix because it's an assembly made from 3 other scripts I developed: `trim-subnet.sh`, `aggregate-subnets.sh` and `detect-subnet.sh`. They have a separate repository here:
+
+https://github.com/blunderful-scripts/subnet-tools
