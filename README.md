@@ -64,7 +64,7 @@ _(for installation instructions, skip to the [**Installation**](#Installation) s
 <details> <summary>Read more:</summary>
  
 - I paid much attention to compatibility with typical Unix utilities, so the scripts should work even with embedded distributions.
-- That said, embedded hardware-oriented distributions may be missing some required utilities. OpenWRT, for example, comes by default without Bash, and without the 'comm' and 'bc' utilities which are required for the scripts to work. So these utilities need to be installed in order for the scripts to work. For more info on OpenWRT compatibiliy, read the [OPENWRT.md](/OPENWRT.md) file.
+- That said, embedded hardware-oriented distributions may be missing some required utilities. OpenWRT, for example, comes by default without Bash, and without the 'comm' and 'bc' utilities which are required for the scripts to work. So these utilities need to be installed in order for the scripts to work.
 - Some (mostly commercial) distros have their own firewall management utilities and even implement their own firewall persistence across reboots. The suite should work on these, too, provided they use iptables as the back-end, but you probably should disable the cron-based persistence solution (more info in the [Pre-requisites](#Pre-requisites) section).
 - Scripts check for dependencies before running, so if you are missing some, the scripts just won't run at all.
 </details>
@@ -83,13 +83,13 @@ _Recommended to read the [NOTES.md](/NOTES.md) file._
 
 _<details><summary>4) Optional:</summary>_
 
-- If intended use is whitelist and you want to install geoblocker-bash on a **remote** machine, you can run the ```check-ip-in-registry.sh``` script before Installation to make sure that your public ip addresses are included in the fetched ip list.
+- If intended use is whitelist and you want to install geoblocker-bash on a **remote** machine, you can run the ```check-ip-in-source.sh``` script before Installation to make sure that your public ip addresses are included in the fetched ip list.
 
-_Example: (for US):_ ```bash check-ip-in-registry.sh -c US -i "8.8.8.8 8.8.4.4"``` _(if checking multiple ip addresses, use double quotes)_
+_Example: (for US):_ ```bash check-ip-in-source.sh -c US -i "8.8.8.8 8.8.4.4"``` _(if checking multiple ip addresses, use double quotes)_
 
-- If intended use is blacklist and you know in advance some of the ip addresses you want to block, you can use the check-ip-in-registry.sh script to verify that those ip addresses are included in the fetched ip list. The syntax is the same as above.
+- If intended use is blacklist and you know in advance some of the ip addresses you want to block, you can use the check-ip-in-source.sh script to verify that those ip addresses are included in the fetched ip list. The syntax is the same as above.
 
-**Note**: check-ip-in-registry.sh has an additional pre-requisite: grepcidr. Install it with your distro's package manager.
+**Note**: check-ip-in-source.sh has an additional pre-requisite: grepcidr. Install it with your distro's package manager.
 
 </details>
 
@@ -104,7 +104,7 @@ _<details><summary>Examples:</summary>_
 
 - **NOTE**: If your distro (or you) have enabled automatic iptables and ipsets persistence, you can disable the built-in cron-based persistence feature by adding the ```-n``` (for no-persistence) option when running the -install script.
 
-**6)** That's it! By default, ip lists will be updated daily at 4am local time (4 o'clock at night) - you can verify that automatic updates work by running ```sudo cat /var/log/syslog | grep geoblocker-bash``` on the next day (change syslog path if necessary, according to the location assigned by your distro).
+**6)** That's it! By default, ip lists will be updated daily at 4:15am local time (4:15 at night) - you can verify that automatic updates work by running ```sudo cat /var/log/syslog | grep geoblocker-bash``` on the next day (change syslog path if necessary, according to the location assigned by your distro).
 
 ## **Usage**
 Generally, once the installation completes, you don't have to do anything else for geoblocking to work. But I implemented some tools to change geoblocking settings and check geoblocking state.
@@ -143,7 +143,7 @@ For specifics about each script, read the [DETAILS.md](/DETAILS.md) file.
 ## **Pre-requisites**:
 (if a pre-requisite is missing, the -install script will tell you which)
 - bash v4.0 or higher (should be included with any relatively modern linux distribution)
-- Linux. Tested on Debian-like systems and occasionally on [OPENWRT](/OPENWRT.md), should work on any desktop/server distribution and possibly on some embedded distributions (pleasee let me know if you have a particular one you want to use it on).
+- Linux. Tested on Debian-like systems and occasionally on OpenWRT, should work on any desktop/server distribution and possibly on some embedded distributions (please let me know if you have a particular one you want to use it on).
 - iptables - firewall management utility (nftables support will likely get implemented later)
 - standard (mostly GNU) utilities including awk, sed, grep, bc, comm, ps which are included with every server/desktop linux distro. For embedded (like OpenWRT), may require installing a couple of packages that don't come by default.
 - for persistence and autoupdate functionality, requires the cron service to be enabled
@@ -167,11 +167,10 @@ then run ```sudo zypper install ipset```
 
 **RHEL/CentOS**: install ipset with ```sudo yum install ipset```. If using a specialized firewall management utility such as 'scf', you would probably want to disable the suite's cron-based persistence feature.
 
-**OpenWRT**: Read the [OPENWRT.md](/OPENWRT.md) file.
 </details>
 
 
-**Optional**: the _check-ip-in-registry.sh_ script requires grepcidr. install it with ```sudo apt install grepcidr``` on Debian and derivatives. For other distros, use their built-in package manager.
+**Optional**: the _check-ip-in-source.sh_ script requires grepcidr. install it with ```sudo apt install grepcidr``` on Debian and derivatives. For other distros, use their built-in package manager.
 
 ## **Notes**
 For some helpful notes about using this suite, read [NOTES.md](/NOTES.md).
@@ -184,10 +183,7 @@ These scripts do not share your data with anyone, as long as you downloaded them
 https://github.com/blunderful-scripts/geoblocker-bash
 That said, if you are using the ipdeny source then note that they are a 3rd party which has its own data privacy policy.
 
-## **OpenWRT**
-For compatibility with OpenWRT, read [OPENWRT.md](/OPENWRT.md).
-
-## **Last but not least**
+## **P.s.**
 
 - If you use and like this project, please consider giving it a star on Github.
 - I would appreciate a report of whether it works or doesn't work on your system (please specify which). It is really important for me to know that there are people who are using this project, and it will motivate me to continue the development.
