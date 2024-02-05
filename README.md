@@ -1,4 +1,5 @@
-**NOTE: this repository will see no future updates**. This project is continued in a new repository under a new name - '**geoip-shell**'. The continuation project implements all features of 'geoblocker-bash' but better, faster and significantly stronger. And implements support for **nftables**, along with other new features. Check it out here:
+**NOTE: this repository will see no future updates**. This project is continued in a new repository under a new name - '**geoip-shell**'. The continuation project implements all features of 'geoblocker-bash' but better, faster and significantly stronger. Plus support for **nftables**, improved support for running on a router, and a ton of other improvements and new features. Check it out here:
+
 https://github.com/blunderful-scripts/geoip-shell
 
 # geoblocker-bash
