@@ -1,6 +1,6 @@
 **NOTE:** This project is continued in a new repository under a new name - '**geoip-shell**'. The continuation project implements all features of 'geoblocker-bash', plus support for **nftables**, improved support for running on a router, and a ton of other improvements and new features. Check it out here:
 
-https://github.com/blunderful-scripts/geoip-shell
+https://github.com/friendly-bits/geoip-shell
 
 **This repository will see no future updates.**
 # geoblocker-bash
@@ -82,7 +82,7 @@ _Recommended to read the [NOTES.md](/NOTES.md) file._
 
 **1)** Install pre-requisites. Use your distro's package manager to install ```ipset``` (also needs ```wget``` or ```curl``` but you probably have one of these installed already). For examples for most popular distros, check out the [Pre-requisites](#Pre-requisites) section.
 
-**2)** Download the latest realease: https://github.com/blunderful-scripts/geoblocker-bash/releases
+**2)** Download the latest realease: https://github.com/friendly-bits/geoblocker-bash/releases
 
 **3)** Extract all files included in the release into the same folder somewhere in your home directory and ```cd``` into that directory in your terminal
 
@@ -185,7 +185,7 @@ For more detailed description of each script, read [DETAILS.md](/DETAILS.md).
 
 ## **Data privacy**
 These scripts do not share your data with anyone, as long as you downloaded them from the official source, which is
-https://github.com/blunderful-scripts/geoblocker-bash
+https://github.com/friendly-bits/geoblocker-bash
 That said, if you are using the ipdeny source then note that they are a 3rd party which has its own data privacy policy.
 
 ## **P.s.**
